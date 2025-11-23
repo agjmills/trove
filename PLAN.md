@@ -68,6 +68,24 @@ Self-hostable file storage in Go with server-side rendering, minimal JS, Docker 
 ## Phase 2 (Optional)
 Sharing links, versioning, thumbnails, bulk ops, admin dashboard, REST API
 
+## Phase 3 (Future Enhancements)
+
+### UI/UX Improvements
+- [ ] **Tailwind CSS Migration**: Replace custom CSS with Tailwind for easier styling and proper dark mode support
+  - Minimal JS philosophy maintained
+  - System preference detection + manual toggle
+  - Consistent dark/light theme across all pages
+  - Alternative: Consider other lightweight CSS frameworks (Pico CSS, etc.)
+
+### Storage Abstraction
+- [ ] **Storage Interface/Adapter Pattern**: Abstract storage layer for multiple backends
+  - Interface: `StorageBackend` with methods: `Save()`, `Get()`, `Delete()`, `Exists()`, `List()`
+  - Local filesystem implementation (current)
+  - S3-compatible storage (MinIO, AWS S3, Backblaze B2, etc.)
+  - Configuration: `STORAGE_BACKEND=local|s3` in .env
+  - Maintain deduplication support across backends
+  - Consider: Azure Blob Storage, Google Cloud Storage
+
 ## Tech Stack
 
 **Backend**: Go 1.21+, Chi router, GORM (SQLite/PostgreSQL), bcrypt auth
