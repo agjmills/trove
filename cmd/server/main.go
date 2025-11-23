@@ -51,6 +51,7 @@ func main() {
 
 	r.Use(middleware.Logger)
 	r.Use(internalMiddleware.RecoverMiddleware)
+	r.Use(internalMiddleware.SecurityHeaders)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 

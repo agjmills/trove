@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
@@ -17,6 +18,10 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService *storag
 	authHandler := handlers.NewAuthHandler(db, cfg)
 	pageHandler := handlers.NewPageHandler(db)
 	fileHandler := handlers.NewFileHandler(db, cfg, storageService)
+
+	// Create rate limiters for auth endpoints
+	// Allow 5 login/register attempts per 15 minutes per IP
+	authRateLimiter := middleware.NewRateLimiter(5, 15*time.Minute)
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -36,8 +41,13 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService *storag
 		r.Get("/register", authHandler.ShowRegister)
 	})
 
-	r.Post("/register", authHandler.Register)
-	r.Post("/login", authHandler.Login)
+	// Rate-limited auth endpoints
+	r.Group(func(r chi.Router) {
+		r.Use(authRateLimiter.Middleware)
+		r.Post("/register", authHandler.Register)
+		r.Post("/login", authHandler.Login)
+	})
+
 	r.Post("/logout", authHandler.Logout)
 
 	r.Group(func(r chi.Router) {

@@ -54,8 +54,8 @@ Self-hostable file storage in Go with server-side rendering, minimal JS, Docker 
 - [x] Input validation (CSRF, form validation, file size limits)
 - [x] Human-readable size configuration (10G, 500M, etc.)
 - [x] Descriptive upload error messages
-- [ ] Security headers (X-Frame-Options, CSP, HSTS)
-- [ ] Rate limiting on auth endpoints
+- [x] Security headers (X-Frame-Options, CSP, HSTS, etc.)
+- [x] Rate limiting on auth endpoints (5 attempts per 15 minutes)
 
 ## Core Features (MVP)
 
@@ -199,8 +199,8 @@ CSRF protection, custom error pages with panic recovery, responsive full-width l
 - [x] SQL injection prevention (GORM parameterized queries)
 - [x] CSRF tokens with validation middleware
 - [x] Panic recovery with custom error pages
-- [ ] Security headers (X-Frame-Options, CSP, HSTS)
-- [ ] Rate limiting on auth endpoints
+- [x] Security headers (X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
+- [x] Rate limiting on auth endpoints (5 attempts/15 min per IP with automatic cleanup)
 
 ## Performance Targets
 - [ ] Template caching in production
@@ -214,8 +214,8 @@ CSRF protection, custom error pages with panic recovery, responsive full-width l
 
 ## Current Status
 
-**Working**: Full authentication system, file upload/download/delete, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, responsive full-width layout with collapsible sidebar, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors
+**Working**: Full authentication system, file upload/download/delete, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, responsive full-width layout with collapsible sidebar, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints
 
-**Next**: Production Dockerfile (multi-stage build), security headers middleware, rate limiting on auth endpoints
+**Next**: Production Dockerfile (multi-stage build)
 
-**Recent**: Added human-readable size parsing for MAX_UPLOAD_SIZE and DEFAULT_USER_QUOTA (supports B, K/KB, M/MB, G/GB, T/TB), improved upload error messages to show actual server responses and specific error conditions
+**Recent**: Implemented security headers middleware (X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy, Permissions-Policy), rate limiting for login/register endpoints (5 attempts per 15 minutes per IP with automatic cleanup)
