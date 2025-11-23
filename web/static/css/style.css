@@ -1,0 +1,197 @@
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+body {
+	font-family: system-ui, -apple-system, sans-serif;
+	line-height: 1.6;
+	color: #333;
+	background: #f5f5f5;
+}
+
+.container {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 0 20px;
+}
+
+nav {
+	background: #fff;
+	border-bottom: 1px solid #e0e0e0;
+	padding: 1rem 0;
+	margin-bottom: 2rem;
+}
+
+nav .container {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+nav .logo {
+	font-size: 1.5rem;
+	font-weight: bold;
+	text-decoration: none;
+	color: #333;
+}
+
+nav .nav-links {
+	display: flex;
+	gap: 1rem;
+	align-items: center;
+}
+
+nav a {
+	text-decoration: none;
+	color: #666;
+}
+
+nav a:hover {
+	color: #333;
+}
+
+button {
+	background: #333;
+	color: #fff;
+	border: none;
+	padding: 0.5rem 1rem;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 1rem;
+}
+
+button:hover {
+	background: #555;
+}
+
+.auth-form {
+	max-width: 400px;
+	margin: 2rem auto;
+	background: #fff;
+	padding: 2rem;
+	border-radius: 8px;
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.auth-form h1 {
+	margin-bottom: 1.5rem;
+}
+
+.form-group {
+	margin-bottom: 1rem;
+}
+
+.form-group label {
+	display: block;
+	margin-bottom: 0.5rem;
+	font-weight: 500;
+}
+
+.form-group input {
+	width: 100%;
+	padding: 0.5rem;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	font-size: 1rem;
+}
+
+.form-group input:focus {
+	outline: none;
+	border-color: #333;
+}
+
+.auth-form button {
+	width: 100%;
+	padding: 0.75rem;
+	margin-top: 1rem;
+}
+
+.auth-form p {
+	margin-top: 1rem;
+	text-align: center;
+}
+
+.error {
+	background: #fee;
+	color: #c33;
+	padding: 0.75rem;
+	border-radius: 4px;
+	margin-bottom: 1rem;
+}
+
+.stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 1rem;
+	margin-bottom: 2rem;
+}
+
+.stat {
+	background: #fff;
+	padding: 1.5rem;
+	border-radius: 8px;
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stat .label {
+	display: block;
+	color: #666;
+	font-size: 0.875rem;
+	margin-bottom: 0.5rem;
+}
+
+.stat .value {
+	display: block;
+	font-size: 1.5rem;
+	font-weight: bold;
+}
+
+.upload-section, .files-section {
+	background: #fff;
+	padding: 1.5rem;
+	border-radius: 8px;
+	box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+	margin-bottom: 2rem;
+}
+
+.upload-section h2, .files-section h2 {
+	margin-bottom: 1rem;
+}
+
+.upload-section form {
+	display: flex;
+	gap: 1rem;
+	align-items: center;
+}
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+th, td {
+	text-align: left;
+	padding: 0.75rem;
+	border-bottom: 1px solid #e0e0e0;
+}
+
+th {
+	font-weight: 600;
+	color: #666;
+}
+
+td form {
+	display: inline;
+	margin-left: 0.5rem;
+}
+
+td button {
+	padding: 0.25rem 0.5rem;
+	font-size: 0.875rem;
+}
+
+a {
+	color: #333;
+}

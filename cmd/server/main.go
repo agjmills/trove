@@ -7,6 +7,7 @@ import (
 
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database"
+	"github.com/agjmills/trove/internal/handlers"
 	"github.com/agjmills/trove/internal/routes"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -25,6 +26,10 @@ func main() {
 
 	if err := database.Migrate(db); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
+	}
+
+	if err := handlers.LoadTemplates(); err != nil {
+		log.Fatalf("Failed to load templates: %v", err)
 	}
 
 	r := chi.NewRouter()

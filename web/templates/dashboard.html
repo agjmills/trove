@@ -1,0 +1,54 @@
+{{define "content"}}
+<h1>Dashboard</h1>
+<div class="stats">
+	<div class="stat">
+		<span class="label">Storage Used</span>
+		<span class="value">{{formatBytes .User.StorageUsed}} / {{formatBytes .User.StorageQuota}}</span>
+	</div>
+	<div class="stat">
+		<span class="label">Files</span>
+		<span class="value">{{len .Files}}</span>
+	</div>
+</div>
+
+<div class="upload-section">
+	<h2>Upload File</h2>
+	<form method="POST" action="/upload" enctype="multipart/form-data">
+		<input type="file" name="file" required>
+		<button type="submit">Upload</button>
+	</form>
+</div>
+
+<div class="files-section">
+	<h2>Your Files</h2>
+	{{if .Files}}
+		<table>
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Size</th>
+					<th>Uploaded</th>
+					<th>Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				{{range .Files}}
+				<tr>
+					<td>{{.OriginalFilename}}</td>
+					<td>{{formatBytes .FileSize}}</td>
+					<td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+					<td>
+						<a href="/download/{{.ID}}">Download</a>
+						<form method="POST" action="/delete/{{.ID}}" style="display:inline">
+							<button type="submit">Delete</button>
+						</form>
+					</td>
+				</tr>
+				{{end}}
+			</tbody>
+		</table>
+	{{else}}
+		<p>No files yet. Upload your first file!</p>
+	{{end}}
+</div>
+{{end}}

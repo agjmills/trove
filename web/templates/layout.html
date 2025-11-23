@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>{{if .Title}}{{.Title}} - {{end}}Trove</title>
+	<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+	<nav>
+		<div class="container">
+			<a href="/" class="logo">Trove</a>
+			<div class="nav-links">
+				{{if .User}}
+					<span>{{.User.Username}}</span>
+					<form action="/logout" method="POST" style="display:inline">
+						<button type="submit">Logout</button>
+					</form>
+				{{else}}
+					<a href="/login">Login</a>
+					<a href="/register">Register</a>
+				{{end}}
+			</div>
+		</div>
+	</nav>
+	<main class="container">
+		{{template "content" .}}
+	</main>
+</body>
+</html>
