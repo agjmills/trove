@@ -2,10 +2,14 @@ package handlers
 
 import (
 	"net/http"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/database/models"
+	"github.com/agjmills/trove/internal/flash"
 	"gorm.io/gorm"
 )
 
@@ -25,8 +29,12 @@ func (h *PageHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 
 	// Get files in current folder
 	var files []models.File
-	h.db.Where("user_id = ? AND folder_path = ?", user.ID, currentFolder).
-		Order("created_at DESC").Find(&files)
+	h.db.Where("user_id = ? AND folder_path = ?", user.ID, currentFolder).Find(&files)
+
+	// Sort files with natural ordering (handles numbered files correctly)
+	sort.Slice(files, func(i, j int) bool {
+		return naturalLess(files[i].OriginalFilename, files[j].OriginalFilename)
+	})
 
 	// Get direct subfolders from Folders table
 	var folders []models.Folder
@@ -130,6 +138,9 @@ func (h *PageHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get flash message if any
+	flashMsg := flash.Get(w, r)
+
 	render(w, "dashboard.html", map[string]any{
 		"Title":         "Dashboard",
 		"User":          user,
@@ -138,5 +149,45 @@ func (h *PageHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 		"CurrentFolder": currentFolder,
 		"ParentFolder":  parentFolder,
 		"Breadcrumbs":   breadcrumbs,
+		"Flash":         flashMsg,
 	})
+}
+
+// naturalLess compares two strings using natural ordering (numbers are compared numerically)
+func naturalLess(a, b string) bool {
+	// Extract numbers from strings like "file (1).txt" and "file (10).txt"
+	re := regexp.MustCompile(`\s*\((\d+)\)`)
+
+	aMatches := re.FindStringSubmatch(a)
+	bMatches := re.FindStringSubmatch(b)
+
+	// Remove " (n)" pattern to get base name
+	aBase := re.ReplaceAllString(a, "")
+	bBase := re.ReplaceAllString(b, "")
+
+	// If base names are different, compare alphabetically
+	if aBase != bBase {
+		return aBase < bBase
+	}
+
+	// Same base name - file without number comes first
+	aHasNum := len(aMatches) > 1
+	bHasNum := len(bMatches) > 1
+
+	if !aHasNum && bHasNum {
+		return true // a (no number) comes before b (has number)
+	}
+	if aHasNum && !bHasNum {
+		return false // b (no number) comes before a (has number)
+	}
+
+	// Both have numbers, compare numerically
+	if aHasNum && bHasNum {
+		aNum, _ := strconv.Atoi(aMatches[1])
+		bNum, _ := strconv.Atoi(bMatches[1])
+		return aNum < bNum
+	}
+
+	// Default to string comparison
+	return a < b
 }

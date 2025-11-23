@@ -40,5 +40,8 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService *storag
 		r.Get("/dashboard", pageHandler.ShowDashboard)
 		r.Post("/upload", fileHandler.Upload)
 		r.Post("/folders/create", fileHandler.CreateFolder)
+		r.Get("/download/{id}", fileHandler.Download)
+		r.Post("/delete/{id}", fileHandler.Delete)
+		r.Post("/folders/delete/{name}", fileHandler.DeleteFolder)
 	})
 }

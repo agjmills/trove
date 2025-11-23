@@ -9,7 +9,9 @@ import (
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
+	"github.com/agjmills/trove/internal/flash"
 	"github.com/agjmills/trove/internal/storage"
+	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 )
 
@@ -85,11 +87,15 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	// Get and sanitize folder path
 	folderPath := sanitizeFolderPath(r.FormValue("folder"))
 
+	// Check if file with same name exists in this folder and auto-rename if needed
+	originalFilename := header.Filename
+	finalFilename := h.getUniqueFilename(user.ID, folderPath, originalFilename)
+
 	// Create database record
 	fileRecord := models.File{
 		UserID:           user.ID,
 		Filename:         filename,
-		OriginalFilename: header.Filename,
+		OriginalFilename: finalFilename,
 		FilePath:         h.storage.GetFilePath(filename),
 		FileSize:         size,
 		MimeType:         header.Header.Get("Content-Type"),
@@ -111,12 +117,47 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Warning: failed to update user storage: %v\n", err)
 	}
 
+	// Show success message with renamed filename if applicable
+	if finalFilename != originalFilename {
+		flash.Success(w, fmt.Sprintf("File uploaded as '%s'", finalFilename))
+	} else {
+		flash.Success(w, "File uploaded successfully.")
+	}
+
 	// Redirect back to the folder we uploaded to
 	redirectURL := "/dashboard"
 	if folderPath != "/" {
 		redirectURL = "/dashboard?folder=" + folderPath
 	}
 	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+}
+
+// getUniqueFilename checks if a file with the same name exists and returns a unique name
+func (h *FileHandler) getUniqueFilename(userID uint, folderPath, originalFilename string) string {
+	// Check if file exists
+	var count int64
+	h.db.Model(&models.File{}).
+		Where("user_id = ? AND folder_path = ? AND original_filename = ?", userID, folderPath, originalFilename).
+		Count(&count)
+
+	if count == 0 {
+		return originalFilename
+	}
+
+	// File exists, find a unique name
+	ext := filepath.Ext(originalFilename)
+	nameWithoutExt := strings.TrimSuffix(originalFilename, ext)
+
+	for i := 1; ; i++ {
+		newName := fmt.Sprintf("%s (%d)%s", nameWithoutExt, i, ext)
+		h.db.Model(&models.File{}).
+			Where("user_id = ? AND folder_path = ? AND original_filename = ?", userID, folderPath, newName).
+			Count(&count)
+
+		if count == 0 {
+			return newName
+		}
+	}
 }
 
 func (h *FileHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +195,8 @@ func (h *FileHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 
 	if result.Error == nil {
 		// Folder already exists
-		http.Redirect(w, r, "/dashboard?folder="+newFolderPath, http.StatusSeeOther)
+		flash.Error(w, "A folder with that name already exists.")
+		http.Redirect(w, r, "/dashboard?folder="+currentFolder, http.StatusSeeOther)
 		return
 	}
 
@@ -165,10 +207,159 @@ func (h *FileHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Create(&folder).Error; err != nil {
-		http.Error(w, "Failed to create folder", http.StatusInternalServerError)
+		flash.Error(w, "Failed to create folder. Please try again.")
+		http.Redirect(w, r, "/dashboard?folder="+currentFolder, http.StatusSeeOther)
 		return
 	}
 
+	flash.Success(w, "Folder created successfully.")
 	// Redirect to the new folder
 	http.Redirect(w, r, "/dashboard?folder="+newFolderPath, http.StatusSeeOther)
+}
+
+func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get file ID from URL
+	fileID := chi.URLParam(r, "id")
+	if fileID == "" {
+		http.Error(w, "File ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Fetch file from database
+	var file models.File
+	if err := h.db.Where("id = ? AND user_id = ?", fileID, user.ID).First(&file).Error; err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	// Check if file exists on disk
+	if !h.storage.FileExists(file.Filename) {
+		http.Error(w, "File not found on disk", http.StatusNotFound)
+		return
+	}
+
+	// Open file
+	filePath := h.storage.GetFilePath(file.Filename)
+	f, err := h.storage.OpenFile(file.Filename)
+	if err != nil {
+		http.Error(w, "Failed to open file", http.StatusInternalServerError)
+		return
+	}
+	defer f.Close()
+
+	// Set headers
+	w.Header().Set("Content-Type", file.MimeType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, file.OriginalFilename))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", file.FileSize))
+
+	// Stream file to response
+	http.ServeFile(w, r, filePath)
+}
+
+func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get file ID from URL
+	fileID := chi.URLParam(r, "id")
+	if fileID == "" {
+		http.Error(w, "File ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Fetch file from database
+	var file models.File
+	if err := h.db.Where("id = ? AND user_id = ?", fileID, user.ID).First(&file).Error; err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	// Store the folder path and size before deletion
+	folderPath := file.FolderPath
+	fileSize := file.FileSize
+
+	// Delete from database
+	if err := h.db.Delete(&file).Error; err != nil {
+		http.Error(w, "Failed to delete file from database", http.StatusInternalServerError)
+		return
+	}
+
+	// Delete from disk
+	if err := h.storage.DeleteFile(file.Filename); err != nil {
+		// Log the error but don't fail the request since DB record is already gone
+		fmt.Printf("Warning: failed to delete file from disk: %v\n", err)
+	}
+
+	// Update user storage quota
+	if err := h.db.Model(&models.User{}).Where("id = ?", user.ID).
+		UpdateColumn("storage_used", gorm.Expr("storage_used - ?", fileSize)).Error; err != nil {
+		fmt.Printf("Warning: failed to update user storage: %v\n", err)
+	}
+
+	flash.Success(w, "File deleted successfully.")
+
+	// Redirect back to the folder
+	redirectURL := "/dashboard"
+	if folderPath != "/" {
+		redirectURL = "/dashboard?folder=" + folderPath
+	}
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+}
+
+func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get folder name from URL
+	folderName := chi.URLParam(r, "name")
+	if folderName == "" {
+		http.Error(w, "Folder name is required", http.StatusBadRequest)
+		return
+	}
+
+	currentFolder := sanitizeFolderPath(r.FormValue("current_folder"))
+
+	// Build full folder path
+	fullFolderPath := currentFolder
+	if currentFolder == "/" {
+		fullFolderPath = "/" + folderName
+	} else {
+		fullFolderPath = currentFolder + "/" + folderName
+	}
+
+	// Check if folder has any files
+	var fileCount int64
+	h.db.Model(&models.File{}).
+		Where("user_id = ? AND folder_path LIKE ?", user.ID, fullFolderPath+"%").
+		Count(&fileCount)
+
+	if fileCount > 0 {
+		flash.Error(w, "Cannot delete folder: folder contains files. Please delete or move the files first.")
+		http.Redirect(w, r, "/dashboard?folder="+currentFolder, http.StatusSeeOther)
+		return
+	}
+
+	// Delete the folder record
+	if err := h.db.Where("user_id = ? AND folder_path = ?", user.ID, fullFolderPath).
+		Delete(&models.Folder{}).Error; err != nil {
+		flash.Error(w, "Failed to delete folder. Please try again.")
+		http.Redirect(w, r, "/dashboard?folder="+currentFolder, http.StatusSeeOther)
+		return
+	}
+
+	flash.Success(w, "Folder deleted successfully.")
+	// Redirect back to parent folder
+	http.Redirect(w, r, "/dashboard?folder="+currentFolder, http.StatusSeeOther)
 }

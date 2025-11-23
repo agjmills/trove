@@ -121,6 +121,38 @@ button:hover {
 	margin-bottom: 1rem;
 }
 
+/* Flash Messages */
+.flash {
+	padding: 1rem;
+	border-radius: 4px;
+	margin-bottom: 1rem;
+	border-left: 4px solid;
+}
+
+.flash-error {
+	background: #fee;
+	color: #c33;
+	border-color: #c33;
+}
+
+.flash-success {
+	background: #efe;
+	color: #3a3;
+	border-color: #3a3;
+}
+
+.flash-warning {
+	background: #ffc;
+	color: #963;
+	border-color: #963;
+}
+
+.flash-info {
+	background: #eef;
+	color: #36c;
+	border-color: #36c;
+}
+
 .stats {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -158,9 +190,9 @@ button:hover {
 
 .upload-section {
 	display: flex;
-	gap: 1rem;
+	gap: 0.75rem;
 	flex-wrap: wrap;
-	align-items: flex-start;
+	align-items: center;
 }
 
 .upload-section h2, .files-section h2 {
@@ -171,14 +203,12 @@ button:hover {
 	display: flex;
 	gap: 0.5rem;
 	align-items: center;
-	flex: 1 1 auto;
-	min-width: 300px;
-	max-width: 48%;
+	flex: 0 1 auto;
 }
 
 @media (max-width: 768px) {
 	.upload-section .inline-form {
-		max-width: 100%;
+		flex: 1 1 100%;
 	}
 }
 
@@ -191,11 +221,11 @@ button:hover {
 }
 
 .upload-section input[type="text"] {
-	flex: 1;
 	padding: 0.5rem;
 	border: 1px solid #ddd;
 	border-radius: 4px;
 	font-size: 0.875rem;
+	width: 200px;
 }
 
 .upload-section button {
@@ -228,6 +258,15 @@ td form {
 td button {
 	padding: 0.25rem 0.5rem;
 	font-size: 0.875rem;
+}
+
+td .download-btn {
+	background: #0066cc;
+	margin-right: 0.5rem;
+}
+
+td .download-btn:hover {
+	background: #0052a3;
 }
 
 tr.parent-directory {

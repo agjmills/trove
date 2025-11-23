@@ -72,3 +72,13 @@ func (s *Service) FileExists(filename string) bool {
 	_, err := os.Stat(filePath)
 	return err == nil
 }
+
+// OpenFile opens a file for reading
+func (s *Service) OpenFile(filename string) (*os.File, error) {
+	filePath := filepath.Join(s.basePath, filename)
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	return file, nil
+}

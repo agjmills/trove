@@ -10,6 +10,13 @@
 
 <h1>Dashboard</h1>
 
+<!-- Flash Messages -->
+{{if .Flash}}
+<div class="flash flash-{{.Flash.Type}}">
+	{{.Flash.Content}}
+</div>
+{{end}}
+
 <!-- Breadcrumb Navigation -->
 <div class="breadcrumbs">
 	{{range $index, $crumb := .Breadcrumbs}}
@@ -34,10 +41,10 @@
 </div>
 
 <div class="upload-section">
-	<form method="POST" action="/upload" enctype="multipart/form-data" class="inline-form">
+	<form method="POST" action="/upload" enctype="multipart/form-data" class="inline-form" id="upload-form">
 		<input type="hidden" name="folder" value="{{.CurrentFolder}}">
-		<input type="file" name="file" required>
-		<button type="submit">📤 Upload</button>
+		<input type="file" name="file" id="file-input" required style="display: none;">
+		<button type="button" onclick="document.getElementById('file-input').click()">📤 Upload File</button>
 	</form>
 	
 	<form method="POST" action="/folders/create" class="inline-form">
@@ -95,7 +102,7 @@
 					<td>{{formatBytes .FileSize}}</td>
 					<td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
 					<td>
-						<a href="/download/{{.ID}}">Download</a>
+						<button class="download-btn" onclick="window.location='/download/{{.ID}}'">Download</button>
 						<form method="POST" action="/delete/{{.ID}}" style="display:inline">
 							<button type="submit">Delete</button>
 						</form>
@@ -112,8 +119,8 @@
 <script>
 	// Drag and drop functionality
 	const dragOverlay = document.getElementById('drag-overlay');
-	const uploadForm = document.querySelector('.upload-section form[enctype="multipart/form-data"]');
-	const fileInput = uploadForm.querySelector('input[type="file"]');
+	const uploadForm = document.getElementById('upload-form');
+	const fileInput = document.getElementById('file-input');
 	let dragCounter = 0;
 
 	// Prevent default drag behaviors on the entire page
@@ -157,6 +164,13 @@
 	// Also hide overlay when dragging over it
 	dragOverlay.addEventListener('dragover', function(e) {
 		e.preventDefault();
+	});
+
+	// Auto-submit form when file is selected via the upload button
+	fileInput.addEventListener('change', function() {
+		if (this.files.length > 0) {
+			uploadForm.submit();
+		}
 	});
 </script>
 
