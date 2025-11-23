@@ -1,0 +1,35 @@
+# Development files
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+tmp/
+*.log
+
+# Documentation
+README.md
+PLAN.md
+LICENSE
+
+# Docker files
+Dockerfile.dev
+docker-compose.yml
+docker-compose.prod.yml
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Data directories (will be mounted as volumes)
+data/
+
+# Air config
+.air.toml

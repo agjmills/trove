@@ -1,0 +1,50 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trove-app-prod
+    ports:
+      - "192.168.0.3:5014:8080"
+    volumes:
+      - ./data:/app/data
+      - trove-data:/app/data/files
+    env_file:
+      - .env
+    environment:
+      - ENV=production
+      - DB_HOST=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - trove-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: trove-postgres-prod
+    environment:
+      - POSTGRES_DB=trove
+      - POSTGRES_USER=trove
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-trove_prod_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trove"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trove-network
+    restart: unless-stopped
+
+volumes:
+  trove-data:
+  postgres-data:
+
+networks:
+  trove-network:
+    driver: bridge

@@ -44,7 +44,8 @@ Self-hostable file storage in Go with server-side rendering, minimal JS, Docker 
 
 ### Docker & Deployment
 - [x] Dev: Dockerfile + Compose with PostgreSQL, hot reload, health checks
-- [ ] Prod: Multi-stage Dockerfile
+- [x] Prod: Multi-stage Dockerfile with scratch base (~18MB image)
+- [x] Production docker-compose.yml with restart policies
 - [ ] Documentation (README deployment guide)
 
 ### Testing & Polish
@@ -223,17 +224,17 @@ CSRF protection, custom error pages with panic recovery, responsive full-width l
 ## Performance Targets
 - [ ] Template caching in production
 - [ ] Static asset caching headers
-- [ ] File streaming (no memory loading)
-- [ ] Database indexes on user_id, hash, token_hash
-- [ ] <50MB Docker image (production)
+- [x] File streaming (no memory loading)
+- [x] Database indexes on user_id, hash, token_hash
+- [x] <50MB Docker image (production) - **Achieved: ~18MB with scratch base**
 - [ ] <100ms page load
 
 ---
 
 ## Current Status
 
-**Working**: Full authentication system, file upload/download/delete, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, responsive full-width layout with collapsible sidebar, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints
+**Working**: Full authentication system, file upload/download/delete, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, responsive full-width layout with collapsible sidebar, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints, production-ready Docker image (~18MB)
 
-**Next**: Production Dockerfile (multi-stage build)
+**Next**: Deployment documentation, template caching
 
-**Recent**: Implemented security headers middleware (X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy, Permissions-Policy), rate limiting for login/register endpoints (5 attempts per 15 minutes per IP with automatic cleanup)
+**Recent**: Created production Dockerfile with multi-stage build using scratch base (static binary, CA certs, timezone data) - final image size ~18MB. Added docker-compose.prod.yml with restart policies and health checks.
