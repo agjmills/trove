@@ -51,7 +51,9 @@ Self-hostable file storage in Go with server-side rendering, minimal JS, Docker 
 - [ ] Unit tests for core logic
 - [ ] Integration tests for handlers
 - [x] Error handling (panic recovery, custom error pages)
-- [x] Input validation (CSRF, form validation)
+- [x] Input validation (CSRF, form validation, file size limits)
+- [x] Human-readable size configuration (10G, 500M, etc.)
+- [x] Descriptive upload error messages
 - [ ] Security headers (X-Frame-Options, CSP, HSTS)
 - [ ] Rate limiting on auth endpoints
 
