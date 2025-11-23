@@ -55,7 +55,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		if contentType == "application/json" {
 			http.Error(w, "All fields are required", http.StatusBadRequest)
 		} else {
-			registerTemplate.ExecuteTemplate(w, "layout.html", map[string]any{
+			render(w, "register.html", map[string]any{
 				"Title": "Register",
 				"Error": "All fields are required",
 			})
@@ -135,7 +135,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		if contentType == "application/json" {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		} else {
-			loginTemplate.ExecuteTemplate(w, "layout.html", map[string]any{
+			render(w, "login.html", map[string]any{
 				"Title": "Login",
 				"Error": "Invalid credentials",
 			})
@@ -147,7 +147,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		if contentType == "application/json" {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		} else {
-			loginTemplate.ExecuteTemplate(w, "layout.html", map[string]any{
+			render(w, "login.html", map[string]any{
 				"Title": "Login",
 				"Error": "Invalid credentials",
 			})

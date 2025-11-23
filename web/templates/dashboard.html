@@ -1,5 +1,27 @@
 {{define "content"}}
+<!-- Drag and Drop Overlay -->
+<div id="drag-overlay" class="drag-overlay" style="display: none;">
+	<div class="drag-overlay-content">
+		<div class="drag-icon">📤</div>
+		<h2>Drop files here to upload</h2>
+		<p>Files will be uploaded to the current folder</p>
+	</div>
+</div>
+
 <h1>Dashboard</h1>
+
+<!-- Breadcrumb Navigation -->
+<div class="breadcrumbs">
+	{{range $index, $crumb := .Breadcrumbs}}
+		{{if $index}} / {{end}}
+		{{if eq $crumb.Path $.CurrentFolder}}
+			<strong>{{$crumb.Name}}</strong>
+		{{else}}
+			<a href="/dashboard?folder={{$crumb.Path}}">{{$crumb.Name}}</a>
+		{{end}}
+	{{end}}
+</div>
+
 <div class="stats">
 	<div class="stat">
 		<span class="label">Storage Used</span>
@@ -12,16 +34,22 @@
 </div>
 
 <div class="upload-section">
-	<h2>Upload File</h2>
-	<form method="POST" action="/upload" enctype="multipart/form-data">
+	<form method="POST" action="/upload" enctype="multipart/form-data" class="inline-form">
+		<input type="hidden" name="folder" value="{{.CurrentFolder}}">
 		<input type="file" name="file" required>
-		<button type="submit">Upload</button>
+		<button type="submit">📤 Upload</button>
+	</form>
+	
+	<form method="POST" action="/folders/create" class="inline-form">
+		<input type="hidden" name="current_folder" value="{{.CurrentFolder}}">
+		<input type="text" name="folder_name" placeholder="New folder name" required>
+		<button type="submit">📁 Create Folder</button>
 	</form>
 </div>
 
 <div class="files-section">
 	<h2>Your Files</h2>
-	{{if .Files}}
+	{{if or .Files .Folders (ne .CurrentFolder "/")}}
 		<table>
 			<thead>
 				<tr>
@@ -32,6 +60,35 @@
 				</tr>
 			</thead>
 			<tbody>
+				{{if ne .CurrentFolder "/"}}
+				<tr class="parent-directory">
+					<td>
+						<a href="/dashboard{{if eq .ParentFolder "/"}}{{else}}?folder={{.ParentFolder}}{{end}}">
+							📁 ↩️ Parent Directory
+						</a>
+					</td>
+					<td>-</td>
+					<td>-</td>
+					<td></td>
+				</tr>
+				{{end}}
+				{{range .Folders}}
+				<tr>
+					<td>
+						<a href="/dashboard?folder={{if eq $.CurrentFolder "/"}}/{{.}}{{else}}{{$.CurrentFolder}}/{{.}}{{end}}">
+							📁 {{.}}
+						</a>
+					</td>
+					<td>-</td>
+					<td>-</td>
+					<td>
+						<form method="POST" action="/folders/delete/{{.}}" style="display:inline">
+							<input type="hidden" name="current_folder" value="{{$.CurrentFolder}}">
+							<button type="submit">Delete</button>
+						</form>
+					</td>
+				</tr>
+				{{end}}
 				{{range .Files}}
 				<tr>
 					<td>{{.OriginalFilename}}</td>
@@ -48,7 +105,59 @@
 			</tbody>
 		</table>
 	{{else}}
-		<p>No files yet. Upload your first file!</p>
+		<p>No files in this folder yet.</p>
 	{{end}}
 </div>
+
+<script>
+	// Drag and drop functionality
+	const dragOverlay = document.getElementById('drag-overlay');
+	const uploadForm = document.querySelector('.upload-section form[enctype="multipart/form-data"]');
+	const fileInput = uploadForm.querySelector('input[type="file"]');
+	let dragCounter = 0;
+
+	// Prevent default drag behaviors on the entire page
+	['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+		document.body.addEventListener(eventName, preventDefaults, false);
+	});
+
+	function preventDefaults(e) {
+		e.preventDefault();
+		e.stopPropagation();
+	}
+
+	// Show overlay when dragging files over the window
+	document.body.addEventListener('dragenter', function(e) {
+		if (e.dataTransfer.types.includes('Files')) {
+			dragCounter++;
+			dragOverlay.style.display = 'flex';
+		}
+	});
+
+	document.body.addEventListener('dragleave', function(e) {
+		dragCounter--;
+		if (dragCounter === 0) {
+			dragOverlay.style.display = 'none';
+		}
+	});
+
+	// Handle file drop
+	document.body.addEventListener('drop', function(e) {
+		dragCounter = 0;
+		dragOverlay.style.display = 'none';
+		
+		const files = e.dataTransfer.files;
+		if (files.length > 0) {
+			// Set the file to the input and submit the form
+			fileInput.files = files;
+			uploadForm.submit();
+		}
+	});
+
+	// Also hide overlay when dragging over it
+	dragOverlay.addEventListener('dragover', function(e) {
+		e.preventDefault();
+	});
+</script>
+
 {{end}}

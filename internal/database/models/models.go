@@ -19,7 +19,19 @@ type User struct {
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Files    []File    `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+	Folders  []Folder  `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
 	Sessions []Session `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+}
+
+type Folder struct {
+	ID         uint           `gorm:"primaryKey" json:"id"`
+	UserID     uint           `gorm:"not null;index:idx_user_folder_path" json:"user_id"`
+	FolderPath string         `gorm:"not null;size:1024;index:idx_user_folder_path" json:"folder_path"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
+
+	User User `gorm:"foreignKey:UserID" json:"-"`
 }
 
 type File struct {

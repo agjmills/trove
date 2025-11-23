@@ -156,14 +156,52 @@ button:hover {
 	margin-bottom: 2rem;
 }
 
+.upload-section {
+	display: flex;
+	gap: 1rem;
+	flex-wrap: wrap;
+	align-items: flex-start;
+}
+
 .upload-section h2, .files-section h2 {
 	margin-bottom: 1rem;
 }
 
-.upload-section form {
+.upload-section .inline-form {
 	display: flex;
-	gap: 1rem;
+	gap: 0.5rem;
 	align-items: center;
+	flex: 1 1 auto;
+	min-width: 300px;
+	max-width: 48%;
+}
+
+@media (max-width: 768px) {
+	.upload-section .inline-form {
+		max-width: 100%;
+	}
+}
+
+.upload-section input[type="file"] {
+	flex: 1;
+	padding: 0.5rem;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	font-size: 0.875rem;
+}
+
+.upload-section input[type="text"] {
+	flex: 1;
+	padding: 0.5rem;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	font-size: 0.875rem;
+}
+
+.upload-section button {
+	white-space: nowrap;
+	padding: 0.5rem 1rem;
+	flex-shrink: 0;
 }
 
 table {
@@ -192,6 +230,60 @@ td button {
 	font-size: 0.875rem;
 }
 
+tr.parent-directory {
+	background: #f9f9f9;
+	font-weight: 500;
+}
+
+tr.parent-directory:hover {
+	background: #f0f0f0;
+}
+
 a {
 	color: #333;
+}
+
+/* Drag and Drop Overlay */
+.drag-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(51, 51, 51, 0.95);
+	z-index: 9999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+}
+
+.drag-overlay-content {
+	text-align: center;
+	color: white;
+}
+
+.drag-overlay .drag-icon {
+	font-size: 5rem;
+	margin-bottom: 1rem;
+	animation: bounce 1s infinite;
+}
+
+.drag-overlay h2 {
+	font-size: 2rem;
+	margin-bottom: 0.5rem;
+}
+
+.drag-overlay p {
+	font-size: 1.2rem;
+	opacity: 0.8;
+}
+
+@keyframes bounce {
+	0%, 100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-20px);
+	}
 }
