@@ -5,7 +5,9 @@ import (
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
+	"github.com/agjmills/trove/internal/csrf"
 	"github.com/agjmills/trove/internal/handlers"
+	"github.com/agjmills/trove/internal/middleware"
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
@@ -24,6 +26,9 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService *storag
 	fileServer := http.FileServer(http.Dir("web/static"))
 	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
 
+	// 404 handler
+	r.NotFound(middleware.NotFoundHandler)
+
 	r.Group(func(r chi.Router) {
 		r.Use(auth.OptionalAuth(db))
 		r.Get("/", authHandler.ShowLogin)
@@ -37,6 +42,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService *storag
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireAuth(db))
+		r.Use(csrf.Middleware)
 		r.Get("/dashboard", pageHandler.ShowDashboard)
 		r.Post("/upload", fileHandler.Upload)
 		r.Post("/folders/create", fileHandler.CreateFolder)

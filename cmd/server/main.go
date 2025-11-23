@@ -8,6 +8,7 @@ import (
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database"
 	"github.com/agjmills/trove/internal/handlers"
+	internalMiddleware "github.com/agjmills/trove/internal/middleware"
 	"github.com/agjmills/trove/internal/routes"
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
@@ -33,6 +34,10 @@ func main() {
 		log.Fatalf("Failed to load templates: %v", err)
 	}
 
+	if err := internalMiddleware.LoadErrorTemplates(); err != nil {
+		log.Fatalf("Failed to load error templates: %v", err)
+	}
+
 	storageService, err := storage.NewService(cfg.StoragePath)
 	if err != nil {
 		log.Fatalf("Failed to initialize storage: %v", err)
@@ -41,7 +46,7 @@ func main() {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
+	r.Use(internalMiddleware.RecoverMiddleware)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 

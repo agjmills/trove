@@ -5,6 +5,7 @@
 		<div class="error">{{.Error}}</div>
 	{{end}}
 	<form method="POST" action="/register">
+		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 		<div class="form-group">
 			<label for="username">Username</label>
 			<input type="text" id="username" name="username" required autofocus>

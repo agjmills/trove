@@ -39,12 +39,14 @@
 <div class="upload-section">
 	<form method="POST" action="/upload" enctype="multipart/form-data" class="inline-form" id="upload-form">
 		<input type="hidden" name="folder" value="{{.CurrentFolder}}">
+		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}" id="csrf-token">
 		<input type="file" name="file" id="file-input" required style="display: none;">
 		<button type="button" id="upload-button" onclick="document.getElementById('file-input').click()">📤 Upload File</button>
 	</form>
 	
 	<form method="POST" action="/folders/create" class="inline-form">
 		<input type="hidden" name="current_folder" value="{{.CurrentFolder}}">
+		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 		<input type="text" name="folder_name" placeholder="New folder name" required>
 		<button type="submit">📁 Create Folder</button>
 	</form>
@@ -100,6 +102,7 @@
 					<td>
 						<form method="POST" action="/folders/delete/{{.}}" style="display:inline">
 							<input type="hidden" name="current_folder" value="{{$.CurrentFolder}}">
+							<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
 							<button type="submit">Delete</button>
 						</form>
 					</td>
@@ -113,6 +116,7 @@
 					<td>
 						<button class="download-btn" onclick="window.location='/download/{{.ID}}'">Download</button>
 						<form method="POST" action="/delete/{{.ID}}" style="display:inline">
+							<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
 							<button type="submit">Delete</button>
 						</form>
 					</td>
@@ -142,6 +146,7 @@
 		const formData = new FormData();
 		formData.append('file', file);
 		formData.append('folder', uploadForm.querySelector('input[name="folder"]').value);
+		formData.append('csrf_token', document.getElementById('csrf-token').value);
 
 		// Show progress bar
 		progressContainer.style.display = 'block';
