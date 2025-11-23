@@ -160,8 +160,8 @@ DB_PASSWORD=changeme
 
 # Storage
 STORAGE_PATH=./data/files
-DEFAULT_USER_QUOTA=10737418240    # 10GB
-MAX_UPLOAD_SIZE=524288000         # 500MB
+DEFAULT_USER_QUOTA=10G            # Supports: B, K/KB, M/MB, G/GB, T/TB
+MAX_UPLOAD_SIZE=500M              # Supports: B, K/KB, M/MB, G/GB, T/TB
 
 # Security
 SESSION_SECRET=changeme_generate_random_secret
@@ -214,8 +214,8 @@ CSRF protection, custom error pages with panic recovery, responsive full-width l
 
 ## Current Status
 
-**Working**: Full authentication system, file upload/download/delete, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, responsive full-width layout with collapsible sidebar, mobile optimizations
+**Working**: Full authentication system, file upload/download/delete, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, responsive full-width layout with collapsible sidebar, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors
 
 **Next**: Production Dockerfile (multi-stage build), security headers middleware, rate limiting on auth endpoints
 
-**Recent**: Added mobile optimizations (hide "Uploaded" column, truncate long filenames on small screens), responsive sidebar at 900px breakpoint
+**Recent**: Added human-readable size parsing for MAX_UPLOAD_SIZE and DEFAULT_USER_QUOTA (supports B, K/KB, M/MB, G/GB, T/TB), improved upload error messages to show actual server responses and specific error conditions
