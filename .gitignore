@@ -27,6 +27,13 @@ go.work.sum
 # env file
 .env
 
+# Data directories
+data/
+
+# Air (hot reload)
+tmp/
+build-errors.log
+
 # Editor/IDE
 # .idea/
 # .vscode/
