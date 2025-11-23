@@ -9,6 +9,11 @@
 <body>
 	<nav>
 		<div class="container">
+			{{if .FullWidth}}
+			<button id="sidebar-toggle-nav" class="sidebar-toggle-nav">
+				<span class="toggle-icon">☰</span>
+			</button>
+			{{end}}
 			<a href="/" class="logo">Trove</a>
 			<div class="nav-links">
 				{{if .User}}
@@ -23,7 +28,7 @@
 			</div>
 		</div>
 	</nav>
-	<main class="container">
+	<main class="{{if .FullWidth}}full-width{{else}}container{{end}}">
 		{{template "content" .}}
 	</main>
 </body>

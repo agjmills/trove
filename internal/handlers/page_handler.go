@@ -28,14 +28,37 @@ func (h *PageHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 	// Get current folder from query param, default to root
 	currentFolder := sanitizeFolderPath(r.URL.Query().Get("folder"))
 
-	// Get files in current folder
+	// Pagination parameters
+	page := 1
+	pageSize := 50
+	if p := r.URL.Query().Get("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	offset := (page - 1) * pageSize
+
+	// Get total count of files in current folder
+	var totalFiles int64
+	h.db.Model(&models.File{}).Where("user_id = ? AND folder_path = ?", user.ID, currentFolder).Count(&totalFiles)
+
+	// Get files in current folder with pagination
 	var files []models.File
-	h.db.Where("user_id = ? AND folder_path = ?", user.ID, currentFolder).Find(&files)
+	h.db.Where("user_id = ? AND folder_path = ?", user.ID, currentFolder).
+		Offset(offset).
+		Limit(pageSize).
+		Find(&files)
 
 	// Sort files with natural ordering (handles numbered files correctly)
 	sort.Slice(files, func(i, j int) bool {
 		return naturalLess(files[i].OriginalFilename, files[j].OriginalFilename)
 	})
+
+	// Calculate pagination info
+	totalPages := int((totalFiles + int64(pageSize) - 1) / int64(pageSize))
+	if totalPages == 0 {
+		totalPages = 1
+	}
 
 	// Get direct subfolders from Folders table
 	var folders []models.Folder
@@ -159,6 +182,10 @@ func (h *PageHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 		"Breadcrumbs":   breadcrumbs,
 		"Flash":         flashMsg,
 		"CSRFToken":     csrfToken,
+		"Page":          page,
+		"TotalPages":    totalPages,
+		"TotalFiles":    totalFiles,
+		"FullWidth":     true,
 	})
 }
 

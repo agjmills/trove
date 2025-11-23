@@ -25,6 +25,18 @@ func formatBytes(bytes int64) string {
 func LoadTemplates() error {
 	funcMap := template.FuncMap{
 		"formatBytes": formatBytes,
+		"add": func(a, b int) int {
+			return a + b
+		},
+		"mul": func(a, b int64) int64 {
+			return a * b
+		},
+		"div": func(a, b int64) int64 {
+			if b == 0 {
+				return 0
+			}
+			return a / b
+		},
 	}
 
 	var err error

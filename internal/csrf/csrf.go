@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	tokenLength  = 32
-	cookieName   = "csrf_token"
+	tokenLength   = 32
+	cookieName    = "csrf_token"
 	formFieldName = "csrf_token"
-	tokenTTL     = 24 * time.Hour
+	tokenTTL      = 24 * time.Hour
 )
 
 // Store holds CSRF tokens with expiration
@@ -33,15 +33,15 @@ func GenerateToken() (string, error) {
 		return "", err
 	}
 	token := base64.URLEncoding.EncodeToString(b)
-	
+
 	// Store token with expiration
 	globalStore.mu.Lock()
 	globalStore.tokens[token] = time.Now().Add(tokenTTL)
 	globalStore.mu.Unlock()
-	
+
 	// Clean up expired tokens periodically
 	go globalStore.cleanup()
-	
+
 	return token, nil
 }
 
@@ -50,15 +50,15 @@ func ValidateToken(token string) bool {
 	if token == "" {
 		return false
 	}
-	
+
 	globalStore.mu.RLock()
 	expiry, exists := globalStore.tokens[token]
 	globalStore.mu.RUnlock()
-	
+
 	if !exists {
 		return false
 	}
-	
+
 	// Check if token has expired
 	if time.Now().After(expiry) {
 		globalStore.mu.Lock()
@@ -66,7 +66,7 @@ func ValidateToken(token string) bool {
 		globalStore.mu.Unlock()
 		return false
 	}
-	
+
 	return true
 }
 
@@ -74,7 +74,7 @@ func ValidateToken(token string) bool {
 func (s *Store) cleanup() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	now := time.Now()
 	for token, expiry := range s.tokens {
 		if now.After(expiry) {
@@ -91,19 +91,19 @@ func Middleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		
+
 		// Get token from form or header
 		token := r.FormValue(formFieldName)
 		if token == "" {
 			token = r.Header.Get("X-CSRF-Token")
 		}
-		
+
 		// Validate token
 		if !ValidateToken(token) {
 			http.Error(w, "CSRF token validation failed", http.StatusForbidden)
 			return
 		}
-		
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -128,15 +128,15 @@ func GetToken(w http.ResponseWriter, r *http.Request) (string, error) {
 	if err == nil && ValidateToken(cookie.Value) {
 		return cookie.Value, nil
 	}
-	
+
 	// Generate new token
 	token, err := GenerateToken()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate CSRF token: %w", err)
 	}
-	
+
 	// Set cookie
 	SetTokenCookie(w, token)
-	
+
 	return token, nil
 }

@@ -8,97 +8,114 @@
 	</div>
 </div>
 
-<h1>Dashboard</h1>
+<div class="dashboard-layout">
+	<!-- Sidebar -->
+	<aside id="sidebar" class="sidebar">
+		<div class="sidebar-header">
+			<h3>Storage</h3>
+		</div>
 
-<!-- Flash Messages -->
-{{if .Flash}}
-<div class="flash flash-{{.Flash.Type}}">
-	{{.Flash.Content}}
-</div>
-{{end}}
+		<div class="sidebar-section">
+			<div class="storage-info">
+				<div class="storage-label">Used</div>
+				<div class="storage-value">{{formatBytes .User.StorageUsed}} / {{formatBytes .User.StorageQuota}}</div>
+				<div class="storage-bar">
+					<div class="storage-bar-fill" style="width: {{div (mul .User.StorageUsed 100) .User.StorageQuota}}%"></div>
+				</div>
+			</div>
+		</div>
 
-<!-- Breadcrumb Navigation -->
-<div class="breadcrumbs">
-	{{range $index, $crumb := .Breadcrumbs}}
-		{{if $index}} / {{end}}
-		{{if eq $crumb.Path $.CurrentFolder}}
-			<strong>{{$crumb.Name}}</strong>
-		{{else}}
-			<a href="/dashboard?folder={{$crumb.Path}}">{{$crumb.Name}}</a>
+		<div class="sidebar-section">
+			<h4>Upload File</h4>
+			<form method="POST" action="/upload" enctype="multipart/form-data" id="upload-form">
+				<input type="hidden" name="folder" value="{{.CurrentFolder}}">
+				<input type="hidden" name="csrf_token" value="{{.CSRFToken}}" id="csrf-token">
+				<input type="file" name="file" id="file-input" required style="display: none;">
+				<button type="button" id="upload-button" class="sidebar-btn" onclick="document.getElementById('file-input').click()">
+					📤 Choose File
+				</button>
+			</form>
+		</div>
+
+		<div class="sidebar-section">
+			<h4>New Folder</h4>
+			<form method="POST" action="/folders/create">
+				<input type="hidden" name="current_folder" value="{{.CurrentFolder}}">
+				<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+				<input type="text" name="folder_name" placeholder="Folder name" required class="sidebar-input">
+				<button type="submit" class="sidebar-btn">📁 Create</button>
+			</form>
+		</div>
+
+		<!-- Upload Progress in Sidebar -->
+		<div id="upload-progress-container" class="upload-progress-container" style="display: none;">
+			<div class="upload-progress-content">
+				<div class="upload-progress-text">
+					<span id="upload-filename">Uploading...</span>
+					<span id="upload-percentage">0%</span>
+				</div>
+				<div class="upload-progress-bar">
+					<div id="upload-progress-fill" class="upload-progress-fill"></div>
+				</div>
+			</div>
+		</div>
+	</aside>
+
+	<!-- Main Content -->
+	<main class="main-content">
+		<h1>Your Files</h1>
+
+		<!-- Flash Messages -->
+		{{if .Flash}}
+		<div class="flash flash-{{.Flash.Type}}">
+			{{.Flash.Content}}
+		</div>
 		{{end}}
-	{{end}}
-</div>
 
-<div class="stats">
-	<div class="stat">
-		<span class="label">Storage Used</span>
-		<span class="value">{{formatBytes .User.StorageUsed}} / {{formatBytes .User.StorageQuota}}</span>
-	</div>
-</div>
-
-<div class="upload-section">
-	<form method="POST" action="/upload" enctype="multipart/form-data" class="inline-form" id="upload-form">
-		<input type="hidden" name="folder" value="{{.CurrentFolder}}">
-		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}" id="csrf-token">
-		<input type="file" name="file" id="file-input" required style="display: none;">
-		<button type="button" id="upload-button" onclick="document.getElementById('file-input').click()">📤 Upload File</button>
-	</form>
-	
-	<form method="POST" action="/folders/create" class="inline-form">
-		<input type="hidden" name="current_folder" value="{{.CurrentFolder}}">
-		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-		<input type="text" name="folder_name" placeholder="New folder name" required>
-		<button type="submit">📁 Create Folder</button>
-	</form>
-</div>
-
-<!-- Upload Progress Bar -->
-<div id="upload-progress-container" class="upload-progress-container" style="display: none;">
-	<div class="upload-progress-content">
-		<div class="upload-progress-text">
-			<span id="upload-filename">Uploading...</span>
-			<span id="upload-percentage">0%</span>
+		<!-- Breadcrumb Navigation -->
+		<div class="breadcrumbs">
+			{{range $index, $crumb := .Breadcrumbs}}
+				{{if $index}} / {{end}}
+				{{if eq $crumb.Path $.CurrentFolder}}
+					<strong>{{$crumb.Name}}</strong>
+				{{else}}
+					<a href="/dashboard?folder={{$crumb.Path}}">{{$crumb.Name}}</a>
+				{{end}}
+			{{end}}
 		</div>
-		<div class="upload-progress-bar">
-			<div id="upload-progress-fill" class="upload-progress-fill"></div>
-		</div>
-	</div>
-</div>
 
-<div class="files-section">
-	<h2>Your Files</h2>
-	{{if or .Files .Folders (ne .CurrentFolder "/")}}
-		<table>
-			<thead>
-				<tr>
-					<th>Name</th>
-					<th>Size</th>
-					<th>Uploaded</th>
-					<th>Actions</th>
-				</tr>
-			</thead>
-			<tbody>
+		{{if or .Files .Folders (ne .CurrentFolder "/")}}
+			<table>
+				<thead>
+					<tr>
+						<th>Name</th>
+						<th>Size</th>
+						<th class="hide-mobile">Uploaded</th>
+						<th>Actions</th>
+					</tr>
+				</thead>
+				<tbody>
 				{{if ne .CurrentFolder "/"}}
 				<tr class="parent-directory">
-					<td>
+					<td class="filename-cell">
 						<a href="/dashboard{{if eq .ParentFolder "/"}}{{else}}?folder={{.ParentFolder}}{{end}}">
 							📁 ↩️ Parent Directory
 						</a>
 					</td>
 					<td>-</td>
-					<td>-</td>
+					<td class="hide-mobile">-</td>
 					<td></td>
 				</tr>
 				{{end}}
 				{{range .Folders}}
 				<tr>
-					<td>
+					<td class="filename-cell">
 						<a href="/dashboard?folder={{if eq $.CurrentFolder "/"}}/{{.}}{{else}}{{$.CurrentFolder}}/{{.}}{{end}}">
 							📁 {{.}}
 						</a>
 					</td>
 					<td>-</td>
-					<td>-</td>
+					<td class="hide-mobile">-</td>
 					<td>
 						<form method="POST" action="/folders/delete/{{.}}" style="display:inline">
 							<input type="hidden" name="current_folder" value="{{$.CurrentFolder}}">
@@ -110,9 +127,9 @@
 				{{end}}
 				{{range .Files}}
 				<tr>
-					<td>{{.OriginalFilename}}</td>
+					<td class="filename-cell">{{.OriginalFilename}}</td>
 					<td>{{formatBytes .FileSize}}</td>
-					<td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+					<td class="hide-mobile">{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
 					<td>
 						<button class="download-btn" onclick="window.location='/download/{{.ID}}'">Download</button>
 						<form method="POST" action="/delete/{{.ID}}" style="display:inline">
@@ -124,12 +141,77 @@
 				{{end}}
 			</tbody>
 		</table>
+
+		<!-- Pagination -->
+		{{if gt .TotalPages 1}}
+		<div class="pagination">
+			{{if gt .Page 1}}
+				<a href="/dashboard?folder={{.CurrentFolder}}&page={{.Page | add -1}}" class="pagination-btn">← Previous</a>
+			{{else}}
+				<span class="pagination-btn disabled">← Previous</span>
+			{{end}}
+
+			<span class="pagination-info">Page {{.Page}} of {{.TotalPages}}</span>
+
+			{{if lt .Page .TotalPages}}
+				<a href="/dashboard?folder={{.CurrentFolder}}&page={{.Page | add 1}}" class="pagination-btn">Next →</a>
+			{{else}}
+				<span class="pagination-btn disabled">Next →</span>
+			{{end}}
+		</div>
+		{{end}}
 	{{else}}
 		<p>No files in this folder yet.</p>
 	{{end}}
+	</main>
 </div>
 
 <script>
+	// Sidebar toggle
+	const sidebar = document.getElementById('sidebar');
+	const sidebarToggle = document.getElementById('sidebar-toggle-nav');
+	
+	// Initialize sidebar state based on screen size
+	function initSidebar() {
+		if (window.innerWidth < 900) {
+			// Mobile/Portrait: collapsed by default
+			sidebar.classList.add('sidebar-collapsed');
+		} else {
+			// Desktop/Landscape: always visible
+			sidebar.classList.remove('sidebar-collapsed');
+		}
+	}
+	
+	// Initialize on load
+	initSidebar();
+	
+	// Handle window resize
+	window.addEventListener('resize', function() {
+		if (window.innerWidth >= 900) {
+			// Always show sidebar on desktop/landscape
+			sidebar.classList.remove('sidebar-collapsed');
+		}
+	});
+	
+	if (sidebarToggle) {
+		sidebarToggle.addEventListener('click', function() {
+			// Only toggle on mobile/portrait
+			if (window.innerWidth < 900) {
+				sidebar.classList.toggle('sidebar-collapsed');
+			}
+		});
+	}
+	
+	// Close sidebar when clicking outside on mobile
+	document.addEventListener('click', function(e) {
+		if (window.innerWidth < 900 && 
+			!sidebar.contains(e.target) && 
+			(!sidebarToggle || !sidebarToggle.contains(e.target)) &&
+			!sidebar.classList.contains('sidebar-collapsed')) {
+			sidebar.classList.add('sidebar-collapsed');
+		}
+	});
+
 	// Drag and drop functionality
 	const dragOverlay = document.getElementById('drag-overlay');
 	const uploadForm = document.getElementById('upload-form');
