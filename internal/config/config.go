@@ -110,7 +110,7 @@ func getEnvBool(key string, defaultValue bool) bool {
 // Supports: B, K/KB, M/MB, G/GB, T/TB (case-insensitive)
 func parseSize(sizeStr string) (int64, error) {
 	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
-	
+
 	// If it's just a number, treat as bytes
 	if val, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
 		return val, nil

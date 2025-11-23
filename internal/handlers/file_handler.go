@@ -55,7 +55,7 @@ func sanitizeFolderPath(path string) string {
 
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Upload handler: MaxUploadSize configured as %d bytes (%.2f MB)", h.cfg.MaxUploadSize, float64(h.cfg.MaxUploadSize)/(1024*1024))
-	
+
 	user := auth.GetUser(r)
 	if user == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
