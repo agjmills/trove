@@ -256,8 +256,18 @@
 				// Success - reload page to show updated file list
 				window.location.reload();
 			} else {
-				// Error
-				alert('Upload failed. Please try again.');
+				// Error - show server response or generic message
+				let errorMsg = 'Upload failed. ';
+				if (xhr.responseText) {
+					errorMsg += xhr.responseText;
+				} else if (xhr.status === 413) {
+					errorMsg += 'File is too large.';
+				} else if (xhr.status === 507) {
+					errorMsg += 'Storage quota exceeded.';
+				} else {
+					errorMsg += 'Please try again.';
+				}
+				alert(errorMsg);
 				progressContainer.style.display = 'none';
 				uploadButton.disabled = false;
 			}
@@ -265,7 +275,7 @@
 
 		// Handle errors
 		xhr.addEventListener('error', function() {
-			alert('Upload failed. Please try again.');
+			alert('Upload failed: Network error. Please check your connection and try again.');
 			progressContainer.style.display = 'none';
 			uploadButton.disabled = false;
 		});

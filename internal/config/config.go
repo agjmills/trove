@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -49,8 +51,8 @@ func Load() (*Config, error) {
 		DBPassword:              getEnv("DB_PASSWORD", ""),
 		DBPath:                  getEnv("DB_PATH", "./data/trove.db"),
 		StoragePath:             getEnv("STORAGE_PATH", "./data/files"),
-		DefaultUserQuota:        getEnvInt64("DEFAULT_USER_QUOTA", 10737418240),
-		MaxUploadSize:           getEnvInt64("MAX_UPLOAD_SIZE", 524288000),
+		DefaultUserQuota:        getEnvSize("DEFAULT_USER_QUOTA", "10G"),
+		MaxUploadSize:           getEnvSize("MAX_UPLOAD_SIZE", "500M"),
 		SessionSecret:           getEnv("SESSION_SECRET", "change_me_in_production"),
 		SessionDuration:         getEnv("SESSION_DURATION", "168h"),
 		BcryptCost:              getEnvInt("BCRYPT_COST", 10),
@@ -62,6 +64,10 @@ func Load() (*Config, error) {
 	if cfg.SessionSecret == "change_me_in_production" && cfg.Env == "production" {
 		return nil, fmt.Errorf("SESSION_SECRET must be set in production")
 	}
+
+	log.Printf("Config loaded: MaxUploadSize=%d bytes (%.2f MB), DefaultUserQuota=%d bytes (%.2f GB)",
+		cfg.MaxUploadSize, float64(cfg.MaxUploadSize)/(1024*1024),
+		cfg.DefaultUserQuota, float64(cfg.DefaultUserQuota)/(1024*1024*1024))
 
 	return cfg, nil
 }
@@ -98,4 +104,64 @@ func getEnvBool(key string, defaultValue bool) bool {
 		}
 	}
 	return defaultValue
+}
+
+// parseSize converts human-readable sizes (e.g., "10G", "500M", "1K") to bytes
+// Supports: B, K/KB, M/MB, G/GB, T/TB (case-insensitive)
+func parseSize(sizeStr string) (int64, error) {
+	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
+	
+	// If it's just a number, treat as bytes
+	if val, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
+		return val, nil
+	}
+
+	// Parse size with unit
+	var multiplier int64 = 1
+	var numStr string
+
+	if strings.HasSuffix(sizeStr, "TB") || strings.HasSuffix(sizeStr, "T") {
+		multiplier = 1024 * 1024 * 1024 * 1024
+		numStr = strings.TrimSuffix(strings.TrimSuffix(sizeStr, "TB"), "T")
+	} else if strings.HasSuffix(sizeStr, "GB") || strings.HasSuffix(sizeStr, "G") {
+		multiplier = 1024 * 1024 * 1024
+		numStr = strings.TrimSuffix(strings.TrimSuffix(sizeStr, "GB"), "G")
+	} else if strings.HasSuffix(sizeStr, "MB") || strings.HasSuffix(sizeStr, "M") {
+		multiplier = 1024 * 1024
+		numStr = strings.TrimSuffix(strings.TrimSuffix(sizeStr, "MB"), "M")
+	} else if strings.HasSuffix(sizeStr, "KB") || strings.HasSuffix(sizeStr, "K") {
+		multiplier = 1024
+		numStr = strings.TrimSuffix(strings.TrimSuffix(sizeStr, "KB"), "K")
+	} else if strings.HasSuffix(sizeStr, "B") {
+		multiplier = 1
+		numStr = strings.TrimSuffix(sizeStr, "B")
+	} else {
+		return 0, fmt.Errorf("invalid size format: %s (use B, K/KB, M/MB, G/GB, T/TB)", sizeStr)
+	}
+
+	// Parse the numeric part (supports decimals like "1.5G")
+	val, err := strconv.ParseFloat(numStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid size value: %s", sizeStr)
+	}
+
+	return int64(val * float64(multiplier)), nil
+}
+
+// getEnvSize parses size strings like "10G", "500M" or raw bytes
+func getEnvSize(key string, defaultValue string) int64 {
+	value := getEnv(key, defaultValue)
+	log.Printf("getEnvSize: key=%s, value=%s, default=%s", key, value, defaultValue)
+	size, err := parseSize(value)
+	if err != nil {
+		log.Printf("getEnvSize: parseSize failed for %s: %v, trying default", value, err)
+		// If parsing fails, try to get default
+		if defaultSize, defaultErr := parseSize(defaultValue); defaultErr == nil {
+			return defaultSize
+		}
+		// Last resort: return 0
+		return 0
+	}
+	log.Printf("getEnvSize: parsed %s to %d bytes", value, size)
+	return size
 }

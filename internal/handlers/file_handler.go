@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -53,15 +54,18 @@ func sanitizeFolderPath(path string) string {
 }
 
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Upload handler: MaxUploadSize configured as %d bytes (%.2f MB)", h.cfg.MaxUploadSize, float64(h.cfg.MaxUploadSize)/(1024*1024))
+	
 	user := auth.GetUser(r)
 	if user == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// Parse multipart form (max 500MB by default)
-	if err := r.ParseMultipartForm(int64(h.cfg.MaxUploadSize)); err != nil {
-		http.Error(w, "File too large", http.StatusRequestEntityTooLarge)
+	// Parse multipart form with reasonable memory limit (32MB for form fields)
+	// The actual file size limit is checked after getting the file header
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		http.Error(w, "Failed to parse upload form", http.StatusBadRequest)
 		return
 	}
 
@@ -71,6 +75,14 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+
+	// Check file size limit
+	log.Printf("Upload attempt: file=%s, size=%d bytes, limit=%d bytes", header.Filename, header.Size, h.cfg.MaxUploadSize)
+	if header.Size > h.cfg.MaxUploadSize {
+		log.Printf("File rejected: size %d exceeds limit %d", header.Size, h.cfg.MaxUploadSize)
+		http.Error(w, fmt.Sprintf("File too large (max %d MB)", h.cfg.MaxUploadSize/(1024*1024)), http.StatusRequestEntityTooLarge)
+		return
+	}
 
 	// Check storage quota
 	if user.StorageUsed+header.Size > user.StorageQuota {

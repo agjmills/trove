@@ -21,6 +21,10 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
+	log.Printf("Configuration loaded: MaxUploadSize=%d bytes (%.2f MB), DefaultUserQuota=%d bytes (%.2f GB)",
+		cfg.MaxUploadSize, float64(cfg.MaxUploadSize)/(1024*1024),
+		cfg.DefaultUserQuota, float64(cfg.DefaultUserQuota)/(1024*1024*1024))
+
 	db, err := database.Connect(cfg)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
