@@ -34,17 +34,13 @@
 		<span class="label">Storage Used</span>
 		<span class="value">{{formatBytes .User.StorageUsed}} / {{formatBytes .User.StorageQuota}}</span>
 	</div>
-	<div class="stat">
-		<span class="label">Files</span>
-		<span class="value">{{len .Files}}</span>
-	</div>
 </div>
 
 <div class="upload-section">
 	<form method="POST" action="/upload" enctype="multipart/form-data" class="inline-form" id="upload-form">
 		<input type="hidden" name="folder" value="{{.CurrentFolder}}">
 		<input type="file" name="file" id="file-input" required style="display: none;">
-		<button type="button" onclick="document.getElementById('file-input').click()">📤 Upload File</button>
+		<button type="button" id="upload-button" onclick="document.getElementById('file-input').click()">📤 Upload File</button>
 	</form>
 	
 	<form method="POST" action="/folders/create" class="inline-form">
@@ -52,6 +48,19 @@
 		<input type="text" name="folder_name" placeholder="New folder name" required>
 		<button type="submit">📁 Create Folder</button>
 	</form>
+</div>
+
+<!-- Upload Progress Bar -->
+<div id="upload-progress-container" class="upload-progress-container" style="display: none;">
+	<div class="upload-progress-content">
+		<div class="upload-progress-text">
+			<span id="upload-filename">Uploading...</span>
+			<span id="upload-percentage">0%</span>
+		</div>
+		<div class="upload-progress-bar">
+			<div id="upload-progress-fill" class="upload-progress-fill"></div>
+		</div>
+	</div>
 </div>
 
 <div class="files-section">
@@ -121,7 +130,63 @@
 	const dragOverlay = document.getElementById('drag-overlay');
 	const uploadForm = document.getElementById('upload-form');
 	const fileInput = document.getElementById('file-input');
+	const uploadButton = document.getElementById('upload-button');
+	const progressContainer = document.getElementById('upload-progress-container');
+	const progressFill = document.getElementById('upload-progress-fill');
+	const uploadPercentage = document.getElementById('upload-percentage');
+	const uploadFilename = document.getElementById('upload-filename');
 	let dragCounter = 0;
+
+	// Function to upload file with progress tracking
+	function uploadFile(file) {
+		const formData = new FormData();
+		formData.append('file', file);
+		formData.append('folder', uploadForm.querySelector('input[name="folder"]').value);
+
+		// Show progress bar
+		progressContainer.style.display = 'block';
+		uploadFilename.textContent = file.name;
+		uploadPercentage.textContent = '0%';
+		progressFill.style.width = '0%';
+		
+		// Disable upload button during upload
+		uploadButton.disabled = true;
+
+		const xhr = new XMLHttpRequest();
+
+		// Track upload progress
+		xhr.upload.addEventListener('progress', function(e) {
+			if (e.lengthComputable) {
+				const percentage = Math.round((e.loaded / e.total) * 100);
+				progressFill.style.width = percentage + '%';
+				uploadPercentage.textContent = percentage + '%';
+			}
+		});
+
+		// Handle completion
+		xhr.addEventListener('load', function() {
+			if (xhr.status === 200 || xhr.status === 302 || xhr.status === 303) {
+				// Success - reload page to show updated file list
+				window.location.reload();
+			} else {
+				// Error
+				alert('Upload failed. Please try again.');
+				progressContainer.style.display = 'none';
+				uploadButton.disabled = false;
+			}
+		});
+
+		// Handle errors
+		xhr.addEventListener('error', function() {
+			alert('Upload failed. Please try again.');
+			progressContainer.style.display = 'none';
+			uploadButton.disabled = false;
+		});
+
+		// Send request
+		xhr.open('POST', '/upload');
+		xhr.send(formData);
+	}
 
 	// Prevent default drag behaviors on the entire page
 	['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -155,9 +220,7 @@
 		
 		const files = e.dataTransfer.files;
 		if (files.length > 0) {
-			// Set the file to the input and submit the form
-			fileInput.files = files;
-			uploadForm.submit();
+			uploadFile(files[0]);
 		}
 	});
 
@@ -166,10 +229,10 @@
 		e.preventDefault();
 	});
 
-	// Auto-submit form when file is selected via the upload button
+	// Handle file selection via button
 	fileInput.addEventListener('change', function() {
 		if (this.files.length > 0) {
-			uploadForm.submit();
+			uploadFile(this.files[0]);
 		}
 	});
 </script>

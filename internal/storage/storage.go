@@ -82,3 +82,12 @@ func (s *Service) OpenFile(filename string) (*os.File, error) {
 	}
 	return file, nil
 }
+
+// CalculateHash calculates the SHA-256 hash of a reader's content
+func (s *Service) CalculateHash(reader io.Reader) (string, error) {
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, reader); err != nil {
+		return "", fmt.Errorf("failed to calculate hash: %w", err)
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}

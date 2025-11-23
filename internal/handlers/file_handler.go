@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -77,13 +78,6 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save file to disk
-	filename, hash, size, err := h.storage.SaveFile(file, header.Filename)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to save file: %v", err), http.StatusInternalServerError)
-		return
-	}
-
 	// Get and sanitize folder path
 	folderPath := sanitizeFolderPath(r.FormValue("folder"))
 
@@ -91,30 +85,69 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	originalFilename := header.Filename
 	finalFilename := h.getUniqueFilename(user.ID, folderPath, originalFilename)
 
+	// Calculate hash first to check for deduplication
+	hash, err := h.storage.CalculateHash(file)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to calculate file hash: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Reset file reader to beginning after hashing
+	if seeker, ok := file.(io.Seeker); ok {
+		seeker.Seek(0, 0)
+	}
+
+	var filename string
+	var actualSize int64
+	var isDuplicate bool
+
+	// Check if this file already exists (deduplication)
+	var existingFile models.File
+	result := h.db.Where("user_id = ? AND hash = ?", user.ID, hash).First(&existingFile)
+
+	if result.Error == nil {
+		// Duplicate found! Reuse the existing physical file
+		filename = existingFile.Filename
+		actualSize = existingFile.FileSize
+		isDuplicate = true
+	} else {
+		// New file, save to disk
+		filename, _, actualSize, err = h.storage.SaveFile(file, header.Filename)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to save file: %v", err), http.StatusInternalServerError)
+			return
+		}
+		isDuplicate = false
+	}
+
 	// Create database record
 	fileRecord := models.File{
 		UserID:           user.ID,
 		Filename:         filename,
 		OriginalFilename: finalFilename,
 		FilePath:         h.storage.GetFilePath(filename),
-		FileSize:         size,
+		FileSize:         actualSize,
 		MimeType:         header.Header.Get("Content-Type"),
 		Hash:             hash,
 		FolderPath:       folderPath,
 	}
 
 	if err := h.db.Create(&fileRecord).Error; err != nil {
-		// Clean up file if database insert fails
-		h.storage.DeleteFile(filename)
+		// Clean up file if database insert fails (only if not a duplicate)
+		if !isDuplicate {
+			h.storage.DeleteFile(filename)
+		}
 		http.Error(w, "Failed to save file metadata", http.StatusInternalServerError)
 		return
 	}
 
-	// Update user storage
-	if err := h.db.Model(&models.User{}).Where("id = ?", user.ID).
-		UpdateColumn("storage_used", gorm.Expr("storage_used + ?", size)).Error; err != nil {
-		// Don't fail the upload, but log it
-		fmt.Printf("Warning: failed to update user storage: %v\n", err)
+	// Update user storage (only if not a duplicate)
+	if !isDuplicate {
+		if err := h.db.Model(&models.User{}).Where("id = ?", user.ID).
+			UpdateColumn("storage_used", gorm.Expr("storage_used + ?", actualSize)).Error; err != nil {
+			// Don't fail the upload, but log it
+			fmt.Printf("Warning: failed to update user storage: %v\n", err)
+		}
 	}
 
 	// Show success message with renamed filename if applicable
@@ -286,6 +319,7 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Store the folder path and size before deletion
 	folderPath := file.FolderPath
 	fileSize := file.FileSize
+	physicalFilename := file.Filename
 
 	// Delete from database
 	if err := h.db.Delete(&file).Error; err != nil {
@@ -293,16 +327,23 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete from disk
-	if err := h.storage.DeleteFile(file.Filename); err != nil {
-		// Log the error but don't fail the request since DB record is already gone
-		fmt.Printf("Warning: failed to delete file from disk: %v\n", err)
-	}
+	// Check if any other File records reference this physical file (deduplication check)
+	var refCount int64
+	h.db.Model(&models.File{}).Where("user_id = ? AND filename = ?", user.ID, physicalFilename).Count(&refCount)
 
-	// Update user storage quota
-	if err := h.db.Model(&models.User{}).Where("id = ?", user.ID).
-		UpdateColumn("storage_used", gorm.Expr("storage_used - ?", fileSize)).Error; err != nil {
-		fmt.Printf("Warning: failed to update user storage: %v\n", err)
+	// Only delete from disk if no other references exist
+	shouldDeleteFromDisk := refCount == 0
+	if shouldDeleteFromDisk {
+		if err := h.storage.DeleteFile(physicalFilename); err != nil {
+			// Log the error but don't fail the request since DB record is already gone
+			fmt.Printf("Warning: failed to delete file from disk: %v\n", err)
+		}
+
+		// Update user storage quota (only if physical file was deleted)
+		if err := h.db.Model(&models.User{}).Where("id = ?", user.ID).
+			UpdateColumn("storage_used", gorm.Expr("storage_used - ?", fileSize)).Error; err != nil {
+			fmt.Printf("Warning: failed to update user storage: %v\n", err)
+		}
 	}
 
 	flash.Success(w, "File deleted successfully.")
