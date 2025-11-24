@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/agjmills/trove/internal/auth"
-	"github.com/agjmills/trove/internal/csrf"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/flash"
+	"github.com/gorilla/csrf"
 	"gorm.io/gorm"
 )
 
@@ -165,13 +165,6 @@ func (h *PageHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 	// Get flash message if any
 	flashMsg := flash.Get(w, r)
 
-	// Get or generate CSRF token
-	csrfToken, err := csrf.GetToken(w, r)
-	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
 	render(w, "dashboard.html", map[string]any{
 		"Title":         "Dashboard",
 		"User":          user,
@@ -181,7 +174,7 @@ func (h *PageHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 		"ParentFolder":  parentFolder,
 		"Breadcrumbs":   breadcrumbs,
 		"Flash":         flashMsg,
-		"CSRFToken":     csrfToken,
+		"CSRFToken":     csrf.Token(r),
 		"Page":          page,
 		"TotalPages":    totalPages,
 		"TotalFiles":    totalFiles,

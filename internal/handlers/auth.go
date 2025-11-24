@@ -6,9 +6,9 @@ import (
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
-	"github.com/agjmills/trove/internal/csrf"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/alexedwards/scs/v2"
+	"github.com/gorilla/csrf"
 	"gorm.io/gorm"
 )
 
@@ -197,15 +197,9 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	csrfToken, err := csrf.GetToken(w, r)
-	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
 	render(w, "login.html", map[string]any{
 		"Title":     "Login",
-		"CSRFToken": csrfToken,
+		"CSRFToken": csrf.Token(r),
 	})
 }
 
@@ -216,14 +210,8 @@ func (h *AuthHandler) ShowRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	csrfToken, err := csrf.GetToken(w, r)
-	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
 	render(w, "register.html", map[string]any{
 		"Title":     "Register",
-		"CSRFToken": csrfToken,
+		"CSRFToken": csrf.Token(r),
 	})
 }

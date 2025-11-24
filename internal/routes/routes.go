@@ -6,12 +6,12 @@ import (
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
-	"github.com/agjmills/trove/internal/csrf"
 	"github.com/agjmills/trove/internal/handlers"
 	"github.com/agjmills/trove/internal/middleware"
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/csrf"
 	"gorm.io/gorm"
 )
 
@@ -23,6 +23,22 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	// Create rate limiters for auth endpoints
 	// Allow 5 login/register attempts per 15 minutes per IP
 	authRateLimiter := middleware.NewRateLimiter(5, 15*time.Minute)
+
+	// CSRF protection (only if enabled in config)
+	var csrfMiddleware func(http.Handler) http.Handler
+	if cfg.CSRFEnabled {
+		csrfMiddleware = csrf.Protect(
+			[]byte(cfg.SessionSecret), // Use session secret as CSRF key
+			csrf.Secure(cfg.Env == "production"),
+			csrf.SameSite(csrf.SameSiteStrictMode),
+			csrf.FieldName("csrf_token"), // Use same field name as before
+		)
+	} else {
+		// No-op middleware if CSRF is disabled
+		csrfMiddleware = func(next http.Handler) http.Handler {
+			return next
+		}
+	}
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -60,7 +76,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
 		r.Use(auth.RequireAuth(db, sessionManager))
-		r.Use(csrf.Middleware)
+		r.Use(csrfMiddleware)
 		r.Get("/dashboard", pageHandler.ShowDashboard)
 		r.Post("/upload", fileHandler.Upload)
 		r.Post("/folders/create", fileHandler.CreateFolder)
