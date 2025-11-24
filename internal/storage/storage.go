@@ -26,6 +26,7 @@ type StorageBackend interface {
 	OpenFile(filename string) (*os.File, error)
 	CalculateHash(reader io.Reader) (string, error)
 }
+
 func NewService(basePath string) (*Service, error) {
 	if err := os.MkdirAll(basePath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create storage directory: %w", err)

@@ -6,49 +6,49 @@ import (
 
 func TestParseSize(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		want     int64
-		wantErr  bool
+		name    string
+		input   string
+		want    int64
+		wantErr bool
 	}{
 		// Bytes
 		{name: "plain bytes", input: "1024", want: 1024, wantErr: false},
 		{name: "bytes with B", input: "512B", want: 512, wantErr: false},
 		{name: "zero bytes", input: "0", want: 0, wantErr: false},
-		
+
 		// Kilobytes
 		{name: "kilobytes K", input: "10K", want: 10 * 1024, wantErr: false},
 		{name: "kilobytes KB", input: "10KB", want: 10 * 1024, wantErr: false},
 		{name: "lowercase k", input: "5k", want: 5 * 1024, wantErr: false},
 		{name: "lowercase kb", input: "5kb", want: 5 * 1024, wantErr: false},
 		{name: "decimal kilobytes", input: "1.5K", want: int64(1.5 * 1024), wantErr: false},
-		
+
 		// Megabytes
 		{name: "megabytes M", input: "500M", want: 500 * 1024 * 1024, wantErr: false},
 		{name: "megabytes MB", input: "500MB", want: 500 * 1024 * 1024, wantErr: false},
 		{name: "lowercase m", input: "100m", want: 100 * 1024 * 1024, wantErr: false},
 		{name: "lowercase mb", input: "100mb", want: 100 * 1024 * 1024, wantErr: false},
 		{name: "decimal megabytes", input: "2.5M", want: int64(2.5 * 1024 * 1024), wantErr: false},
-		
+
 		// Gigabytes
 		{name: "gigabytes G", input: "10G", want: 10 * 1024 * 1024 * 1024, wantErr: false},
 		{name: "gigabytes GB", input: "10GB", want: 10 * 1024 * 1024 * 1024, wantErr: false},
 		{name: "lowercase g", input: "5g", want: 5 * 1024 * 1024 * 1024, wantErr: false},
 		{name: "lowercase gb", input: "5gb", want: 5 * 1024 * 1024 * 1024, wantErr: false},
 		{name: "decimal gigabytes", input: "1.5G", want: int64(1.5 * 1024 * 1024 * 1024), wantErr: false},
-		
+
 		// Terabytes
 		{name: "terabytes T", input: "2T", want: 2 * 1024 * 1024 * 1024 * 1024, wantErr: false},
 		{name: "terabytes TB", input: "2TB", want: 2 * 1024 * 1024 * 1024 * 1024, wantErr: false},
 		{name: "lowercase t", input: "1t", want: 1 * 1024 * 1024 * 1024 * 1024, wantErr: false},
 		{name: "lowercase tb", input: "1tb", want: 1 * 1024 * 1024 * 1024 * 1024, wantErr: false},
 		{name: "decimal terabytes", input: "0.5T", want: int64(0.5 * 1024 * 1024 * 1024 * 1024), wantErr: false},
-		
+
 		// Whitespace handling
 		{name: "with leading space", input: " 10M", want: 10 * 1024 * 1024, wantErr: false},
 		{name: "with trailing space", input: "10M ", want: 10 * 1024 * 1024, wantErr: false},
 		{name: "with both spaces", input: " 10M ", want: 10 * 1024 * 1024, wantErr: false},
-		
+
 		// Error cases
 		{name: "empty string", input: "", want: 0, wantErr: true},
 		{name: "invalid unit", input: "10X", want: 0, wantErr: true},
@@ -77,10 +77,10 @@ func TestParseSizeCommonValues(t *testing.T) {
 		input string
 		want  int64
 	}{
-		{"10G", 10 * 1024 * 1024 * 1024},             // DEFAULT_USER_QUOTA
-		{"500M", 500 * 1024 * 1024},                  // MAX_UPLOAD_SIZE
-		{"1GB", 1 * 1024 * 1024 * 1024},              // Common quota
-		{"100MB", 100 * 1024 * 1024},                 // Common upload size
+		{"10G", 10 * 1024 * 1024 * 1024}, // DEFAULT_USER_QUOTA
+		{"500M", 500 * 1024 * 1024},      // MAX_UPLOAD_SIZE
+		{"1GB", 1 * 1024 * 1024 * 1024},  // Common quota
+		{"100MB", 100 * 1024 * 1024},     // Common upload size
 	}
 
 	for _, tt := range tests {

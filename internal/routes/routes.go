@@ -4,13 +4,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/alexedwards/scs/v2"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/csrf"
 	"github.com/agjmills/trove/internal/handlers"
 	"github.com/agjmills/trove/internal/middleware"
 	"github.com/agjmills/trove/internal/storage"
+	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 )

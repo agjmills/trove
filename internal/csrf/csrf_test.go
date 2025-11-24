@@ -257,7 +257,7 @@ func TestStoreCleanup(t *testing.T) {
 	// Add some expired tokens
 	store.tokens["expired1"] = time.Now().Add(-2 * time.Hour)
 	store.tokens["expired2"] = time.Now().Add(-1 * time.Hour)
-	
+
 	// Add some valid tokens
 	store.tokens["valid1"] = time.Now().Add(1 * time.Hour)
 	store.tokens["valid2"] = time.Now().Add(2 * time.Hour)

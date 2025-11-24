@@ -3,10 +3,10 @@ package auth
 import (
 	"time"
 
+	"github.com/agjmills/trove/internal/config"
 	"github.com/alexedwards/scs/postgresstore"
 	"github.com/alexedwards/scs/sqlite3store"
 	"github.com/alexedwards/scs/v2"
-	"github.com/agjmills/trove/internal/config"
 	"gorm.io/gorm"
 )
 
@@ -28,7 +28,7 @@ func NewSessionManager(db *gorm.DB, cfg *config.Config) (*scs.SessionManager, er
 	sessionManager.Lifetime = lifetime
 	sessionManager.Cookie.Name = "session_token"
 	sessionManager.Cookie.HttpOnly = true
-	sessionManager.Cookie.SameSite = 3 // Strict
+	sessionManager.Cookie.SameSite = 3                     // Strict
 	sessionManager.Cookie.Secure = cfg.Env == "production" // Only use Secure in production with HTTPS
 
 	// Choose store based on database type

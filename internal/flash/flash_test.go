@@ -238,7 +238,7 @@ func TestGet_ClearsMessage(t *testing.T) {
 	Error(w, "First message")
 
 	cookies := w.Result().Cookies()
-	
+
 	// Get the message (should clear it)
 	r1 := httptest.NewRequest("GET", "/", nil)
 	r1.AddCookie(cookies[0])
