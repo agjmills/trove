@@ -1,0 +1,80 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install Tailwind CSS CLI (amd64)
+        run: |
+          curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
+          chmod +x tailwindcss-linux-x64
+          ./tailwindcss-linux-x64 \
+            -i ./web/static/css/input.css \
+            -o ./web/static/css/style.css \
+            --minify
+
+      - name: Build binaries
+        run: |
+          # Build for Linux amd64
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+            -o trove-linux-amd64 \
+            ./cmd/server
+          
+          # Build for Linux arm64
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+            -o trove-linux-arm64 \
+            ./cmd/server
+          
+          # Build for macOS amd64
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+            -o trove-darwin-amd64 \
+            ./cmd/server
+          
+          # Build for macOS arm64 (Apple Silicon)
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+            -o trove-darwin-arm64 \
+            ./cmd/server
+          
+          # Build for Windows amd64
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=${{ github.ref_name }}" \
+            -o trove-windows-amd64.exe \
+            ./cmd/server
+
+      - name: Create checksums
+        run: |
+          sha256sum trove-* > checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            trove-linux-amd64
+            trove-linux-arm64
+            trove-darwin-amd64
+            trove-darwin-arm64
+            trove-windows-amd64.exe
+            checksums.txt
+          draft: false
+          prerelease: false
+          generate_release_notes: true

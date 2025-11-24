@@ -81,6 +81,28 @@ make build-css
 - Ensure all tests pass
 - Follow existing code style
 
+## Releases
+
+Releases are automated via GitHub Actions:
+
+- **Docker Images:** Built for `linux/amd64` and `linux/arm64`, pushed to `ghcr.io/agjmills/trove`
+  - `main` branch → `latest` tag
+  - Version tags (e.g., `v1.0.0`) → corresponding semantic version tags
+  - Available at: `ghcr.io/agjmills/trove:latest` or `ghcr.io/agjmills/trove:v1.0.0`
+
+- **Binary Releases:** Created on version tags (`v*`)
+  - Linux (amd64, arm64)
+  - macOS (amd64, arm64)
+  - Windows (amd64)
+  - Includes SHA256 checksums
+  - Available on the [Releases](https://github.com/agjmills/trove/releases) page
+
+To trigger a release, maintainers create and push a version tag:
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
 ## Reporting Issues
 
 Found a bug? Have a feature request?

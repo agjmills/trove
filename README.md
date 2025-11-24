@@ -26,6 +26,14 @@ make setup
 
 Trove is now running at `http://localhost:8080`
 
+**Using pre-built images:**
+
+```bash
+docker pull ghcr.io/agjmills/trove:latest
+```
+
+Multi-arch images available for `linux/amd64` and `linux/arm64`.
+
 ## Development
 
 ```bash

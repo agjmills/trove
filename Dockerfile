@@ -1,17 +1,26 @@
 FROM debian:bookworm-slim AS css-builder
 
+ARG TARGETARCH
+
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /css
 
-RUN curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64 && \
-    chmod +x tailwindcss-linux-x64
+# Download the correct Tailwind CLI binary for the target architecture
+RUN case ${TARGETARCH} in \
+    "amd64")  TWARCH=x64  ;; \
+    "arm64")  TWARCH=arm64  ;; \
+    *)        echo "Unsupported architecture: ${TARGETARCH}" && exit 1  ;; \
+    esac && \
+    curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-${TWARCH} && \
+    mv tailwindcss-linux-${TWARCH} tailwindcss && \
+    chmod +x tailwindcss
 
 COPY web/static/css/input.css ./web/static/css/input.css
 COPY web/templates ./web/templates
 COPY tailwind.config.js ./
 
-RUN ./tailwindcss-linux-x64 \
+RUN ./tailwindcss \
     -i ./web/static/css/input.css \
     -o ./web/static/css/style.css \
     --minify
