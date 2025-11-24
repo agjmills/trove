@@ -9,11 +9,18 @@ import (
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database"
 	"github.com/agjmills/trove/internal/handlers"
+	"github.com/agjmills/trove/internal/logger"
 	internalMiddleware "github.com/agjmills/trove/internal/middleware"
 	"github.com/agjmills/trove/internal/routes"
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+)
+
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 func main() {
@@ -22,9 +29,14 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	log.Printf("Configuration loaded: MaxUploadSize=%d bytes (%.2f MB), DefaultUserQuota=%d bytes (%.2f GB)",
-		cfg.MaxUploadSize, float64(cfg.MaxUploadSize)/(1024*1024),
-		cfg.DefaultUserQuota, float64(cfg.DefaultUserQuota)/(1024*1024*1024))
+	// Initialize structured logger
+	logger.Init(cfg.Env)
+
+	logger.Info("configuration loaded",
+		"max_upload_mb", float64(cfg.MaxUploadSize)/(1024*1024),
+		"default_quota_gb", float64(cfg.DefaultUserQuota)/(1024*1024*1024),
+		"env", cfg.Env,
+	)
 
 	db, err := database.Connect(cfg)
 	if err != nil {
@@ -55,16 +67,21 @@ func main() {
 
 	r := chi.NewRouter()
 
-	r.Use(middleware.Logger)
-	r.Use(internalMiddleware.RecoverMiddleware)
-	r.Use(internalMiddleware.SecurityHeaders)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	r.Use(internalMiddleware.LoggingMiddleware)
+	r.Use(internalMiddleware.RecoverMiddleware)
+	r.Use(internalMiddleware.SecurityHeaders)
 
-	routes.Setup(r, db, cfg, storageService, sessionManager)
+	versionInfo := fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date)
+	routes.Setup(r, db, cfg, storageService, sessionManager, versionInfo)
 
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
-	log.Printf("Starting Trove server on %s (environment: %s)", addr, cfg.Env)
+	logger.Info("starting trove server",
+		"address", addr,
+		"environment", cfg.Env,
+		"version", versionInfo,
+	)
 
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("Server failed to start: %v", err)

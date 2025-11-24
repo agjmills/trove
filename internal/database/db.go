@@ -2,14 +2,14 @@ package database
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
+	"github.com/agjmills/trove/internal/logger"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormlogger "gorm.io/gorm/logger"
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
 )
 
@@ -29,24 +29,24 @@ func Connect(cfg *config.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("unsupported database type: %s", cfg.DBType)
 	}
 
-	logLevel := logger.Silent
+	logLevel := gormlogger.Silent
 	if cfg.Env == "development" {
-		logLevel = logger.Info
+		logLevel = gormlogger.Info
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger: logger.Default.LogMode(logLevel),
+		Logger: gormlogger.Default.LogMode(logLevel),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	log.Printf("Connected to %s database", cfg.DBType)
+	logger.Info("database connected", "type", cfg.DBType)
 	return db, nil
 }
 
 func Migrate(db *gorm.DB) error {
-	log.Println("Running database migrations...")
+	logger.Info("running database migrations")
 
 	err := db.AutoMigrate(
 		&models.User{},
@@ -62,7 +62,7 @@ func Migrate(db *gorm.DB) error {
 		return fmt.Errorf("failed to create sessions table: %w", err)
 	}
 
-	log.Println("Database migrations completed successfully")
+	logger.Info("database migrations completed successfully")
 	return nil
 }
 
