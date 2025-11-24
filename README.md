@@ -1,114 +1,82 @@
 # Trove
 
-Self-hosted file storage system built with Go. Simple, fast, and minimal JavaScript.
+Self-hosted file storage. Your personal Google Drive alternative.
+
+**Simple. Fast. Privacy-focused.**
 
 ## Features
 
-- **User Management**: Registration, authentication, and session management
-- **File Operations**: Upload (with drag-and-drop), download, delete, folder organization
-- **Storage**: Quota management per user, real-time usage tracking, upload progress
-- **Security**: CSRF protection, bcrypt password hashing, secure sessions, panic recovery
-- **UI**: Responsive full-width layout, collapsible sidebar, mobile-optimized, custom error pages
-- **Database**: PostgreSQL or SQLite support with GORM
-- **Deployment**: Docker with hot-reload development environment
+- 📤 Upload, organize, and manage files with drag-and-drop
+- 👥 Multi-user support with authentication and per-user quotas
+- 🎨 Modern UI with dark mode
+- 🔒 Secure by default (CSRF protection, bcrypt, rate limiting)
+- 🐳 Easy Docker deployment
+- 🗄️ PostgreSQL or SQLite
 
 ## Quick Start
 
-Requires Docker and Docker Compose.
+**Prerequisites:** Docker and Docker Compose
 
 ```bash
-# First time setup
+git clone https://github.com/agjmills/trove.git
+cd trove
+cp .env.example .env
 make setup
-
-# Start development server with hot reload
-make dev
-
-# Other commands
-make shell    # Open container shell
-make psql     # PostgreSQL console
-make down     # Stop containers
-make clean    # Remove containers and volumes
 ```
 
-Server runs at `http://192.168.0.3:5014`
+Trove is now running at `http://localhost:8080`
 
-## Features in Detail
+## Development
 
-### File Management
-- Upload files with drag-and-drop or file picker
-- Real-time upload progress tracking
-- Organize files in folders with breadcrumb navigation
-- Natural sorting for numbered filenames
-- Pagination (50 items per page)
-- Download and delete operations
-
-### Security
-- CSRF protection on all forms
-- Bcrypt password hashing (configurable cost)
-- HTTP-only secure session cookies
-- Session token hashing in database
-- Custom error pages with panic recovery
-- SQL injection prevention (GORM parameterized queries)
-
-### User Experience
-- Full-width responsive layout
-- Collapsible sidebar with storage usage bar
-- Mobile optimizations (900px breakpoint)
-- Flash messages for user feedback
-- Works without JavaScript (progressive enhancement)
+```bash
+make dev      # Start with hot-reload
+make test     # Run tests
+make shell    # Container shell
+make psql     # Database console
+```
 
 ## Configuration
 
-Copy `.env.example` to `.env` and customize. Key options:
+Edit `.env` for your setup:
 
 ```bash
-# Application
-PORT=8080
-HOST=0.0.0.0
-
-# Database
-DB_TYPE=postgres              # or sqlite
-DB_HOST=postgres
-DB_NAME=trove
-
-# Storage
-STORAGE_PATH=./data/files
-DEFAULT_USER_QUOTA=10737418240    # 10GB in bytes
-MAX_UPLOAD_SIZE=524288000         # 500MB in bytes
-
-# Security
-SESSION_SECRET=changeme_generate_random_secret
-BCRYPT_COST=10
-CSRF_ENABLED=true
-
-# Features
-ENABLE_REGISTRATION=true
+TROVE_PORT=8080                    # Host port
+DB_TYPE=postgres                   # or sqlite
+SESSION_SECRET=random_secret_here  # Required
+DEFAULT_USER_QUOTA=10G             # Per-user limit
+MAX_UPLOAD_SIZE=500M               # Max file size
 ```
 
-## Current Status
+See `.env.example` for all options.
 
-**Completed Features:**
-- ✅ Full authentication system with session management
-- ✅ File upload/download/delete with quota enforcement
-- ✅ Folder organization and navigation
-- ✅ Drag-and-drop uploads with progress tracking
-- ✅ CSRF protection and custom error pages
-- ✅ Responsive UI with mobile optimizations
-- ✅ Pagination for file listings
+## Production
 
-**In Progress:**
-- 🔄 Production Dockerfile (multi-stage build)
-- 🔄 Security headers middleware
-- 🔄 Rate limiting on authentication endpoints
+```bash
+# 1. Setup
+cp .env.example .env                          # Configure
+cp docker-compose.example.yml docker-compose.prod.yml  # Customize
 
-**Future Enhancements:**
-- File sharing links
-- Version history
-- Thumbnail generation
-- Bulk operations
-- Admin dashboard
-- REST API
+# 2. Deploy
+docker compose -f docker-compose.prod.yml up -d
+
+# 3. Monitor
+docker compose -f docker-compose.prod.yml logs -f
+```
+
+**Recommended:** Run behind a reverse proxy (Caddy/Nginx) for HTTPS.
+
+See [INSTALL.md](INSTALL.md) for detailed deployment options.
+
+## Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
+
+## Roadmap
+
+**Completed:** Authentication, file management, quotas, CSRF, rate limiting, dark mode
+
+**Planned:** File sharing links, version history, thumbnails, bulk operations, API
 
 ## License
 
-See LICENSE
+Open source. See LICENSE file.

@@ -31,7 +31,7 @@ exec: ## Execute a command in the app container. Usage: make exec cmd="go test .
 	docker compose exec app $(cmd)
 
 psql: ## Open PostgreSQL shell
-	docker compose exec postgres psql -U trove -d trove
+	docker compose exec postgres psql -U $${DB_USER:-trove} -d $${DB_NAME:-trove}
 
 migrate: ## Run database migrations (placeholder - will implement with migration tool)
 	docker compose exec app go run cmd/server/main.go migrate
@@ -51,6 +51,18 @@ fmt: ## Format Go code
 
 build-css: ## Build Tailwind CSS
 	./build-tailwind.sh
+
+build-prod: ## Build production Docker image
+	docker compose -f docker-compose.prod.yml build
+
+up-prod: ## Start production environment
+	docker compose -f docker-compose.prod.yml up -d
+
+down-prod: ## Stop production environment
+	docker compose -f docker-compose.prod.yml down
+
+logs-prod: ## Show production logs
+	docker compose -f docker-compose.prod.yml logs -f app
 
 lint: ## Run linter (requires golangci-lint)
 	docker compose exec app golangci-lint run

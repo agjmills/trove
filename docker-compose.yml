@@ -1,19 +1,23 @@
+# Development configuration
+# Usage: docker compose up
+
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: trove-app
+    container_name: trove-app-dev
     ports:
-      - "192.168.0.3:5014:8080"
+      - "${TROVE_PORT:-8080}:8080"
     volumes:
-      - .:/app
-      - go-modules:/go/pkg/mod
+      - .:/app                    # Mount source for hot-reload
+      - go-modules:/go/pkg/mod    # Cache Go modules
       - ./data:/app/data
     env_file:
       - .env
     environment:
       - DB_HOST=postgres
+      - ENV=development
     depends_on:
       postgres:
         condition: service_healthy
@@ -22,17 +26,15 @@ services:
 
   postgres:
     image: postgres:15-alpine
-    container_name: trove-postgres
+    container_name: trove-postgres-dev
     environment:
-      - POSTGRES_DB=trove
-      - POSTGRES_USER=trove
-      - POSTGRES_PASSWORD=trove_dev_password
+      - POSTGRES_DB=${DB_NAME:-trove}
+      - POSTGRES_USER=${DB_USER:-trove}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-trove_dev_password}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U trove"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-trove}"]
       interval: 5s
       timeout: 5s
       retries: 5

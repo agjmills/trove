@@ -1,0 +1,70 @@
+services:
+  app:
+    image: ghcr.io/agjmills/trove:latest
+    container_name: trove
+    ports:
+      - "${TROVE_PORT:-8080}:8080"
+    volumes:
+      - ./data:/app/data
+      - trove-files:/app/data/files
+    env_file:
+      - .env
+    environment:
+      - ENV=production
+      - DB_HOST=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - trove-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: trove-postgres
+    environment:
+      - POSTGRES_DB=${DB_NAME:-trove}
+      - POSTGRES_USER=${DB_USER:-trove}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-trove}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - trove-network
+    # Only expose if you need external access
+    # ports:
+    #   - "5432:5432"
+
+  # Optional: Backup service
+  # backup:
+  #   image: prodrigestivill/postgres-backup-local
+  #   container_name: trove-backup
+  #   environment:
+  #     - POSTGRES_HOST=postgres
+  #     - POSTGRES_DB=${DB_NAME:-trove}
+  #     - POSTGRES_USER=${DB_USER:-trove}
+  #     - POSTGRES_PASSWORD=${DB_PASSWORD}
+  #     - SCHEDULE=@daily
+  #     - BACKUP_KEEP_DAYS=7
+  #     - BACKUP_KEEP_WEEKS=4
+  #     - BACKUP_KEEP_MONTHS=6
+  #   volumes:
+  #     - ./backups:/backups
+  #   depends_on:
+  #     - postgres
+  #   restart: unless-stopped
+  #   networks:
+  #     - trove-network
+
+volumes:
+  trove-files:
+  postgres-data:
+
+networks:
+  trove-network:
+    driver: bridge

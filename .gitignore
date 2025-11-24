@@ -26,6 +26,11 @@ go.work.sum
 
 # env file
 .env
+.env.production
+.env.local
+
+# Production configs (user-specific, use docker-compose.example.yml instead)
+docker-compose.prod.yml
 
 # Data directories
 data/
