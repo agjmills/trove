@@ -29,10 +29,10 @@ func NewHealthHandler(db *gorm.DB, storageService storage.StorageBackend, versio
 
 // HealthResponse represents the health check response
 type HealthResponse struct {
-	Status   string            `json:"status"`
-	Version  string            `json:"version"`
-	Checks   map[string]Check  `json:"checks"`
-	Uptime   string            `json:"uptime,omitempty"`
+	Status  string           `json:"status"`
+	Version string           `json:"version"`
+	Checks  map[string]Check `json:"checks"`
+	Uptime  string           `json:"uptime,omitempty"`
 }
 
 // Check represents an individual health check
@@ -71,7 +71,7 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if overallStatus != "healthy" {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}
@@ -111,12 +111,12 @@ func (h *HealthHandler) checkDatabase() Check {
 // checkStorage verifies storage backend is accessible
 func (h *HealthHandler) checkStorage() Check {
 	start := time.Now()
-	
+
 	// Try to get a file path to verify storage is accessible
 	// Use a non-existent file to just check the base path
 	testPath := h.storageService.GetFilePath("health-check-test")
 	baseDir := testPath[:len(testPath)-len("health-check-test")]
-	
+
 	info, err := os.Stat(baseDir)
 	if err != nil {
 		return Check{

@@ -50,7 +50,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 
 		// Calculate duration
 		duration := time.Since(start)
-		
+
 		// Record metrics
 		metrics.RecordHTTPRequest(r.Method, r.URL.Path, wrapped.statusCode, duration)
 
