@@ -15,7 +15,9 @@ require (
 	github.com/alexedwards/scs/postgresstore v0.0.0-20251002162104-209de6e426de // indirect
 	github.com/alexedwards/scs/sqlite3store v0.0.0-20251002162104-209de6e426de // indirect
 	github.com/alexedwards/scs/v2 v2.9.0 // indirect
+	github.com/didip/tollbooth/v7 v7.0.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/go-pkgz/expirable-cache/v3 v3.0.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/csrf v1.7.3 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect

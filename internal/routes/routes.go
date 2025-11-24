@@ -10,6 +10,8 @@ import (
 	"github.com/agjmills/trove/internal/middleware"
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/alexedwards/scs/v2"
+	"github.com/didip/tollbooth/v7"
+	"github.com/didip/tollbooth/v7/limiter"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/csrf"
 	"gorm.io/gorm"
@@ -20,9 +22,12 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	pageHandler := handlers.NewPageHandler(db)
 	fileHandler := handlers.NewFileHandler(db, cfg, storageService)
 
-	// Create rate limiters for auth endpoints
+	// Create rate limiter for auth endpoints
 	// Allow 5 login/register attempts per 15 minutes per IP
-	authRateLimiter := middleware.NewRateLimiter(5, 15*time.Minute)
+	authRateLimiter := tollbooth.NewLimiter(5.0/15.0, &limiter.ExpirableOptions{
+		DefaultExpirationTTL: 15 * time.Minute,
+	})
+	authRateLimiter.SetMessage("Too many requests. Please try again later.")
 
 	// CSRF protection (only if enabled in config)
 	var csrfMiddleware func(http.Handler) http.Handler
@@ -62,7 +67,9 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	// Rate-limited auth endpoints
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
-		r.Use(authRateLimiter.Middleware)
+		r.Use(func(next http.Handler) http.Handler {
+			return tollbooth.LimitHandler(authRateLimiter, next)
+		})
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
 	})
