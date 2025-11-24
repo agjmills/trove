@@ -57,6 +57,57 @@ func Migrate(db *gorm.DB) error {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
+	// Create sessions table for alexedwards/scs
+	if err := createSessionsTable(db); err != nil {
+		return fmt.Errorf("failed to create sessions table: %w", err)
+	}
+
 	log.Println("Database migrations completed successfully")
 	return nil
+}
+
+func createSessionsTable(db *gorm.DB) error {
+	// Get the database type
+	dbType := db.Dialector.Name()
+
+	switch dbType {
+	case "postgres":
+		// Drop old sessions table if it exists with wrong schema
+		if err := db.Exec(`DROP TABLE IF EXISTS sessions CASCADE`).Error; err != nil {
+			return err
+		}
+		// Create new table
+		if err := db.Exec(`
+			CREATE TABLE IF NOT EXISTS sessions (
+				token TEXT PRIMARY KEY,
+				data BYTEA NOT NULL,
+				expiry TIMESTAMPTZ NOT NULL
+			)
+		`).Error; err != nil {
+			return err
+		}
+		// Create index
+		return db.Exec(`CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions (expiry)`).Error
+
+	case "sqlite":
+		// Drop old sessions table if it exists with wrong schema
+		if err := db.Exec(`DROP TABLE IF EXISTS sessions`).Error; err != nil {
+			return err
+		}
+		// Create new table
+		if err := db.Exec(`
+			CREATE TABLE IF NOT EXISTS sessions (
+				token TEXT PRIMARY KEY,
+				data BLOB NOT NULL,
+				expiry REAL NOT NULL
+			)
+		`).Error; err != nil {
+			return err
+		}
+		// Create index
+		return db.Exec(`CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expiry)`).Error
+
+	default:
+		return fmt.Errorf("unsupported database type: %s", dbType)
+	}
 }
