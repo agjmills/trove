@@ -49,6 +49,9 @@ test-coverage: ## Run tests with coverage
 fmt: ## Format Go code
 	docker compose exec app go fmt ./...
 
+build-css: ## Build Tailwind CSS
+	./build-tailwind.sh
+
 lint: ## Run linter (requires golangci-lint)
 	docker compose exec app golangci-lint run
 

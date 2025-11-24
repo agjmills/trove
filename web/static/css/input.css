@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Minimal custom utilities */
+@layer utilities {
+  .no-underline {
+    text-decoration: none;
+  }
+}

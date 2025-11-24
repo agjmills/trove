@@ -51,7 +51,11 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Post("/login", authHandler.Login)
 	})
 
-	r.Post("/logout", authHandler.Logout)
+	// Logout endpoint needs session middleware
+	r.Group(func(r chi.Router) {
+		r.Use(sessionManager.LoadAndSave)
+		r.Post("/logout", authHandler.Logout)
+	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)

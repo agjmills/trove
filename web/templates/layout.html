@@ -5,31 +5,59 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>{{if .Title}}{{.Title}} - {{end}}Trove</title>
 	<link rel="stylesheet" href="/static/css/style.css">
+	<script>
+		// Theme toggle - must run before page renders to prevent flash
+		// Respect system preferences by default, but allow manual override
+		if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+			document.documentElement.classList.add('dark')
+		} else {
+			document.documentElement.classList.remove('dark')
+		}
+	</script>
 </head>
-<body>
-	<nav>
-		<div class="container">
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+	<nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+		<div class="{{if .FullWidth}}max-w-full px-4{{else}}max-w-7xl mx-auto px-4{{end}} py-4 flex justify-between items-center gap-4">
 			{{if .FullWidth}}
-			<button id="sidebar-toggle-nav" class="sidebar-toggle-nav">
-				<span class="toggle-icon">☰</span>
+			<button id="sidebar-toggle-nav" class="lg:hidden text-gray-900 dark:text-gray-100 text-2xl p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+				☰
 			</button>
 			{{end}}
-			<a href="/" class="logo">Trove</a>
-			<div class="nav-links">
+			<a href="/" class="text-2xl font-bold text-gray-900 dark:text-gray-100 no-underline">Trove</a>
+			<div class="flex gap-4 items-center">
+				<button id="theme-toggle" class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-xl" title="Toggle theme">
+					<span class="dark:hidden">🌙</span>
+					<span class="hidden dark:inline">☀️</span>
+				</button>
 				{{if .User}}
-					<span>{{.User.Username}}</span>
-					<form action="/logout" method="POST" style="display:inline">
-						<button type="submit">Logout</button>
+					<span class="text-gray-600 dark:text-gray-400">{{.User.Username}}</span>
+					<form action="/logout" method="POST" class="inline">
+						<button type="submit" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 dark:hover:bg-gray-500">Logout</button>
 					</form>
 				{{else}}
-					<a href="/login">Login</a>
-					<a href="/register">Register</a>
+					<a href="/login" class="text-gray-600 dark:text-gray-400 no-underline hover:text-gray-900 dark:hover:text-gray-100">Login</a>
+					<a href="/register" class="text-gray-600 dark:text-gray-400 no-underline hover:text-gray-900 dark:hover:text-gray-100">Register</a>
 				{{end}}
 			</div>
 		</div>
 	</nav>
-	<main class="{{if .FullWidth}}full-width{{else}}container{{end}}">
+	<main class="{{if not .FullWidth}}max-w-7xl mx-auto px-4{{end}}">
 		{{template "content" .}}
 	</main>
+	<script>
+		// Theme toggle functionality
+		const themeToggle = document.getElementById('theme-toggle');
+		if (themeToggle) {
+			themeToggle.addEventListener('click', function() {
+				if (document.documentElement.classList.contains('dark')) {
+					document.documentElement.classList.remove('dark');
+					localStorage.theme = 'light';
+				} else {
+					document.documentElement.classList.add('dark');
+					localStorage.theme = 'dark';
+				}
+			});
+		}
+	</script>
 </body>
 </html>
