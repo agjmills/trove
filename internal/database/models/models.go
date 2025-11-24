@@ -18,9 +18,8 @@ type User struct {
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Files    []File    `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
-	Folders  []Folder  `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
-	Sessions []Session `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+	Files   []File   `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+	Folders []Folder `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
 }
 
 type Folder struct {
@@ -47,17 +46,6 @@ type File struct {
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
-
-	User User `gorm:"foreignKey:UserID" json:"-"`
-}
-
-type Session struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	UserID     uint      `gorm:"not null;index" json:"user_id"`
-	TokenHash  string    `gorm:"uniqueIndex;not null;size:255" json:"-"`
-	ExpiresAt  time.Time `gorm:"not null;index" json:"expires_at"`
-	CreatedAt  time.Time `json:"created_at"`
-	LastUsedAt time.Time `json:"last_used_at"`
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
 }

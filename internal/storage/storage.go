@@ -15,6 +15,17 @@ type Service struct {
 	basePath string
 }
 
+// StorageBackend defines the behavior required by the application for storing files.
+// This allows swapping implementations (local FS, S3, etc.) while keeping the
+// rest of the codebase implementation-agnostic.
+type StorageBackend interface {
+	SaveFile(reader io.Reader, originalFilename string) (filename string, hash string, size int64, err error)
+	DeleteFile(filename string) error
+	GetFilePath(filename string) string
+	FileExists(filename string) bool
+	OpenFile(filename string) (*os.File, error)
+	CalculateHash(reader io.Reader) (string, error)
+}
 func NewService(basePath string) (*Service, error) {
 	if err := os.MkdirAll(basePath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create storage directory: %w", err)

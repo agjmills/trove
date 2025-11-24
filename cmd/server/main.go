@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database"
 	"github.com/agjmills/trove/internal/handlers"
@@ -47,6 +48,11 @@ func main() {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}
 
+	sessionManager, err := auth.NewSessionManager(db, cfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize session manager: %v", err)
+	}
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
@@ -55,7 +61,7 @@ func main() {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 
-	routes.Setup(r, db, cfg, storageService)
+	routes.Setup(r, db, cfg, storageService, sessionManager)
 
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	log.Printf("Starting Trove server on %s (environment: %s)", addr, cfg.Env)

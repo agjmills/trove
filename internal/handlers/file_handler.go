@@ -20,10 +20,10 @@ import (
 type FileHandler struct {
 	db      *gorm.DB
 	cfg     *config.Config
-	storage *storage.Service
+	storage storage.StorageBackend
 }
 
-func NewFileHandler(db *gorm.DB, cfg *config.Config, storage *storage.Service) *FileHandler {
+func NewFileHandler(db *gorm.DB, cfg *config.Config, storage storage.StorageBackend) *FileHandler {
 	return &FileHandler{
 		db:      db,
 		cfg:     cfg,

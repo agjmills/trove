@@ -3,8 +3,8 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
+	"github.com/alexedwards/scs/v2"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/csrf"
@@ -13,12 +13,17 @@ import (
 )
 
 type AuthHandler struct {
-	db  *gorm.DB
-	cfg *config.Config
+	db             *gorm.DB
+	cfg            *config.Config
+	sessionManager *scs.SessionManager
 }
 
-func NewAuthHandler(db *gorm.DB, cfg *config.Config) *AuthHandler {
-	return &AuthHandler{db: db, cfg: cfg}
+func NewAuthHandler(db *gorm.DB, cfg *config.Config, sessionManager *scs.SessionManager) *AuthHandler {
+	return &AuthHandler{
+		db:             db,
+		cfg:            cfg,
+		sessionManager: sessionManager,
+	}
 }
 
 type RegisterRequest struct {
@@ -88,22 +93,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	duration, _ := time.ParseDuration(h.cfg.SessionDuration)
-	token, err := auth.CreateSession(h.db, user.ID, duration)
+	// Create session using scs
+	err = h.sessionManager.RenewToken(r.Context())
 	if err != nil {
 		http.Error(w, "Failed to create session", http.StatusInternalServerError)
 		return
 	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.cfg.Env == "production",
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(duration.Seconds()),
-	})
+	h.sessionManager.Put(r.Context(), "user_id", int(user.ID))
 
 	if contentType == "application/json" {
 		w.WriteHeader(http.StatusCreated)
@@ -156,22 +152,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	duration, _ := time.ParseDuration(h.cfg.SessionDuration)
-	token, err := auth.CreateSession(h.db, user.ID, duration)
+	// Create session using scs
+	err := h.sessionManager.RenewToken(r.Context())
 	if err != nil {
 		http.Error(w, "Failed to create session", http.StatusInternalServerError)
 		return
 	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.cfg.Env == "production",
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(duration.Seconds()),
-	})
+	h.sessionManager.Put(r.Context(), "user_id", int(user.ID))
 
 	if contentType == "application/json" {
 		w.WriteHeader(http.StatusOK)
@@ -186,18 +173,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("session_token")
-	if err == nil {
-		auth.DeleteSession(h.db, cookie.Value)
+	// Destroy session using scs
+	err := h.sessionManager.Destroy(r.Context())
+	if err != nil {
+		http.Error(w, "Failed to logout", http.StatusInternalServerError)
+		return
 	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		MaxAge:   -1,
-	})
 
 	if r.Header.Get("Content-Type") == "application/json" {
 		w.WriteHeader(http.StatusOK)

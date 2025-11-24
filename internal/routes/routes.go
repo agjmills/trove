@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/csrf"
@@ -14,8 +15,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService *storage.Service) {
-	authHandler := handlers.NewAuthHandler(db, cfg)
+func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager) {
+	authHandler := handlers.NewAuthHandler(db, cfg, sessionManager)
 	pageHandler := handlers.NewPageHandler(db)
 	fileHandler := handlers.NewFileHandler(db, cfg, storageService)
 
@@ -35,7 +36,8 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService *storag
 	r.NotFound(middleware.NotFoundHandler)
 
 	r.Group(func(r chi.Router) {
-		r.Use(auth.OptionalAuth(db))
+		r.Use(sessionManager.LoadAndSave)
+		r.Use(auth.OptionalAuth(db, sessionManager))
 		r.Get("/", authHandler.ShowLogin)
 		r.Get("/login", authHandler.ShowLogin)
 		r.Get("/register", authHandler.ShowRegister)
@@ -43,6 +45,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService *storag
 
 	// Rate-limited auth endpoints
 	r.Group(func(r chi.Router) {
+		r.Use(sessionManager.LoadAndSave)
 		r.Use(authRateLimiter.Middleware)
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
@@ -51,7 +54,8 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService *storag
 	r.Post("/logout", authHandler.Logout)
 
 	r.Group(func(r chi.Router) {
-		r.Use(auth.RequireAuth(db))
+		r.Use(sessionManager.LoadAndSave)
+		r.Use(auth.RequireAuth(db, sessionManager))
 		r.Use(csrf.Middleware)
 		r.Get("/dashboard", pageHandler.ShowDashboard)
 		r.Post("/upload", fileHandler.Upload)
