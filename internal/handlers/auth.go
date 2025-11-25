@@ -109,7 +109,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			"email":    user.Email,
 		})
 	} else {
-		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		http.Redirect(w, r, "/files", http.StatusSeeOther)
 	}
 }
 
@@ -168,7 +168,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			"email":    user.Email,
 		})
 	} else {
-		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		http.Redirect(w, r, "/files", http.StatusSeeOther)
 	}
 }
 
@@ -193,7 +193,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 	if user != nil {
-		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		http.Redirect(w, r, "/files", http.StatusSeeOther)
 		return
 	}
 
@@ -206,7 +206,7 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) ShowRegister(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 	if user != nil {
-		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		http.Redirect(w, r, "/files", http.StatusSeeOther)
 		return
 	}
 
@@ -214,4 +214,137 @@ func (h *AuthHandler) ShowRegister(w http.ResponseWriter, r *http.Request) {
 		"Title":     "Register",
 		"CSRFToken": csrf.Token(r),
 	})
+}
+
+func (h *AuthHandler) ShowSettings(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	render(w, "settings.html", map[string]any{
+		"Title":     "Settings",
+		"User":      user,
+		"CSRFToken": csrf.Token(r),
+		"FullWidth": true,
+	})
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+	ConfirmPassword string `json:"confirm_password"`
+}
+
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req ChangePasswordRequest
+
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "application/json" {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+	} else {
+		req.CurrentPassword = r.FormValue("current_password")
+		req.NewPassword = r.FormValue("new_password")
+		req.ConfirmPassword = r.FormValue("confirm_password")
+	}
+
+	// Validate input
+	if req.CurrentPassword == "" || req.NewPassword == "" || req.ConfirmPassword == "" {
+		if contentType == "application/json" {
+			http.Error(w, "All fields are required", http.StatusBadRequest)
+		} else {
+			render(w, "settings.html", map[string]any{
+				"Title":     "Settings",
+				"User":      user,
+				"CSRFToken": csrf.Token(r),
+				"Error":     "All fields are required",
+			})
+		}
+		return
+	}
+
+	if req.NewPassword != req.ConfirmPassword {
+		if contentType == "application/json" {
+			http.Error(w, "New passwords do not match", http.StatusBadRequest)
+		} else {
+			render(w, "settings.html", map[string]any{
+				"Title":     "Settings",
+				"User":      user,
+				"CSRFToken": csrf.Token(r),
+				"Error":     "New passwords do not match",
+			})
+		}
+		return
+	}
+
+	if len(req.NewPassword) < 8 {
+		if contentType == "application/json" {
+			http.Error(w, "New password must be at least 8 characters", http.StatusBadRequest)
+		} else {
+			render(w, "settings.html", map[string]any{
+				"Title":     "Settings",
+				"User":      user,
+				"CSRFToken": csrf.Token(r),
+				"Error":     "New password must be at least 8 characters",
+			})
+		}
+		return
+	}
+
+	// Fetch full user from database to get password hash
+	var dbUser models.User
+	if err := h.db.First(&dbUser, user.ID).Error; err != nil {
+		http.Error(w, "User not found", http.StatusInternalServerError)
+		return
+	}
+
+	// Verify current password
+	if !auth.VerifyPassword(dbUser.PasswordHash, req.CurrentPassword) {
+		if contentType == "application/json" {
+			http.Error(w, "Current password is incorrect", http.StatusUnauthorized)
+		} else {
+			render(w, "settings.html", map[string]any{
+				"Title":     "Settings",
+				"User":      user,
+				"CSRFToken": csrf.Token(r),
+				"Error":     "Current password is incorrect",
+			})
+		}
+		return
+	}
+
+	// Hash new password
+	newPasswordHash, err := auth.HashPassword(req.NewPassword, h.cfg.BcryptCost)
+	if err != nil {
+		http.Error(w, "Failed to hash new password", http.StatusInternalServerError)
+		return
+	}
+
+	// Update password in database
+	if err := h.db.Model(&dbUser).Update("password_hash", newPasswordHash).Error; err != nil {
+		http.Error(w, "Failed to update password", http.StatusInternalServerError)
+		return
+	}
+
+	if contentType == "application/json" {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Password changed successfully"})
+	} else {
+		render(w, "settings.html", map[string]any{
+			"Title":     "Settings",
+			"User":      user,
+			"CSRFToken": csrf.Token(r),
+			"Success":   "Password changed successfully",
+		})
+	}
 }
