@@ -205,12 +205,12 @@ func TestGetClientIP(t *testing.T) {
 	trustedCIDRs := parseTrustedCIDRs([]string{"10.0.0.0/8"})
 
 	tests := []struct {
-		name             string
-		remoteAddr       string
-		xRealIP          string
-		xForwardedFor    string
-		cidrs            []*net.IPNet
-		want             string
+		name          string
+		remoteAddr    string
+		xRealIP       string
+		xForwardedFor string
+		cidrs         []*net.IPNet
+		want          string
 	}{
 		{
 			name:       "trusted proxy with X-Real-IP",
