@@ -1,7 +1,9 @@
 package routes
 
 import (
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/agjmills/trove/internal/auth"
@@ -19,6 +21,128 @@ import (
 	"gorm.io/gorm"
 )
 
+// parseTrustedCIDRs parses a list of CIDR strings into net.IPNet objects.
+// Invalid CIDRs are logged and skipped.
+func parseTrustedCIDRs(cidrs []string) []*net.IPNet {
+	var result []*net.IPNet
+	for _, cidr := range cidrs {
+		_, ipNet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			// Try parsing as a single IP (e.g., "127.0.0.1" without mask)
+			ip := net.ParseIP(cidr)
+			if ip != nil {
+				// Convert single IP to /32 (IPv4) or /128 (IPv6)
+				if ip.To4() != nil {
+					_, ipNet, _ = net.ParseCIDR(cidr + "/32")
+				} else {
+					_, ipNet, _ = net.ParseCIDR(cidr + "/128")
+				}
+				if ipNet != nil {
+					result = append(result, ipNet)
+					continue
+				}
+			}
+			logger.Warn("invalid trusted proxy CIDR, skipping", "cidr", cidr, "error", err)
+			continue
+		}
+		result = append(result, ipNet)
+	}
+	return result
+}
+
+// isIPInCIDRs checks if the given IP string is contained in any of the CIDR ranges.
+func isIPInCIDRs(ipStr string, cidrs []*net.IPNet) bool {
+	// Handle host:port format from RemoteAddr
+	host, _, err := net.SplitHostPort(ipStr)
+	if err != nil {
+		// No port, use as-is
+		host = ipStr
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+
+	for _, cidr := range cidrs {
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// getClientIP extracts the client IP, preferring X-Real-IP or the leftmost
+// X-Forwarded-For entry if from a trusted proxy. For multi-hop proxy chains
+// (e.g., CDN → load balancer → app), X-Forwarded-For is parsed to get the
+// original client IP.
+func getClientIP(r *http.Request, trustedCIDRs []*net.IPNet) string {
+	// First check if RemoteAddr is from a trusted proxy
+	if len(trustedCIDRs) > 0 && isIPInCIDRs(r.RemoteAddr, trustedCIDRs) {
+		// Trust X-Real-IP header if set (single-proxy setup)
+		if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+			return realIP
+		}
+		// Trust X-Forwarded-For header (multi-hop proxy chains)
+		// Format: X-Forwarded-For: client, proxy1, proxy2
+		// We want the leftmost (original client) IP
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			ips := strings.Split(xff, ",")
+			if len(ips) > 0 {
+				clientIP := strings.TrimSpace(ips[0])
+				if clientIP != "" {
+					return clientIP
+				}
+			}
+		}
+	}
+	return r.RemoteAddr
+}
+
+// plaintextCSRFMiddleware returns middleware that marks requests as plaintext HTTP
+// for gorilla/csrf origin validation. In development, all requests are marked plaintext.
+// In production, X-Forwarded-Proto is only trusted when the request comes from a
+// configured trusted proxy CIDR; otherwise r.TLS is used to detect HTTPS.
+func plaintextCSRFMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+	// Pre-parse trusted CIDRs once at middleware creation time
+	trustedCIDRs := parseTrustedCIDRs(cfg.TrustedProxyCIDRs)
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if cfg.Env != "production" {
+				// Development: skip origin checks (plaintext HTTP)
+				r = csrf.PlaintextHTTPRequest(r)
+			} else {
+				// Production: determine if request is over HTTPS
+				isHTTPS := false
+
+				// Only trust X-Forwarded-Proto if request is from a trusted proxy
+				if len(trustedCIDRs) > 0 && isIPInCIDRs(r.RemoteAddr, trustedCIDRs) {
+					proto := r.Header.Get("X-Forwarded-Proto")
+					isHTTPS = proto == "https"
+				} else {
+					// No trusted proxy or request not from trusted IP: use r.TLS
+					isHTTPS = r.TLS != nil
+				}
+
+				if !isHTTPS {
+					r = csrf.PlaintextHTTPRequest(r)
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// Setup configures HTTP routes and middleware on the provided chi.Router, wiring application handlers,
+// health and metrics endpoints, static file serving, authentication flows, CSRF protection (when enabled),
+// and rate limiting for authentication endpoints.
+//
+// When CSRF is enabled, the middleware is initialized with the session secret and its Secure flag is
+// determined from cfg.Env; when disabled, a no-op CSRF middleware is used. Authentication endpoints
+// (login, register, and change-password) are rate-limited to 5 attempts per 15 minutes per IP. The
+// multipart upload endpoint is intentionally exempt from the Gorilla CSRF middleware to allow streaming
+// uploads while remaining protected by session-based authentication and SameSite cookie policy.
 func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, version string) {
 	authHandler := handlers.NewAuthHandler(db, cfg, sessionManager)
 	pageHandler := handlers.NewPageHandler(db, cfg)
@@ -89,49 +213,37 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Post("/login", authHandler.Login)
 	})
 
-	// Logout endpoint needs session middleware
+	// Logout endpoint needs session middleware and CSRF protection
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
+		r.Use(plaintextCSRFMiddleware(cfg))
+		r.Use(csrfMiddleware)
 		r.Post("/logout", authHandler.Logout)
 	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
 		r.Use(auth.RequireAuth(db, sessionManager))
-		// Handle CSRF origin validation based on environment
-		// In development: skip origin checks (plaintext HTTP)
-		// In production behind reverse proxy: detect if request came via HTTPS
-		if cfg.Env != "production" {
-			r.Use(func(next http.Handler) http.Handler {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// Tell gorilla/csrf this is plaintext HTTP (skips origin checks)
-					r = csrf.PlaintextHTTPRequest(r)
-					next.ServeHTTP(w, r)
-				})
-			})
-		} else {
-			// In production, check if behind TLS-terminating reverse proxy
-			// If request came via HTTPS (X-Forwarded-Proto header), don't mark as plaintext
-			// This allows origin validation to work correctly
-			r.Use(func(next http.Handler) http.Handler {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// Check if behind reverse proxy without TLS forwarding
-					proto := r.Header.Get("X-Forwarded-Proto")
-					if proto == "" || proto == "http" {
-						// No TLS termination detected, mark as plaintext
-						r = csrf.PlaintextHTTPRequest(r)
-					}
-					// If X-Forwarded-Proto is "https", let gorilla/csrf do origin validation
-					next.ServeHTTP(w, r)
-				})
-			})
-		}
+		r.Use(plaintextCSRFMiddleware(cfg))
 		r.Use(csrfMiddleware)
-		r.Get("/dashboard", pageHandler.ShowDashboard)
+		r.Get("/files", pageHandler.ShowFiles)
+		r.Get("/settings", authHandler.ShowSettings)
 		r.Post("/folders/create", fileHandler.CreateFolder)
 		r.Get("/download/{id}", fileHandler.Download)
 		r.Post("/delete/{id}", fileHandler.Delete)
 		r.Post("/folders/delete/{name}", fileHandler.DeleteFolder)
+	})
+
+	// Change password endpoint - rate limited like login/register
+	r.Group(func(r chi.Router) {
+		r.Use(sessionManager.LoadAndSave)
+		r.Use(auth.RequireAuth(db, sessionManager))
+		r.Use(func(next http.Handler) http.Handler {
+			return tollbooth.LimitHandler(authRateLimiter, next)
+		})
+		r.Use(plaintextCSRFMiddleware(cfg))
+		r.Use(csrfMiddleware)
+		r.Post("/settings/change-password", authHandler.ChangePassword)
 	})
 
 	// Upload endpoint - exempt from Gorilla CSRF middleware

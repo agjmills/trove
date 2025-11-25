@@ -20,11 +20,12 @@ type PageHandler struct {
 	cfg *config.Config
 }
 
+// NewPageHandler returns a PageHandler initialized with the given GORM database handle and application configuration.
 func NewPageHandler(db *gorm.DB, cfg *config.Config) *PageHandler {
 	return &PageHandler{db: db, cfg: cfg}
 }
 
-func (h *PageHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
+func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 
 	// Get current folder from query param, default to root
@@ -167,8 +168,8 @@ func (h *PageHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 	// Get flash message if any
 	flashMsg := flash.Get(w, r)
 
-	render(w, "dashboard.html", map[string]any{
-		"Title":         "Dashboard",
+	render(w, "files.html", map[string]any{
+		"Title":         "Files",
 		"User":          user,
 		"Files":         files,
 		"Folders":       folderNames,

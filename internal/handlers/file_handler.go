@@ -8,6 +8,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -54,6 +55,15 @@ func sanitizeFolderPath(path string) string {
 	}
 
 	return path
+}
+
+// folderRedirectURL builds a URL-safe redirect path for the files page.
+// Returns "/files" for root folder, or "/files?folder=<encoded>" otherwise.
+func folderRedirectURL(folderPath string) string {
+	if folderPath == "" || folderPath == "/" {
+		return "/files"
+	}
+	return "/files?folder=" + url.QueryEscape(folderPath)
 }
 
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
@@ -237,11 +247,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Redirect back to the folder we uploaded to
-	redirectURL := "/dashboard"
-	if folderPath != "/" {
-		redirectURL = "/dashboard?folder=" + folderPath
-	}
-	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+	http.Redirect(w, r, folderRedirectURL(folderPath), http.StatusSeeOther)
 }
 
 // getUniqueFilename checks if a file with the same name exists and returns a unique name
@@ -308,7 +314,7 @@ func (h *FileHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 	if result.Error == nil {
 		// Folder already exists
 		flash.Error(w, "A folder with that name already exists.")
-		http.Redirect(w, r, "/dashboard?folder="+currentFolder, http.StatusSeeOther)
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
 	}
 
@@ -320,13 +326,13 @@ func (h *FileHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.db.Create(&folder).Error; err != nil {
 		flash.Error(w, "Failed to create folder. Please try again.")
-		http.Redirect(w, r, "/dashboard?folder="+currentFolder, http.StatusSeeOther)
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
 	}
 
 	flash.Success(w, "Folder created successfully.")
 	// Redirect to the new folder
-	http.Redirect(w, r, "/dashboard?folder="+newFolderPath, http.StatusSeeOther)
+	http.Redirect(w, r, folderRedirectURL(newFolderPath), http.StatusSeeOther)
 }
 
 func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
@@ -428,11 +434,7 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	flash.Success(w, "File deleted successfully.")
 
 	// Redirect back to the folder
-	redirectURL := "/dashboard"
-	if folderPath != "/" {
-		redirectURL = "/dashboard?folder=" + folderPath
-	}
-	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+	http.Redirect(w, r, folderRedirectURL(folderPath), http.StatusSeeOther)
 }
 
 func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
@@ -467,7 +469,7 @@ func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 
 	if fileCount > 0 {
 		flash.Error(w, "Cannot delete folder: folder contains files. Please delete or move the files first.")
-		http.Redirect(w, r, "/dashboard?folder="+currentFolder, http.StatusSeeOther)
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
 	}
 
@@ -475,11 +477,11 @@ func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.Where("user_id = ? AND folder_path = ?", user.ID, fullFolderPath).
 		Delete(&models.Folder{}).Error; err != nil {
 		flash.Error(w, "Failed to delete folder. Please try again.")
-		http.Redirect(w, r, "/dashboard?folder="+currentFolder, http.StatusSeeOther)
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
 	}
 
 	flash.Success(w, "Folder deleted successfully.")
 	// Redirect back to parent folder
-	http.Redirect(w, r, "/dashboard?folder="+currentFolder, http.StatusSeeOther)
+	http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 }
