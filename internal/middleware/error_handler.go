@@ -26,6 +26,16 @@ func formatBytes(bytes int64) string {
 func LoadErrorTemplates() error {
 	funcMap := template.FuncMap{
 		"formatBytes": formatBytes,
+		"storagePercentage": func(used, quota int64) int {
+			if quota == 0 {
+				return 0
+			}
+			percentage := (used * 100) / quota
+			if percentage > 100 {
+				return 100
+			}
+			return int(percentage)
+		},
 		"add": func(a, b int) int {
 			return a + b
 		},
