@@ -86,14 +86,15 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	var folderPath string = "/"
 	var fileProcessed bool
 	var originalFilename string
-	var finalFilename string
 	var filename string
 	var hash string
 	var actualSize int64
 	var mimeType string
 	var isDuplicate bool
 
-	// Process parts sequentially
+	// Two-pass approach: First pass streams the file to storage and collects all form fields.
+	// This ensures that form field ordering doesn't matter - we process the file with whatever
+	// folder path is provided, regardless of whether "folder" comes before or after "file".
 	for {
 		part, err := mr.NextPart()
 		if err == io.EOF {
@@ -134,9 +135,6 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			if mimeType == "" {
 				mimeType = "application/octet-stream"
 			}
-
-			// Check if file with same name exists and get unique name
-			finalFilename = h.getUniqueFilename(user.ID, folderPath, originalFilename)
 
 			log.Printf("Upload streaming: file=%s, limit=%d bytes", originalFilename, h.cfg.MaxUploadSize)
 
@@ -186,6 +184,10 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No file provided", http.StatusBadRequest)
 		return
 	}
+
+	// Second pass: Now that all form fields are collected (including folder),
+	// calculate the unique filename with the correct folder path
+	finalFilename := h.getUniqueFilename(user.ID, folderPath, originalFilename)
 
 	// Create database record
 	fileRecord := models.File{
