@@ -97,14 +97,15 @@
 				
 				// If on dashboard with sidebar
 				if (sidebar) {
-					if (sidebar.classList.contains('-translate-x-full')) {
-						sidebar.classList.remove('-translate-x-full');
-						sidebar.classList.add('translate-x-0');
-						updateMenuIcon(true);
-					} else {
+					// Toggle between hidden (-translate-x-full) and visible (translate-x-0)
+					if (sidebar.classList.contains('translate-x-0')) {
 						sidebar.classList.remove('translate-x-0');
 						sidebar.classList.add('-translate-x-full');
 						updateMenuIcon(false);
+					} else {
+						sidebar.classList.remove('-translate-x-full');
+						sidebar.classList.add('translate-x-0');
+						updateMenuIcon(true);
 					}
 				}
 				// If on other pages with mobile menu
@@ -151,8 +152,10 @@
 			if (sidebar) {
 				window.addEventListener('resize', function() {
 					if (window.innerWidth >= 1024) {
+						// On desktop, remove any mobile toggle classes
 						sidebar.classList.remove('-translate-x-full');
-						sidebar.classList.add('translate-x-0');
+						sidebar.classList.remove('translate-x-0');
+						updateMenuIcon(false);
 					}
 				});
 			}
