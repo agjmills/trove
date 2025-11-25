@@ -5,56 +5,20 @@ import (
 	"html/template"
 	"net/http"
 	"path/filepath"
+
+	"github.com/agjmills/trove/internal/templateutil"
 )
 
 var errorTemplates *template.Template
 
-func formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-}
-
 // LoadErrorTemplates loads and parses error page HTML templates and registers helper functions for use by those templates.
-// 
+//
 // It registers the following template helpers: `formatBytes`, `storagePercentage` (returns 0 if quota is 0; otherwise computes used/quota as a percentage capped at 100), `add`, `mul`, and `div` (returns 0 when dividing by zero).
 // Parsed templates are loaded from the web/templates/*.html glob and stored in the package-level variable `errorTemplates`.
 // Returns any error encountered while parsing the templates.
 func LoadErrorTemplates() error {
-	funcMap := template.FuncMap{
-		"formatBytes": formatBytes,
-		"storagePercentage": func(used, quota int64) int {
-			if quota == 0 {
-				return 0
-			}
-			percentage := (used * 100) / quota
-			if percentage > 100 {
-				return 100
-			}
-			return int(percentage)
-		},
-		"add": func(a, b int) int {
-			return a + b
-		},
-		"mul": func(a, b int64) int64 {
-			return a * b
-		},
-		"div": func(a, b int64) int64 {
-			if b == 0 {
-				return 0
-			}
-			return a / b
-		},
-	}
 	var err error
-	errorTemplates, err = template.New("").Funcs(funcMap).ParseGlob(filepath.Join("web", "templates", "*.html"))
+	errorTemplates, err = template.New("").Funcs(templateutil.FuncMap()).ParseGlob(filepath.Join("web", "templates", "*.html"))
 	return err
 }
 
