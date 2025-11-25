@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
@@ -11,6 +12,13 @@ import (
 	"github.com/gorilla/csrf"
 	"gorm.io/gorm"
 )
+
+// isJSONRequest checks if the request expects JSON format.
+// It uses a prefix match to handle Content-Type values like "application/json; charset=utf-8".
+func isJSONRequest(r *http.Request) bool {
+	contentType := r.Header.Get("Content-Type")
+	return strings.HasPrefix(contentType, "application/json")
+}
 
 type AuthHandler struct {
 	db             *gorm.DB
@@ -45,8 +53,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	var req RegisterRequest
 
-	contentType := r.Header.Get("Content-Type")
-	if contentType == "application/json" {
+	isJSON := isJSONRequest(r)
+	if isJSON {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
@@ -58,7 +66,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Username == "" || req.Email == "" || req.Password == "" {
-		if contentType == "application/json" {
+		if isJSON {
 			http.Error(w, "All fields are required", http.StatusBadRequest)
 		} else {
 			render(w, "register.html", map[string]any{
@@ -102,7 +110,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	h.sessionManager.Put(r.Context(), "user_id", int(user.ID))
 
-	if contentType == "application/json" {
+	if isJSON {
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{
 			"id":       user.ID,
@@ -117,8 +125,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 
-	contentType := r.Header.Get("Content-Type")
-	if contentType == "application/json" {
+	isJSON := isJSONRequest(r)
+	if isJSON {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
@@ -130,7 +138,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	if err := h.db.Where("username = ?", req.Username).First(&user).Error; err != nil {
-		if contentType == "application/json" {
+		if isJSON {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		} else {
 			render(w, "login.html", map[string]any{
@@ -143,7 +151,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !auth.VerifyPassword(user.PasswordHash, req.Password) {
-		if contentType == "application/json" {
+		if isJSON {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		} else {
 			render(w, "login.html", map[string]any{
@@ -163,7 +171,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	h.sessionManager.Put(r.Context(), "user_id", int(user.ID))
 
-	if contentType == "application/json" {
+	if isJSON {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]any{
 			"id":       user.ID,
@@ -183,7 +191,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Header.Get("Content-Type") == "application/json" {
+	if isJSONRequest(r) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Logged out"})
 	} else {
@@ -249,15 +257,19 @@ type ChangePasswordRequest struct {
 
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
+	isJSON := isJSONRequest(r)
 	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		if isJSON {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		} else {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+		}
 		return
 	}
 
 	var req ChangePasswordRequest
 
-	contentType := r.Header.Get("Content-Type")
-	if contentType == "application/json" {
+	if isJSON {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
@@ -270,7 +282,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	// Validate input
 	if req.CurrentPassword == "" || req.NewPassword == "" || req.ConfirmPassword == "" {
-		if contentType == "application/json" {
+		if isJSON {
 			http.Error(w, "All fields are required", http.StatusBadRequest)
 		} else {
 			render(w, "settings.html", map[string]any{
@@ -285,7 +297,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.NewPassword != req.ConfirmPassword {
-		if contentType == "application/json" {
+		if isJSON {
 			http.Error(w, "New passwords do not match", http.StatusBadRequest)
 		} else {
 			render(w, "settings.html", map[string]any{
@@ -300,7 +312,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(req.NewPassword) < 8 {
-		if contentType == "application/json" {
+		if isJSON {
 			http.Error(w, "New password must be at least 8 characters", http.StatusBadRequest)
 		} else {
 			render(w, "settings.html", map[string]any{
@@ -315,7 +327,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(req.NewPassword) > 72 {
-		if contentType == "application/json" {
+		if isJSON {
 			http.Error(w, "New password must be at most 72 characters", http.StatusBadRequest)
 		} else {
 			render(w, "settings.html", map[string]any{
@@ -338,7 +350,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	// Verify current password
 	if !auth.VerifyPassword(dbUser.PasswordHash, req.CurrentPassword) {
-		if contentType == "application/json" {
+		if isJSON {
 			http.Error(w, "Current password is incorrect", http.StatusUnauthorized)
 		} else {
 			render(w, "settings.html", map[string]any{
@@ -365,7 +377,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if contentType == "application/json" {
+	if isJSON {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Password changed successfully"})
 	} else {
