@@ -153,7 +153,11 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			log.Printf("Upload complete: file=%s, size=%d bytes, hash=%s", originalFilename, actualSize, hash[:16])
+			hashPreview := hash
+			if len(hash) > 16 {
+				hashPreview = hash[:16] + "..."
+			}
+			log.Printf("Upload complete: file=%s, size=%d bytes, hash=%s", originalFilename, actualSize, hashPreview)
 
 			// Check storage quota after upload (streaming means we don't know size upfront)
 			if user.StorageUsed+actualSize > user.StorageQuota {
