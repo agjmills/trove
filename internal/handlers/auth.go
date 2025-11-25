@@ -278,6 +278,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 				"User":      user,
 				"CSRFToken": csrf.Token(r),
 				"Error":     "All fields are required",
+				"FullWidth": true,
 			})
 		}
 		return
@@ -292,6 +293,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 				"User":      user,
 				"CSRFToken": csrf.Token(r),
 				"Error":     "New passwords do not match",
+				"FullWidth": true,
 			})
 		}
 		return
@@ -306,6 +308,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 				"User":      user,
 				"CSRFToken": csrf.Token(r),
 				"Error":     "New password must be at least 8 characters",
+				"FullWidth": true,
 			})
 		}
 		return
@@ -328,6 +331,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 				"User":      user,
 				"CSRFToken": csrf.Token(r),
 				"Error":     "Current password is incorrect",
+				"FullWidth": true,
 			})
 		}
 		return
@@ -355,6 +359,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 			"User":      user,
 			"CSRFToken": csrf.Token(r),
 			"Success":   "Password changed successfully",
+			"FullWidth": true,
 		})
 	}
 }
