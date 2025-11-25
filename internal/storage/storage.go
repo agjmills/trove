@@ -3,6 +3,7 @@ package storage
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,12 @@ import (
 
 	"github.com/google/uuid"
 )
+
+// ErrFileTooLarge is returned when an upload exceeds the maximum allowed size
+var ErrFileTooLarge = errors.New("file exceeds maximum allowed size")
+
+// copyBufferSize is the buffer size used for file copies (8MB aligns with S3 multipart upload parts)
+const copyBufferSize = 8 * 1024 * 1024
 
 type Service struct {
 	basePath string
@@ -20,6 +27,7 @@ type Service struct {
 // rest of the codebase implementation-agnostic.
 type StorageBackend interface {
 	SaveFile(reader io.Reader, originalFilename string) (filename string, hash string, size int64, err error)
+	SaveFileWithLimit(reader io.Reader, originalFilename string, maxSize int64) (filename string, hash string, size int64, err error)
 	DeleteFile(filename string) error
 	GetFilePath(filename string) string
 	FileExists(filename string) bool
@@ -49,11 +57,12 @@ func (s *Service) SaveFile(reader io.Reader, originalFilename string) (filename 
 	}
 	defer file.Close()
 
-	// Hash while writing
+	// Hash while writing using large buffer for better throughput
 	hasher := sha256.New()
 	writer := io.MultiWriter(file, hasher)
+	buf := make([]byte, copyBufferSize)
 
-	size, err = io.Copy(writer, reader)
+	size, err = io.CopyBuffer(writer, reader, buf)
 	if err != nil {
 		os.Remove(filePath) // Clean up on error
 		return "", "", 0, fmt.Errorf("failed to write file: %w", err)
@@ -98,8 +107,89 @@ func (s *Service) OpenFile(filename string) (*os.File, error) {
 // CalculateHash calculates the SHA-256 hash of a reader's content
 func (s *Service) CalculateHash(reader io.Reader) (string, error) {
 	hasher := sha256.New()
-	if _, err := io.Copy(hasher, reader); err != nil {
+	buf := make([]byte, copyBufferSize)
+	if _, err := io.CopyBuffer(hasher, reader, buf); err != nil {
 		return "", fmt.Errorf("failed to calculate hash: %w", err)
 	}
 	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+// limitedReader wraps an io.Reader and tracks bytes read, erroring if limit is exceeded
+type limitedReader struct {
+	reader    io.Reader
+	remaining int64
+	exceeded  bool
+	done      bool
+}
+
+func (lr *limitedReader) Read(p []byte) (n int, err error) {
+	if lr.done {
+		return 0, io.EOF
+	}
+
+	if lr.remaining <= 0 {
+		lr.exceeded = true
+		return 0, ErrFileTooLarge
+	}
+
+	// Limit read to remaining bytes
+	if int64(len(p)) > lr.remaining {
+		p = p[:lr.remaining]
+	}
+
+	n, err = lr.reader.Read(p)
+	lr.remaining -= int64(n)
+
+	if lr.remaining <= 0 && err == nil {
+		// Check if there's more data (we've hit the limit)
+		var probe [1]byte
+		probeN, probeErr := lr.reader.Read(probe[:])
+		if probeN > 0 || (probeErr != io.EOF && probeErr != nil) {
+			lr.exceeded = true
+			return n, ErrFileTooLarge
+		}
+		// No more data - we read exactly the limit, signal EOF
+		lr.done = true
+		return n, io.EOF
+	}
+
+	return n, err
+}
+
+// SaveFileWithLimit saves a file to disk with a size limit, returning early if exceeded.
+// This enables terminating oversized uploads without writing the entire file.
+func (s *Service) SaveFileWithLimit(reader io.Reader, originalFilename string, maxSize int64) (filename string, hash string, size int64, err error) {
+	// Generate unique filename
+	ext := filepath.Ext(originalFilename)
+	filename = uuid.New().String() + ext
+
+	filePath := filepath.Join(s.basePath, filename)
+
+	// Create file
+	file, err := os.Create(filePath)
+	if err != nil {
+		return "", "", 0, fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	// Wrap reader with size limit
+	lr := &limitedReader{reader: reader, remaining: maxSize}
+
+	// Hash while writing using large buffer for better throughput
+	hasher := sha256.New()
+	writer := io.MultiWriter(file, hasher)
+	buf := make([]byte, copyBufferSize)
+
+	size, err = io.CopyBuffer(writer, lr, buf)
+	if err != nil {
+		os.Remove(filePath) // Clean up on error
+		if lr.exceeded {
+			return "", "", 0, ErrFileTooLarge
+		}
+		return "", "", 0, fmt.Errorf("failed to write file: %w", err)
+	}
+
+	hash = hex.EncodeToString(hasher.Sum(nil))
+
+	return filename, hash, size, nil
 }

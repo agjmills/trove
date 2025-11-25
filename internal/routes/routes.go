@@ -20,7 +20,7 @@ import (
 
 func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, version string) {
 	authHandler := handlers.NewAuthHandler(db, cfg, sessionManager)
-	pageHandler := handlers.NewPageHandler(db)
+	pageHandler := handlers.NewPageHandler(db, cfg)
 	fileHandler := handlers.NewFileHandler(db, cfg, storageService)
 	healthHandler := handlers.NewHealthHandler(db, storageService, version)
 
@@ -38,7 +38,8 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 			[]byte(cfg.SessionSecret), // Use session secret as CSRF key
 			csrf.Secure(cfg.Env == "production"),
 			csrf.SameSite(csrf.SameSiteStrictMode),
-			csrf.FieldName("csrf_token"), // Use same field name as before
+			csrf.FieldName("csrf_token"),      // Form field name
+			csrf.RequestHeader("X-CSRF-Token"), // Header name for XHR requests
 		)
 	} else {
 		// No-op middleware if CSRF is disabled
@@ -85,10 +86,21 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Use(auth.RequireAuth(db, sessionManager))
 		r.Use(csrfMiddleware)
 		r.Get("/dashboard", pageHandler.ShowDashboard)
-		r.Post("/upload", fileHandler.Upload)
 		r.Post("/folders/create", fileHandler.CreateFolder)
 		r.Get("/download/{id}", fileHandler.Download)
 		r.Post("/delete/{id}", fileHandler.Delete)
 		r.Post("/folders/delete/{name}", fileHandler.DeleteFolder)
+	})
+
+	// Upload endpoint - exempt from Gorilla CSRF middleware
+	// Gorilla CSRF calls ParseMultipartForm internally which consumes the request body,
+	// breaking our streaming upload. Protection is still provided via:
+	// 1. Session-based authentication (RequireAuth middleware)
+	// 2. SameSite cookie policy preventing cross-origin requests
+	r.Group(func(r chi.Router) {
+		r.Use(sessionManager.LoadAndSave)
+		r.Use(auth.RequireAuth(db, sessionManager))
+		// No CSRF middleware - streaming uploads handle their own protection
+		r.Post("/upload", fileHandler.Upload)
 	})
 }

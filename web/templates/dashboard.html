@@ -225,8 +225,34 @@
 	const uploadFilename = document.getElementById('upload-filename');
 	let dragCounter = 0;
 
+	// File size limits from server config
+	const maxUploadSize = {{.MaxUploadSize}};
+	const userStorageUsed = {{.User.StorageUsed}};
+	const userStorageQuota = {{.User.StorageQuota}};
+	const remainingQuota = userStorageQuota - userStorageUsed;
+
+	// Helper to format bytes for display
+	function formatBytes(bytes) {
+		if (bytes === 0) return '0 B';
+		const k = 1024;
+		const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+	}
+
 	// Function to upload file with progress tracking
 	function uploadFile(file) {
+		// Client-side validation before upload
+		if (file.size > maxUploadSize) {
+			alert('File too large. Maximum size is ' + formatBytes(maxUploadSize) + '.\nYour file: ' + formatBytes(file.size));
+			return;
+		}
+
+		if (file.size > remainingQuota) {
+			alert('Insufficient storage quota.\nFile size: ' + formatBytes(file.size) + '\nRemaining quota: ' + formatBytes(remainingQuota));
+			return;
+		}
+
 		const formData = new FormData();
 		formData.append('file', file);
 		formData.append('folder', uploadForm.querySelector('input[name="folder"]').value);
@@ -237,7 +263,7 @@
 		uploadFilename.textContent = file.name;
 		uploadPercentage.textContent = '0%';
 		progressFill.style.width = '0%';
-		
+
 		// Disable upload button during upload
 		uploadButton.disabled = true;
 
@@ -272,8 +298,9 @@
 			uploadButton.disabled = false;
 		});
 
-		// Send request
+		// Send request with CSRF token in header (required for streaming uploads)
 		xhr.open('POST', '/upload');
+		xhr.setRequestHeader('X-CSRF-Token', document.getElementById('csrf-token').value);
 		xhr.send(formData);
 	}
 

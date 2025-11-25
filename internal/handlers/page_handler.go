@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/agjmills/trove/internal/auth"
+	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/flash"
 	"github.com/gorilla/csrf"
@@ -15,11 +16,12 @@ import (
 )
 
 type PageHandler struct {
-	db *gorm.DB
+	db  *gorm.DB
+	cfg *config.Config
 }
 
-func NewPageHandler(db *gorm.DB) *PageHandler {
-	return &PageHandler{db: db}
+func NewPageHandler(db *gorm.DB, cfg *config.Config) *PageHandler {
+	return &PageHandler{db: db, cfg: cfg}
 }
 
 func (h *PageHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +181,7 @@ func (h *PageHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 		"TotalPages":    totalPages,
 		"TotalFiles":    totalFiles,
 		"FullWidth":     true,
+		"MaxUploadSize": h.cfg.MaxUploadSize,
 	})
 }
 
