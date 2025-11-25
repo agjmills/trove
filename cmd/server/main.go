@@ -92,7 +92,7 @@ func main() {
 		Addr:              addr,
 		Handler:           r,
 		ReadHeaderTimeout: 10 * time.Second,
-		WriteTimeout:      0,
+		WriteTimeout:      10 * time.Minute, // Set a reasonable write timeout to prevent slow-read attacks
 		IdleTimeout:       120 * time.Second,
 	}
 
