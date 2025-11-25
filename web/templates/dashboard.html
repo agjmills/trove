@@ -300,9 +300,9 @@
 			uploadButton.disabled = false;
 		});
 
-		// Send request with CSRF token in header (required for streaming uploads)
+		// Note: /upload is exempted from CSRF middleware for streaming and is
+		// protected by session authentication and SameSite cookie policy instead.
 		xhr.open('POST', '/upload');
-		xhr.setRequestHeader('X-CSRF-Token', document.getElementById('csrf-token').value);
 		xhr.send(formData);
 	}
 
