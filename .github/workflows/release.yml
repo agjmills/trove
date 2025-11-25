@@ -123,6 +123,20 @@ jobs:
             fi
           done
 
+      - name: Extract version numbers
+        id: version
+        run: |
+          # Extract version from tag (e.g., v0.1.0)
+          VERSION="${{ github.ref_name }}"
+          # Remove 'v' prefix for processing
+          VERSION_NUM="${VERSION#v}"
+          # Extract major version (e.g., v0)
+          MAJOR="v$(echo "$VERSION_NUM" | cut -d. -f1)"
+          # Extract minor version (e.g., v0.1)
+          MINOR="v$(echo "$VERSION_NUM" | cut -d. -f1,2)"
+          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "minor=$MINOR" >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -146,8 +160,8 @@ jobs:
             
             Available tags:
             - `ghcr.io/agjmills/trove:${{ github.ref_name }}` - Full version
-            - `ghcr.io/agjmills/trove:$(echo ${{ github.ref_name }} | cut -d. -f1,2)` - Minor version
-            - `ghcr.io/agjmills/trove:$(echo ${{ github.ref_name }} | cut -d. -f1)` - Major version
+            - `ghcr.io/agjmills/trove:${{ steps.version.outputs.minor }}` - Minor version
+            - `ghcr.io/agjmills/trove:${{ steps.version.outputs.major }}` - Major version
             
             ## 📦 Installation
             
