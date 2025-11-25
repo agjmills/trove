@@ -87,7 +87,7 @@ func main() {
 	// Configure server with appropriate timeouts for large file uploads
 	// ReadHeaderTimeout protects against Slowloris attacks while allowing
 	// unlimited body streaming for multi-gigabyte uploads.
-	// WriteTimeout is disabled (0) to allow streaming large downloads.
+	// WriteTimeout is disabled (0) to allow streaming large uploads and downloads.
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           r,
