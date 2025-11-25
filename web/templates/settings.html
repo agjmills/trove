@@ -52,13 +52,15 @@
 			
 			<div class="mb-4">
 				<label for="current_password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Current Password</label>
-				<input type="password" id="current_password" name="current_password" required 
+				<input type="password" id="current_password" name="current_password" required
+					autocomplete="current-password"
 					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-400">
 			</div>
 
 			<div class="mb-4">
 				<label for="new_password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">New Password</label>
 				<input type="password" id="new_password" name="new_password" required minlength="8"
+					autocomplete="new-password"
 					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-400">
 				<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Must be at least 8 characters</p>
 			</div>
@@ -66,6 +68,7 @@
 			<div class="mb-6">
 				<label for="confirm_password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Confirm New Password</label>
 				<input type="password" id="confirm_password" name="confirm_password" required minlength="8"
+					autocomplete="new-password"
 					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-400">
 			</div>
 
