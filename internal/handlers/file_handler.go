@@ -109,8 +109,13 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		switch formName {
 		case "folder":
 			// Read small form field into memory (max 1KB)
-			data, _ := io.ReadAll(io.LimitReader(part, 1024))
-			folderPath = sanitizeFolderPath(string(data))
+			data, err := io.ReadAll(io.LimitReader(part, 1024))
+			if err != nil {
+				log.Printf("Warning: failed to read folder field: %v", err)
+				folderPath = "/"
+			} else {
+				folderPath = sanitizeFolderPath(string(data))
+			}
 
 		case "file":
 			if fileProcessed {
