@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"net"
 	"net/http"
 	"time"
 
@@ -19,19 +20,96 @@ import (
 	"gorm.io/gorm"
 )
 
+// parseTrustedCIDRs parses a list of CIDR strings into net.IPNet objects.
+// Invalid CIDRs are logged and skipped.
+func parseTrustedCIDRs(cidrs []string) []*net.IPNet {
+	var result []*net.IPNet
+	for _, cidr := range cidrs {
+		_, ipNet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			// Try parsing as a single IP (e.g., "127.0.0.1" without mask)
+			ip := net.ParseIP(cidr)
+			if ip != nil {
+				// Convert single IP to /32 (IPv4) or /128 (IPv6)
+				if ip.To4() != nil {
+					_, ipNet, _ = net.ParseCIDR(cidr + "/32")
+				} else {
+					_, ipNet, _ = net.ParseCIDR(cidr + "/128")
+				}
+				if ipNet != nil {
+					result = append(result, ipNet)
+					continue
+				}
+			}
+			logger.Warn("invalid trusted proxy CIDR, skipping", "cidr", cidr, "error", err)
+			continue
+		}
+		result = append(result, ipNet)
+	}
+	return result
+}
+
+// isIPInCIDRs checks if the given IP string is contained in any of the CIDR ranges.
+func isIPInCIDRs(ipStr string, cidrs []*net.IPNet) bool {
+	// Handle host:port format from RemoteAddr
+	host, _, err := net.SplitHostPort(ipStr)
+	if err != nil {
+		// No port, use as-is
+		host = ipStr
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+
+	for _, cidr := range cidrs {
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// getClientIP extracts the client IP, preferring X-Real-IP if from a trusted proxy.
+func getClientIP(r *http.Request, trustedCIDRs []*net.IPNet) string {
+	// First check if RemoteAddr is from a trusted proxy
+	if len(trustedCIDRs) > 0 && isIPInCIDRs(r.RemoteAddr, trustedCIDRs) {
+		// Trust X-Real-IP header if set
+		if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+			return realIP
+		}
+	}
+	return r.RemoteAddr
+}
+
 // plaintextCSRFMiddleware returns middleware that marks requests as plaintext HTTP
 // for gorilla/csrf origin validation. In development, all requests are marked plaintext.
-// In production, only requests without HTTPS forwarding are marked plaintext.
+// In production, X-Forwarded-Proto is only trusted when the request comes from a
+// configured trusted proxy CIDR; otherwise r.TLS is used to detect HTTPS.
 func plaintextCSRFMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+	// Pre-parse trusted CIDRs once at middleware creation time
+	trustedCIDRs := parseTrustedCIDRs(cfg.TrustedProxyCIDRs)
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if cfg.Env != "production" {
 				// Development: skip origin checks (plaintext HTTP)
 				r = csrf.PlaintextHTTPRequest(r)
 			} else {
-				// Production: check if behind TLS-terminating reverse proxy
-				proto := r.Header.Get("X-Forwarded-Proto")
-				if proto == "" || proto == "http" {
+				// Production: determine if request is over HTTPS
+				isHTTPS := false
+
+				// Only trust X-Forwarded-Proto if request is from a trusted proxy
+				if len(trustedCIDRs) > 0 && isIPInCIDRs(r.RemoteAddr, trustedCIDRs) {
+					proto := r.Header.Get("X-Forwarded-Proto")
+					isHTTPS = proto == "https"
+				} else {
+					// No trusted proxy or request not from trusted IP: use r.TLS
+					isHTTPS = r.TLS != nil
+				}
+
+				if !isHTTPS {
 					r = csrf.PlaintextHTTPRequest(r)
 				}
 			}

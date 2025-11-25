@@ -34,6 +34,11 @@ type Config struct {
 
 	EnableRegistration      bool
 	EnableFileDeduplication bool
+
+	// TrustedProxyCIDRs is a list of CIDR ranges (e.g., "127.0.0.1/32", "10.0.0.0/8")
+	// from which X-Forwarded-Proto headers will be trusted for CSRF origin validation.
+	// If empty, X-Forwarded-Proto is never trusted and r.TLS is used to detect HTTPS.
+	TrustedProxyCIDRs []string
 }
 
 func Load() (*Config, error) {
@@ -59,6 +64,7 @@ func Load() (*Config, error) {
 		CSRFEnabled:             getEnvBool("CSRF_ENABLED", true),
 		EnableRegistration:      getEnvBool("ENABLE_REGISTRATION", true),
 		EnableFileDeduplication: getEnvBool("ENABLE_FILE_DEDUPLICATION", true),
+		TrustedProxyCIDRs:       getEnvStringSlice("TRUSTED_PROXY_CIDRS", nil),
 	}
 
 	if cfg.SessionSecret == "change_me_in_production" && cfg.Env == "production" {
@@ -104,6 +110,27 @@ func getEnvBool(key string, defaultValue bool) bool {
 		}
 	}
 	return defaultValue
+}
+
+// getEnvStringSlice parses a comma-separated env var into a string slice.
+// Empty entries are filtered out. Returns defaultValue if env var is empty.
+func getEnvStringSlice(key string, defaultValue []string) []string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	if len(result) == 0 {
+		return defaultValue
+	}
+	return result
 }
 
 // parseSize converts human-readable sizes (e.g., "10G", "500M", "1K") to bytes

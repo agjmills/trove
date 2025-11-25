@@ -111,11 +111,14 @@ volumes:
 2. **Create .env**:
 
 ```bash
+ENV=production
 TROVE_PORT=8080
 SESSION_SECRET=generate_a_random_32_character_secret
 DB_PASSWORD=your_secure_database_password
 DEFAULT_USER_QUOTA=10G
 MAX_UPLOAD_SIZE=500M
+# Required when behind a reverse proxy - set to your proxy's network CIDR
+TRUSTED_PROXY_CIDRS=172.18.0.0/16
 ```
 
 3. **Start**:
@@ -205,7 +208,7 @@ DB_TYPE=sqlite
 
 **Important:** Production mode requires either:
 1. Direct HTTPS connection to Trove, **OR**
-2. Reverse proxy with `X-Forwarded-Proto: https` header
+2. Reverse proxy with `X-Forwarded-Proto: https` header **AND** `TRUSTED_PROXY_CIDRS` configured
 
 **Example .env:**
 ```bash
@@ -239,6 +242,7 @@ MAX_UPLOAD_SIZE=500M
 | `DEFAULT_USER_QUOTA` | `1GB` | Default storage quota per user |
 | `MAX_UPLOAD_SIZE` | `100MB` | Maximum file size (supports KB, MB, GB) |
 | `REGISTRATION_ENABLED` | `true` | Allow new user registration |
+| `TRUSTED_PROXY_CIDRS` | (empty) | Comma-separated CIDRs to trust for X-Forwarded-Proto (e.g., `172.17.0.0/16,10.0.0.0/8`) |
 
 ### Security Notes
 
@@ -261,6 +265,31 @@ In production mode, session cookies are Secure-only. You must either:
 ## Reverse Proxy Setup
 
 Running Trove behind a reverse proxy for HTTPS.
+
+### Trusted Proxy Configuration
+
+⚠️ **Security Note:** In production, Trove only trusts `X-Forwarded-Proto` headers from IPs listed in `TRUSTED_PROXY_CIDRS`. This prevents attackers from spoofing the header to bypass CSRF origin checks.
+
+**You must configure `TRUSTED_PROXY_CIDRS`** with your reverse proxy's IP range:
+
+```bash
+# Docker default bridge network
+TRUSTED_PROXY_CIDRS=172.17.0.0/16
+
+# Multiple networks (comma-separated)
+TRUSTED_PROXY_CIDRS=172.17.0.0/16,172.18.0.0/16,10.0.0.0/8
+
+# Single IP (automatically becomes /32)
+TRUSTED_PROXY_CIDRS=127.0.0.1
+```
+
+Common CIDR values:
+- Docker bridge: `172.17.0.0/16`
+- Docker Compose: `172.18.0.0/16` (or check with `docker network inspect`)
+- Kubernetes pod network: varies by CNI (e.g., `10.244.0.0/16` for Flannel)
+- Localhost: `127.0.0.1/32`
+
+If `TRUSTED_PROXY_CIDRS` is not set, Trove falls back to checking `r.TLS` (direct TLS connections only).
 
 ### Requirements for Production Mode
 
@@ -330,6 +359,8 @@ services:
     environment:
       - ENV=production
       - SESSION_SECRET=${SESSION_SECRET}
+      # Trust the Docker network where Traefik runs
+      - TRUSTED_PROXY_CIDRS=172.18.0.0/16
     volumes:
       - ./data:/app/data
     labels:
@@ -404,14 +435,18 @@ Check `MAX_UPLOAD_SIZE` setting and reverse proxy limits.
 - Redirected to login after successful authentication
 - Session cookies not being set
 
-**Cause:** Running with `ENV=production` without HTTPS.
+**Cause:** Running with `ENV=production` without HTTPS or missing `TRUSTED_PROXY_CIDRS`.
 
 **Solutions:**
 
-1. **If behind reverse proxy:** Ensure `X-Forwarded-Proto: https` header is set
+1. **If behind reverse proxy:** Ensure both headers AND trusted proxy are configured:
    ```nginx
    # Nginx
    proxy_set_header X-Forwarded-Proto $scheme;
+   ```
+   ```bash
+   # .env - set to your proxy's IP/network
+   TRUSTED_PROXY_CIDRS=172.17.0.0/16
    ```
 
 2. **If testing locally:** Change to development mode
@@ -419,10 +454,10 @@ Check `MAX_UPLOAD_SIZE` setting and reverse proxy limits.
    ENV=development
    ```
 
-3. **Verify headers:** Check if your reverse proxy is sending the header
+3. **Find your proxy's network:** 
    ```bash
-   # Test from within the container
-   curl -H "X-Forwarded-Proto: https" http://localhost:8080
+   # For Docker Compose
+   docker network inspect <network_name> | grep Subnet
    ```
 
 ### CSRF validation failures
@@ -431,7 +466,7 @@ Check `MAX_UPLOAD_SIZE` setting and reverse proxy limits.
 - "CSRF token invalid" errors
 - Forms don't submit properly
 
-**Cause:** Misconfigured reverse proxy or wrong environment setting.
+**Cause:** Misconfigured reverse proxy, missing `TRUSTED_PROXY_CIDRS`, or wrong environment setting.
 
 **Solutions:**
 
@@ -441,7 +476,13 @@ Check `MAX_UPLOAD_SIZE` setting and reverse proxy limits.
 
 2. **Check X-Forwarded-Proto:** Must be set to `https` in production
 
-3. **SameSite cookies:** Ensure your domain is correct (no subdomain mismatch)
+3. **Configure TRUSTED_PROXY_CIDRS:** Required for production behind a proxy
+   ```bash
+   # .env
+   TRUSTED_PROXY_CIDRS=172.17.0.0/16
+   ```
+
+4. **SameSite cookies:** Ensure your domain is correct (no subdomain mismatch)
 
 ## Updating
 
