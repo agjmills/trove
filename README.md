@@ -7,6 +7,7 @@ Self-hosted file storage. Your personal Google Drive alternative.
 ## Features
 
 - 📤 Upload, organize, and manage files with drag-and-drop
+- 📦 Streaming uploads for large files (multi-GB support)
 - 👥 Multi-user support with authentication and per-user quotas
 - 🎨 Modern UI with dark mode
 - 🔒 Secure by default (CSRF protection, bcrypt, rate limiting)

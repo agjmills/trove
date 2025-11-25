@@ -199,9 +199,16 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # For large file uploads
-        client_max_body_size 500M;
+
+        # For large file uploads (set to match MAX_UPLOAD_SIZE or higher)
+        client_max_body_size 10G;
+
+        # Disable request buffering for streaming uploads
+        proxy_request_buffering off;
+
+        # Extended timeouts for large uploads
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
     }
 }
 ```

@@ -29,6 +29,8 @@ Self-hostable file storage in Go with server-side rendering, minimal JS, Docker 
 - [x] Upload progress bar with real-time feedback
 - [x] List files with pagination (50 per page)
 - [x] Hash-based deduplication (SHA-256)
+- [x] Streaming uploads for large files (multi-GB support)
+- [x] Client-side file size and quota validation
 
 ### Web Interface ✅
 - [x] Layout template with navigation
@@ -88,11 +90,12 @@ Sharing links, versioning, thumbnails, bulk ops, admin dashboard, REST API
 
 ### Storage Abstraction ✅
 - [x] **Storage Interface/Adapter Pattern**: Abstract storage layer for multiple backends
-  - Interface: `StorageBackend` with methods: `SaveFile()`, `DeleteFile()`, `GetFilePath()`, `FileExists()`, `OpenFile()`, `CalculateHash()`
+  - Interface: `StorageBackend` with methods: `SaveFile()`, `SaveFileWithLimit()`, `DeleteFile()`, `GetFilePath()`, `FileExists()`, `OpenFile()`, `CalculateHash()`
   - Local filesystem implementation (active)
   - Ready for S3-compatible storage (MinIO, AWS S3, Backblaze B2, etc.)
   - Configuration: `STORAGE_BACKEND=local|s3` in .env (future)
   - Maintains deduplication support across backends
+  - 8MB copy buffer aligned with S3 multipart upload parts
 
 ## Tech Stack
 
@@ -243,12 +246,15 @@ Production Dockerfile (~18MB), security headers, rate limiting, storage abstract
 
 ## Current Status
 
-**Working**: Full authentication system with alexedwards/scs session management, file upload/download/delete with SHA-256 deduplication, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, responsive full-width layout with collapsible sidebar, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints, production-ready Docker image (~18MB), storage abstraction layer with interface pattern, comprehensive unit tests (83 tests, 70-90% coverage)
+**Working**: Full authentication system with alexedwards/scs session management, file upload/download/delete with SHA-256 deduplication, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, responsive full-width layout with collapsible sidebar, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints, production-ready Docker image (~18MB), storage abstraction layer with interface pattern, comprehensive unit tests (88+ tests, 70-90% coverage), streaming uploads for multi-GB files
 
-**Next**: Deployment documentation (README), template caching, integration tests
+**Next**: Deployment documentation (README), template caching, integration tests, chunked/resumable uploads
 
-**Recent**: 
+**Recent**:
+- Implemented streaming uploads for large files (multi-GB support) using direct multipart parsing
+- Added SaveFileWithLimit for early termination of oversized uploads
+- Configured HTTP server timeouts for long-running transfers
+- Added client-side file size and quota validation
+- 8MB copy buffer for improved throughput (aligned with S3 multipart parts)
 - Refactored session management to use alexedwards/scs (removed ~90 lines of custom session code)
-- Added comprehensive unit tests for core modules: storage (82.9%), flash (89.5%), config (75%), CSRF (70.8%), rate limiter (39.6%), password (13.3%)
 - Implemented storage abstraction with StorageBackend interface for future S3/cloud support
-- All 83 unit tests passing with good coverage on business logic
