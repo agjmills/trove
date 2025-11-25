@@ -446,3 +446,138 @@ func TestSaveAndRetrieveWorkflow(t *testing.T) {
 		t.Error("File should not exist after deletion")
 	}
 }
+
+func TestSaveFileWithLimit_UnderLimit(t *testing.T) {
+	tempDir := t.TempDir()
+	service, err := NewService(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create service: %v", err)
+	}
+
+	testContent := []byte("Small file under limit")
+	reader := bytes.NewReader(testContent)
+	maxSize := int64(1024) // 1KB limit
+
+	filename, hash, size, err := service.SaveFileWithLimit(reader, "small.txt", maxSize)
+	if err != nil {
+		t.Fatalf("SaveFileWithLimit failed: %v", err)
+	}
+
+	// Verify size
+	expectedSize := int64(len(testContent))
+	if size != expectedSize {
+		t.Errorf("Expected size %d, got %d", expectedSize, size)
+	}
+
+	// Verify hash
+	hasher := sha256.New()
+	hasher.Write(testContent)
+	expectedHash := hex.EncodeToString(hasher.Sum(nil))
+	if hash != expectedHash {
+		t.Errorf("Expected hash %s, got %s", expectedHash, hash)
+	}
+
+	// Verify file exists on disk
+	if !service.FileExists(filename) {
+		t.Error("File should exist after saving")
+	}
+}
+
+func TestSaveFileWithLimit_ExactlyAtLimit(t *testing.T) {
+	tempDir := t.TempDir()
+	service, err := NewService(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create service: %v", err)
+	}
+
+	testContent := []byte("12345") // Exactly 5 bytes
+	reader := bytes.NewReader(testContent)
+	maxSize := int64(5) // Exactly 5 bytes limit
+
+	filename, _, size, err := service.SaveFileWithLimit(reader, "exact.txt", maxSize)
+	if err != nil {
+		t.Fatalf("SaveFileWithLimit should succeed at exact limit: %v", err)
+	}
+
+	if size != maxSize {
+		t.Errorf("Expected size %d, got %d", maxSize, size)
+	}
+
+	if !service.FileExists(filename) {
+		t.Error("File should exist after saving")
+	}
+}
+
+func TestSaveFileWithLimit_OverLimit(t *testing.T) {
+	tempDir := t.TempDir()
+	service, err := NewService(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create service: %v", err)
+	}
+
+	testContent := []byte("This content is way over the limit")
+	reader := bytes.NewReader(testContent)
+	maxSize := int64(10) // Only allow 10 bytes
+
+	_, _, _, err = service.SaveFileWithLimit(reader, "large.txt", maxSize)
+	if err == nil {
+		t.Fatal("SaveFileWithLimit should error when over limit")
+	}
+
+	if err != ErrFileTooLarge {
+		t.Errorf("Expected ErrFileTooLarge, got: %v", err)
+	}
+
+	// Verify no partial file was left behind
+	files, _ := os.ReadDir(tempDir)
+	if len(files) > 0 {
+		t.Error("No file should be left after size limit exceeded")
+	}
+}
+
+func TestSaveFileWithLimit_LargeFileOverLimit(t *testing.T) {
+	tempDir := t.TempDir()
+	service, err := NewService(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create service: %v", err)
+	}
+
+	// Create a 1MB file but only allow 100KB
+	testContent := make([]byte, 1024*1024) // 1MB
+	for i := range testContent {
+		testContent[i] = byte(i % 256)
+	}
+
+	reader := bytes.NewReader(testContent)
+	maxSize := int64(100 * 1024) // 100KB limit
+
+	_, _, _, err = service.SaveFileWithLimit(reader, "huge.bin", maxSize)
+	if err == nil {
+		t.Fatal("SaveFileWithLimit should error for oversized file")
+	}
+
+	if err != ErrFileTooLarge {
+		t.Errorf("Expected ErrFileTooLarge, got: %v", err)
+	}
+}
+
+func TestSaveFileWithLimit_ZeroLimit(t *testing.T) {
+	tempDir := t.TempDir()
+	service, err := NewService(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create service: %v", err)
+	}
+
+	testContent := []byte("Any content")
+	reader := bytes.NewReader(testContent)
+	maxSize := int64(0) // Zero limit
+
+	_, _, _, err = service.SaveFileWithLimit(reader, "zero.txt", maxSize)
+	if err == nil {
+		t.Fatal("SaveFileWithLimit should error with zero limit")
+	}
+
+	if err != ErrFileTooLarge {
+		t.Errorf("Expected ErrFileTooLarge, got: %v", err)
+	}
+}

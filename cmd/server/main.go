@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
@@ -83,7 +84,19 @@ func main() {
 		"version", versionInfo,
 	)
 
-	if err := http.ListenAndServe(addr, r); err != nil {
+	// Configure server with appropriate timeouts for large file uploads
+	// ReadHeaderTimeout protects against Slowloris attacks while allowing
+	// unlimited body streaming for multi-gigabyte uploads.
+	// WriteTimeout set to 10 minutes to allow large file downloads while preventing slow-read attacks.
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      10 * time.Minute, // Set a reasonable write timeout to prevent slow-read attacks
+		IdleTimeout:       120 * time.Second,
+	}
+
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 }

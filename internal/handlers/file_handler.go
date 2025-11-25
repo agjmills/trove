@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -62,75 +65,139 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse multipart form with reasonable memory limit (32MB for form fields)
-	// The actual file size limit is checked after getting the file header
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Error(w, "Failed to parse upload form", http.StatusBadRequest)
+	// Extract boundary from Content-Type header for direct multipart parsing
+	// This avoids ParseMultipartForm which buffers large files to temp disk
+	contentType := r.Header.Get("Content-Type")
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		http.Error(w, "Invalid content type", http.StatusBadRequest)
+		return
+	}
+	boundary := params["boundary"]
+	if boundary == "" {
+		http.Error(w, "Missing multipart boundary", http.StatusBadRequest)
 		return
 	}
 
-	file, header, err := r.FormFile("file")
-	if err != nil {
+	// Create multipart reader directly from request body (NO temp files)
+	// This enables true streaming for multi-gigabyte uploads
+	mr := multipart.NewReader(r.Body, boundary)
+
+	var folderPath string = "/"
+	var fileProcessed bool
+	var originalFilename string
+	var filename string
+	var hash string
+	var actualSize int64
+	var mimeType string
+	var isDuplicate bool
+
+	// Two-pass approach: First pass streams the file to storage and collects all form fields.
+	// This ensures that form field ordering doesn't matter - we process the file with whatever
+	// folder path is provided, regardless of whether "folder" comes before or after "file".
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			http.Error(w, "Failed to parse multipart form", http.StatusBadRequest)
+			return
+		}
+
+		formName := part.FormName()
+
+		switch formName {
+		case "folder":
+			// Read small form field into memory (max 1KB)
+			data, err := io.ReadAll(io.LimitReader(part, 1024))
+			if err != nil {
+				log.Printf("Warning: failed to read folder field: %v", err)
+				folderPath = "/"
+			} else {
+				folderPath = sanitizeFolderPath(string(data))
+			}
+
+		case "file":
+			if fileProcessed {
+				part.Close()
+				continue // Only process first file
+			}
+
+			originalFilename = part.FileName()
+			if originalFilename == "" {
+				part.Close()
+				continue
+			}
+
+			// Get MIME type from part header
+			mimeType = part.Header.Get("Content-Type")
+			if mimeType == "" {
+				mimeType = "application/octet-stream"
+			}
+
+			log.Printf("Upload streaming: file=%s, limit=%d bytes", originalFilename, h.cfg.MaxUploadSize)
+
+			// Stream directly to storage with size limit - single pass computes hash while writing
+			filename, hash, actualSize, err = h.storage.SaveFileWithLimit(part, originalFilename, h.cfg.MaxUploadSize)
+			if err != nil {
+				part.Close()
+				if errors.Is(err, storage.ErrFileTooLarge) {
+					log.Printf("File rejected: exceeds limit %d bytes", h.cfg.MaxUploadSize)
+					http.Error(w, fmt.Sprintf("File too large (max %d MB)", h.cfg.MaxUploadSize/(1024*1024)), http.StatusRequestEntityTooLarge)
+					return
+				}
+				http.Error(w, fmt.Sprintf("Failed to save file: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			hashPreview := hash
+			if len(hash) > 16 {
+				hashPreview = hash[:16] + "..."
+			}
+			log.Printf("Upload complete: file=%s, size=%d bytes, hash=%s", originalFilename, actualSize, hashPreview)
+
+			// Check storage quota after upload (streaming means we don't know size upfront)
+			if user.StorageUsed+actualSize > user.StorageQuota {
+				h.storage.DeleteFile(filename)
+				part.Close()
+				http.Error(w, "Storage quota exceeded", http.StatusInsufficientStorage)
+				return
+			}
+
+			// Check for deduplication - if same hash exists, reuse that file
+			var existingFile models.File
+			result := h.db.Where("user_id = ? AND hash = ?", user.ID, hash).First(&existingFile)
+
+			if result.Error == nil {
+				// Duplicate found! Delete the just-uploaded file and reuse existing
+				h.storage.DeleteFile(filename)
+				filename = existingFile.Filename
+				actualSize = existingFile.FileSize
+				isDuplicate = true
+				log.Printf("Deduplication: reusing existing file %s", filename)
+			}
+
+			fileProcessed = true
+
+		default:
+			// Ignore unknown form fields
+			if _, err := io.Copy(io.Discard, part); err != nil {
+				log.Printf("Warning: failed to discard unknown form field %q: %v", formName, err)
+			}
+		}
+
+		part.Close()
+	}
+
+	if !fileProcessed {
 		http.Error(w, "No file provided", http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
 
-	// Check file size limit
-	log.Printf("Upload attempt: file=%s, size=%d bytes, limit=%d bytes", header.Filename, header.Size, h.cfg.MaxUploadSize)
-	if header.Size > h.cfg.MaxUploadSize {
-		log.Printf("File rejected: size %d exceeds limit %d", header.Size, h.cfg.MaxUploadSize)
-		http.Error(w, fmt.Sprintf("File too large (max %d MB)", h.cfg.MaxUploadSize/(1024*1024)), http.StatusRequestEntityTooLarge)
-		return
-	}
-
-	// Check storage quota
-	if user.StorageUsed+header.Size > user.StorageQuota {
-		http.Error(w, "Storage quota exceeded", http.StatusInsufficientStorage)
-		return
-	}
-
-	// Get and sanitize folder path
-	folderPath := sanitizeFolderPath(r.FormValue("folder"))
-
-	// Check if file with same name exists in this folder and auto-rename if needed
-	originalFilename := header.Filename
+	// Second pass: Now that all form fields are collected (including folder),
+	// calculate the unique filename with the correct folder path
 	finalFilename := h.getUniqueFilename(user.ID, folderPath, originalFilename)
-
-	// Calculate hash first to check for deduplication
-	hash, err := h.storage.CalculateHash(file)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to calculate file hash: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Reset file reader to beginning after hashing
-	if seeker, ok := file.(io.Seeker); ok {
-		seeker.Seek(0, 0)
-	}
-
-	var filename string
-	var actualSize int64
-	var isDuplicate bool
-
-	// Check if this file already exists (deduplication)
-	var existingFile models.File
-	result := h.db.Where("user_id = ? AND hash = ?", user.ID, hash).First(&existingFile)
-
-	if result.Error == nil {
-		// Duplicate found! Reuse the existing physical file
-		filename = existingFile.Filename
-		actualSize = existingFile.FileSize
-		isDuplicate = true
-	} else {
-		// New file, save to disk
-		filename, _, actualSize, err = h.storage.SaveFile(file, header.Filename)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to save file: %v", err), http.StatusInternalServerError)
-			return
-		}
-		isDuplicate = false
-	}
 
 	// Create database record
 	fileRecord := models.File{
@@ -139,7 +206,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		OriginalFilename: finalFilename,
 		FilePath:         h.storage.GetFilePath(filename),
 		FileSize:         actualSize,
-		MimeType:         header.Header.Get("Content-Type"),
+		MimeType:         mimeType,
 		Hash:             hash,
 		FolderPath:       folderPath,
 	}
