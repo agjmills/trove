@@ -144,7 +144,7 @@ func (lr *limitedReader) Read(p []byte) (n int, err error) {
 		// Check if there's more data (we've hit the limit)
 		var probe [1]byte
 		probeN, probeErr := lr.reader.Read(probe[:])
-		if probeN > 0 || (probeErr != io.EOF && probeErr != nil) {
+		if probeN > 0 || (probeErr != nil && probeErr != io.EOF) {
 			lr.exceeded = true
 			return n, ErrFileTooLarge
 		}
