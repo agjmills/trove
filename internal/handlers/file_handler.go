@@ -180,7 +180,9 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 		default:
 			// Ignore unknown form fields
-			io.Copy(io.Discard, part)
+			if _, err := io.Copy(io.Discard, part); err != nil {
+				log.Printf("Warning: failed to discard unknown form field %q: %v", formName, err)
+			}
 		}
 
 		part.Close()
