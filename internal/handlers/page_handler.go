@@ -31,6 +31,25 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	// Get current folder from query param, default to root
 	currentFolder := sanitizeFolderPath(r.URL.Query().Get("folder"))
 
+	// Validate folder exists (root folder "/" is always valid)
+	if currentFolder != "/" {
+		// Check if folder exists in folders table
+		var folderCount int64
+		h.db.Model(&models.Folder{}).Where("user_id = ? AND folder_path = ?", user.ID, currentFolder).Count(&folderCount)
+
+		// Also check if any files exist in this folder path (implicit folders)
+		var fileCount int64
+		if folderCount == 0 {
+			h.db.Model(&models.File{}).Where("user_id = ? AND folder_path = ?", user.ID, currentFolder).Count(&fileCount)
+		}
+
+		// If folder doesn't exist in either table, return 404
+		if folderCount == 0 && fileCount == 0 {
+			http.NotFound(w, r)
+			return
+		}
+	}
+
 	// Pagination parameters
 	page := 1
 	pageSize := 50
