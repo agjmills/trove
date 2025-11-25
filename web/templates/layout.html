@@ -16,7 +16,7 @@
 	</script>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-	<nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm sticky top-0 z-50">
+	<nav id="main-nav" class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm sticky top-0 z-50">
 		<div class="max-w-full px-4 py-3">
 			<div class="flex justify-between items-center">
 				<div class="flex items-center gap-3">
@@ -71,7 +71,7 @@
 	</nav>
 
 	<!-- Mobile menu (full screen overlay below nav) -->
-	<div id="mobile-menu" class="sm:hidden hidden bg-white dark:bg-gray-800 z-[999]" style="position: fixed; top: 56px; left: 0; right: 0; bottom: 0;">
+	<div id="mobile-menu" class="sm:hidden hidden bg-white dark:bg-gray-800 z-[999]" style="position: fixed; left: 0; right: 0; bottom: 0;">
 		<div class="p-6 space-y-4">
 			{{if .User}}
 			<div class="pb-4 border-b border-gray-200 dark:border-gray-700">
@@ -132,6 +132,14 @@
 	<script>
 		const mobileMenuToggleRight = document.getElementById('mobile-menu-toggle-right');
 		const mobileMenu = document.getElementById('mobile-menu');
+		const mainNav = document.getElementById('main-nav');
+		
+		// Dynamically position mobile menu below nav bar
+		function updateMobileMenuPosition() {
+			if (mobileMenu && mainNav) {
+				mobileMenu.style.top = mainNav.offsetHeight + 'px';
+			}
+		}
 		
 		function updateMenuIcon(isOpen) {
 			const icon = document.querySelector('.menu-icon-right');
@@ -142,6 +150,7 @@
 
 		function openMobileMenu() {
 			if (mobileMenu) {
+				updateMobileMenuPosition();
 				mobileMenu.classList.remove('hidden');
 				updateMenuIcon(true);
 			}
@@ -153,6 +162,16 @@
 				updateMenuIcon(false);
 			}
 		}
+
+		// Close mobile menu on Escape key
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape' && mobileMenu && !mobileMenu.classList.contains('hidden')) {
+				closeMobileMenu();
+			}
+		});
+
+		// Update position on window resize
+		window.addEventListener('resize', updateMobileMenuPosition);
 		
 		if (mobileMenuToggleRight && mobileMenu) {
 			mobileMenuToggleRight.addEventListener('click', function(e) {
