@@ -54,6 +54,7 @@ DB_TYPE=postgres                   # or sqlite
 SESSION_SECRET=random_secret_here  # Required
 DEFAULT_USER_QUOTA=10G             # Per-user limit
 MAX_UPLOAD_SIZE=500M               # Max file size
+ENV=development                    # or production
 ```
 
 See `.env.example` for all options.
@@ -77,7 +78,12 @@ docker compose -f docker-compose.prod.yml logs -f
 **Security Best Practices:**
 - Use a strong `SESSION_SECRET` (generate with `openssl rand -base64 32`)
 - Restrict `/metrics` endpoint access via firewall or reverse proxy auth
-- Enable HTTPS in production (via reverse proxy)
+- **Enable HTTPS in production:** Set `ENV=production` to enable strict CSRF origin validation
+  - For HTTP-only environments (homelab), use `ENV=development` (CSRF token validation still active)
+  - **Behind reverse proxy with TLS termination:** Ensure proxy forwards `X-Forwarded-Proto` header
+    - Traefik: automatic with `--providers.docker.exposedByDefault=false`
+    - Nginx: `proxy_set_header X-Forwarded-Proto $scheme;`
+    - Caddy: automatic
 - Keep database credentials secure and use strong passwords
 - Regularly update to latest version
 

@@ -7,6 +7,7 @@ import (
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/handlers"
+	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/middleware"
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/alexedwards/scs/v2"
@@ -34,12 +35,25 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	// CSRF protection (only if enabled in config)
 	var csrfMiddleware func(http.Handler) http.Handler
 	if cfg.CSRFEnabled {
+		// In production (HTTPS), enforce strict origin validation
+		// In development (HTTP), skip origin checks - the CSRF token itself still protects
+		// Note: gorilla/csrf automatically skips origin validation for HTTP when Secure=false
+		isSecure := cfg.Env == "production"
+
 		csrfMiddleware = csrf.Protect(
-			[]byte(cfg.SessionSecret), // Use session secret as CSRF key
-			csrf.Secure(cfg.Env == "production"),
-			csrf.SameSite(csrf.SameSiteStrictMode),
-			csrf.FieldName("csrf_token"),      // Form field name
-			csrf.RequestHeader("X-CSRF-Token"), // Header name for XHR requests
+			[]byte(cfg.SessionSecret),           // Use session secret as CSRF key
+			csrf.Secure(isSecure),               // Only require HTTPS in production
+			csrf.SameSite(csrf.SameSiteLaxMode), // Allow same-site POST requests
+			csrf.FieldName("csrf_token"),        // Form field name
+			csrf.RequestHeader("X-CSRF-Token"),  // Header name for XHR requests
+			csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				logger.Warn("csrf validation failed",
+					"reason", csrf.FailureReason(r),
+					"method", r.Method,
+					"path", r.URL.Path,
+				)
+				http.Error(w, "Forbidden", http.StatusForbidden)
+			})),
 		)
 	} else {
 		// No-op middleware if CSRF is disabled
@@ -84,6 +98,34 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
 		r.Use(auth.RequireAuth(db, sessionManager))
+		// Handle CSRF origin validation based on environment
+		// In development: skip origin checks (plaintext HTTP)
+		// In production behind reverse proxy: detect if request came via HTTPS
+		if cfg.Env != "production" {
+			r.Use(func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// Tell gorilla/csrf this is plaintext HTTP (skips origin checks)
+					r = csrf.PlaintextHTTPRequest(r)
+					next.ServeHTTP(w, r)
+				})
+			})
+		} else {
+			// In production, check if behind TLS-terminating reverse proxy
+			// If request came via HTTPS (X-Forwarded-Proto header), don't mark as plaintext
+			// This allows origin validation to work correctly
+			r.Use(func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// Check if behind reverse proxy without TLS forwarding
+					proto := r.Header.Get("X-Forwarded-Proto")
+					if proto == "" || proto == "http" {
+						// No TLS termination detected, mark as plaintext
+						r = csrf.PlaintextHTTPRequest(r)
+					}
+					// If X-Forwarded-Proto is "https", let gorilla/csrf do origin validation
+					next.ServeHTTP(w, r)
+				})
+			})
+		}
 		r.Use(csrfMiddleware)
 		r.Get("/dashboard", pageHandler.ShowDashboard)
 		r.Post("/folders/create", fileHandler.CreateFolder)
