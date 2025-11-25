@@ -19,6 +19,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// Setup configures HTTP routes and middleware on the provided chi.Router, wiring application handlers,
+// health and metrics endpoints, static file serving, authentication flows, CSRF protection (when enabled),
+// and rate limiting for authentication endpoints.
+//
+// When CSRF is enabled, the middleware is initialized with the session secret and its Secure flag is
+// determined from cfg.Env; when disabled, a no-op CSRF middleware is used. Authentication endpoints are
+// rate-limited to 5 attempts per 15 minutes per IP. The multipart upload endpoint is intentionally exempt
+// from the Gorilla CSRF middleware to allow streaming uploads while remaining protected by session-based
+// authentication and SameSite cookie policy.
 func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, version string) {
 	authHandler := handlers.NewAuthHandler(db, cfg, sessionManager)
 	pageHandler := handlers.NewPageHandler(db, cfg)

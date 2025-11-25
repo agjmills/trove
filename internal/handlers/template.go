@@ -22,6 +22,18 @@ func formatBytes(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
+// LoadTemplates parses HTML templates from the web/templates directory and registers
+// helper functions for use by those templates.
+//
+// It builds a template.FuncMap with the following helpers:
+// - formatBytes: formats a byte count into human-readable units.
+// - storagePercentage(used, quota int64) int: returns 0 if quota == 0, otherwise computes
+//   (used*100)/quota and clamps the result to a maximum of 100.
+// - add(a, b int) int, mul(a, b int64) int64, div(a, b int64) int64: basic arithmetic
+//   helpers (div returns 0 when the divisor is 0).
+//
+// The parsed templates are assigned to the package-level `templates` variable.
+// Returns any error encountered while parsing the template files.
 func LoadTemplates() error {
 	funcMap := template.FuncMap{
 		"formatBytes": formatBytes,

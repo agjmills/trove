@@ -22,7 +22,11 @@ func formatBytes(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-// LoadErrorTemplates loads error page templates
+// LoadErrorTemplates loads and parses error page HTML templates and registers helper functions for use by those templates.
+// 
+// It registers the following template helpers: `formatBytes`, `storagePercentage` (returns 0 if quota is 0; otherwise computes used/quota as a percentage capped at 100), `add`, `mul`, and `div` (returns 0 when dividing by zero).
+// Parsed templates are loaded from the web/templates/*.html glob and stored in the package-level variable `errorTemplates`.
+// Returns any error encountered while parsing the templates.
 func LoadErrorTemplates() error {
 	funcMap := template.FuncMap{
 		"formatBytes": formatBytes,

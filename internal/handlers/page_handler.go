@@ -20,6 +20,7 @@ type PageHandler struct {
 	cfg *config.Config
 }
 
+// NewPageHandler returns a PageHandler initialized with the given GORM database handle and application configuration.
 func NewPageHandler(db *gorm.DB, cfg *config.Config) *PageHandler {
 	return &PageHandler{db: db, cfg: cfg}
 }
