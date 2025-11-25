@@ -25,16 +25,28 @@
 
 				<div class="hidden sm:flex items-center gap-2">
 					{{if .User}}
-						<a href="/files" class="px-3 py-2 rounded-lg {{if eq .Title "Files"}}bg-gray-900 dark:bg-gray-600 text-white{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}} transition-colors no-underline font-medium">
-							📁 Files
+						<a href="/files" class="flex items-center gap-2 px-3 py-2 rounded-lg {{if eq .Title "Files"}}bg-gray-900 dark:bg-gray-600 text-white{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}} transition-colors no-underline font-medium">
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+								<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+							</svg>
+							Files
 						</a>
-						<a href="/settings" class="px-3 py-2 rounded-lg {{if eq .Title "Settings"}}bg-gray-900 dark:bg-gray-600 text-white{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}} transition-colors no-underline font-medium">
-							⚙️ Settings
+						<a href="/settings" class="flex items-center gap-2 px-3 py-2 rounded-lg {{if eq .Title "Settings"}}bg-gray-900 dark:bg-gray-600 text-white{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}} transition-colors no-underline font-medium">
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+								<circle cx="12" cy="12" r="3"></circle>
+								<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+							</svg>
+							Settings
 						</a>
 						<div class="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2"></div>
 						<span class="text-sm text-gray-600 dark:text-gray-400 px-2">{{.User.Username}}</span>
 						<form action="/logout" method="POST" class="inline">
-							<button type="submit" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-500 transition-colors font-medium">
+							<button type="submit" class="flex items-center gap-2 bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-500 transition-colors font-medium">
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+									<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+									<polyline points="16 17 21 12 16 7"></polyline>
+									<line x1="21" y1="12" x2="9" y2="12"></line>
+								</svg>
 								Logout
 							</button>
 						</form>
@@ -54,34 +66,51 @@
 				</button>
 				{{end}}
 			</div>
-
-			{{if and .User (not .FullWidth)}}
-			<div id="mobile-menu" class="sm:hidden hidden mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
-				<div class="text-xs text-gray-600 dark:text-gray-400 px-3 pb-2">
-					Signed in as <strong class="text-gray-900 dark:text-gray-100">{{.User.Username}}</strong>
-				</div>
-				<a href="/files" class="block px-3 py-2 rounded-lg {{if eq .Title "Files"}}bg-gray-900 dark:bg-gray-600 text-white{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}} transition-colors no-underline font-medium">
-					📁 Files
-				</a>
-				<a href="/settings" class="block px-3 py-2 rounded-lg {{if eq .Title "Settings"}}bg-gray-900 dark:bg-gray-600 text-white{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}} transition-colors no-underline font-medium">
-					⚙️ Settings
-				</a>
-				<form action="/logout" method="POST">
-					<button type="submit" class="w-full text-left px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-medium">
-						🚪 Logout
-					</button>
-				</form>
-			</div>
-			{{end}}
 		</div>
 	</nav>
+
+	{{if .User}}
+	<!-- Mobile menu (full screen overlay below nav) -->
+	<div id="mobile-menu" class="sm:hidden hidden bg-white dark:bg-gray-800 z-[999]" style="position: fixed; top: 56px; left: 0; right: 0; bottom: 0;">
+		<div class="p-6 space-y-4">
+			<div class="pb-4 border-b border-gray-200 dark:border-gray-700">
+				<div class="text-xs text-gray-600 dark:text-gray-400">
+					Signed in as <strong class="text-gray-900 dark:text-gray-100">{{.User.Username}}</strong>
+				</div>
+			</div>
+			<a href="/files" class="flex items-center gap-3 px-3 py-2 rounded-lg {{if eq .Title "Files"}}bg-gray-900 dark:bg-gray-600 text-white{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}} transition-colors no-underline font-medium">
+				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+				</svg>
+				Files
+			</a>
+			<a href="/settings" class="flex items-center gap-3 px-3 py-2 rounded-lg {{if eq .Title "Settings"}}bg-gray-900 dark:bg-gray-600 text-white{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}} transition-colors no-underline font-medium">
+				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<circle cx="12" cy="12" r="3"></circle>
+					<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+				</svg>
+				Settings
+			</a>
+			<form action="/logout" method="POST">
+				<button type="submit" class="w-full flex items-center gap-3 text-left px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-medium">
+					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+						<polyline points="16 17 21 12 16 7"></polyline>
+						<line x1="21" y1="12" x2="9" y2="12"></line>
+					</svg>
+					Logout
+				</button>
+			</form>
+		</div>
+	</div>
+	{{end}}
+
 	<main class="{{if not .FullWidth}}max-w-7xl mx-auto px-4{{end}}">
 		{{template "content" .}}
 	</main>
 	<script>
 		const mobileMenuToggleRight = document.getElementById('mobile-menu-toggle-right');
 		const mobileMenu = document.getElementById('mobile-menu');
-		const sidebar = document.getElementById('sidebar');
 		
 		function updateMenuIcon(isOpen) {
 			const icon = document.querySelector('.menu-icon-right');
@@ -89,76 +118,38 @@
 				icon.textContent = isOpen ? '✕' : '☰';
 			}
 		}
+
+		function openMobileMenu() {
+			if (mobileMenu) {
+				mobileMenu.classList.remove('hidden');
+				updateMenuIcon(true);
+			}
+		}
+
+		function closeMobileMenu() {
+			if (mobileMenu) {
+				mobileMenu.classList.add('hidden');
+				updateMenuIcon(false);
+			}
+		}
 		
-		if (mobileMenuToggleRight) {
+		if (mobileMenuToggleRight && mobileMenu) {
 			mobileMenuToggleRight.addEventListener('click', function(e) {
 				e.stopPropagation();
 				e.preventDefault();
 				
-				// If on dashboard with sidebar
-				if (sidebar) {
-					// Toggle between hidden (-translate-x-full) and visible (translate-x-0)
-					if (sidebar.classList.contains('translate-x-0')) {
-						sidebar.classList.remove('translate-x-0');
-						sidebar.classList.add('-translate-x-full');
-						updateMenuIcon(false);
-					} else {
-						sidebar.classList.remove('-translate-x-full');
-						sidebar.classList.add('translate-x-0');
-						updateMenuIcon(true);
-					}
-				}
-				// If on other pages with mobile menu
-				else if (mobileMenu) {
-					const isOpen = !mobileMenu.classList.contains('hidden');
-					mobileMenu.classList.toggle('hidden');
-					updateMenuIcon(!isOpen);
-				}
-			});
-
-			// Close when clicking outside
-			document.addEventListener('click', function(e) {
-				// Close sidebar if open
-				if (sidebar && 
-					window.innerWidth < 1024 && 
-					!sidebar.contains(e.target) && 
-					!mobileMenuToggleRight.contains(e.target) &&
-					sidebar.classList.contains('translate-x-0')) {
-					sidebar.classList.remove('translate-x-0');
-					sidebar.classList.add('-translate-x-full');
-					updateMenuIcon(false);
-				}
-				
-				// Close mobile menu if open
-				if (mobileMenu && 
-					!mobileMenu.contains(e.target) && 
-					!mobileMenuToggleRight.contains(e.target)) {
-					mobileMenu.classList.add('hidden');
-					updateMenuIcon(false);
+				const isOpen = !mobileMenu.classList.contains('hidden');
+				if (isOpen) {
+					closeMobileMenu();
+				} else {
+					openMobileMenu();
 				}
 			});
 
 			// Close mobile menu when clicking a link
-			if (mobileMenu) {
-				mobileMenu.querySelectorAll('a').forEach(link => {
-					link.addEventListener('click', function() {
-						mobileMenu.classList.add('hidden');
-						updateMenuIcon(false);
-					});
-				});
-			}
-			
-			// Handle window resize for sidebar
-			if (sidebar) {
-				window.addEventListener('resize', function() {
-					if (window.innerWidth >= 1024) {
-						// On desktop, remove any mobile toggle classes
-						sidebar.classList.remove('-translate-x-full');
-						sidebar.classList.remove('translate-x-0');
-						updateMenuIcon(false);
-					}
-				});
-			}
+			mobileMenu.querySelectorAll('a').forEach(link => {
+				link.addEventListener('click', closeMobileMenu);
+			});
 		}
 	</script>
 </body>
