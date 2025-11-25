@@ -177,6 +177,10 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			}
 
 			fileProcessed = true
+
+		default:
+			// Ignore unknown form fields
+			io.Copy(io.Discard, part)
 		}
 
 		part.Close()
