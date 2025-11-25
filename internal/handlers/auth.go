@@ -72,6 +72,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			render(w, "register.html", map[string]any{
 				"Title":              "Register",
 				"Error":              "All fields are required",
+				"CSRFToken":          csrf.Token(r),
 				"EnableRegistration": h.cfg.EnableRegistration,
 			})
 		}
