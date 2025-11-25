@@ -41,9 +41,28 @@ services:
     networks:
       - trove-network
 
+  # Optional: S3-compatible storage using rustfs (for testing S3 backend)
+  # To use: set STORAGE_BACKEND=s3 in your .env
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: trove-rustfs-dev
+    ports:
+      - "${S3_PORT:-9000}:9000"
+      - "9001:9001"
+    volumes:
+      - rustfs-data:/data
+    environment:
+      - RUSTFS_ACCESS_KEY=${S3_ACCESS_KEY:-rustfsadmin}
+      - RUSTFS_SECRET_KEY=${S3_SECRET_KEY:-rustfsadmin}
+    networks:
+      - trove-network
+    profiles:
+      - s3
+
 volumes:
   go-modules:
   postgres-data:
+  rustfs-data:
 
 networks:
   trove-network:

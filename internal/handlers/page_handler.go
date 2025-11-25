@@ -43,11 +43,11 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 
 	// Get total count of files in current folder
 	var totalFiles int64
-	h.db.Model(&models.File{}).Where("user_id = ? AND folder_path = ?", user.ID, currentFolder).Count(&totalFiles)
+	h.db.Model(&models.File{}).Where("user_id = ? AND logical_path = ?", user.ID, currentFolder).Count(&totalFiles)
 
 	// Get files in current folder with pagination
 	var files []models.File
-	h.db.Where("user_id = ? AND folder_path = ?", user.ID, currentFolder).
+	h.db.Where("user_id = ? AND logical_path = ?", user.ID, currentFolder).
 		Offset(offset).
 		Limit(pageSize).
 		Find(&files)
@@ -90,12 +90,12 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 
 	// Also check for implicit folders (folders that only exist because files are in them)
 	type FolderInfo struct {
-		FolderPath string
+		LogicalPath string
 	}
 	var implicitFolders []FolderInfo
 	h.db.Model(&models.File{}).
-		Select("DISTINCT folder_path").
-		Where("user_id = ? AND folder_path LIKE ? AND folder_path != ?",
+		Select("DISTINCT logical_path").
+		Where("user_id = ? AND logical_path LIKE ? AND logical_path != ?",
 			user.ID, currentFolder+"/%", currentFolder).
 		Scan(&implicitFolders)
 
@@ -117,11 +117,11 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 
 	// Add implicit folders (only immediate children)
 	for _, sf := range implicitFolders {
-		relativePath := sf.FolderPath
+		relativePath := sf.LogicalPath
 		if currentFolder != "/" {
-			relativePath = strings.TrimPrefix(sf.FolderPath, currentFolder+"/")
+			relativePath = strings.TrimPrefix(sf.LogicalPath, currentFolder+"/")
 		} else {
-			relativePath = strings.TrimPrefix(sf.FolderPath, "/")
+			relativePath = strings.TrimPrefix(sf.LogicalPath, "/")
 		}
 
 		// Only include direct children (no further slashes)

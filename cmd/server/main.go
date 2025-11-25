@@ -56,9 +56,9 @@ func main() {
 		log.Fatalf("Failed to load error templates: %v", err)
 	}
 
-	storageService, err := storage.NewService(cfg.StoragePath)
+	storageService, err := storage.NewBackendFromConfig(cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize storage: %v", err)
+		log.Fatalf("Failed to initialize storage backend: %v", err)
 	}
 
 	sessionManager, err := auth.NewSessionManager(db, cfg)

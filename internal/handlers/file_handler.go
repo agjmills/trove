@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -9,7 +11,9 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/agjmills/trove/internal/auth"
@@ -75,8 +79,17 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check Content-Length header first (if provided) for early rejection
+	if r.ContentLength > 0 && r.ContentLength > h.cfg.MaxUploadSize {
+		log.Printf("Upload rejected: Content-Length %d exceeds limit %d", r.ContentLength, h.cfg.MaxUploadSize)
+		http.Error(w, fmt.Sprintf("File too large (max %d MB)", h.cfg.MaxUploadSize/(1024*1024)), http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	// Wrap request body with MaxBytesReader for streaming protection
+	r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxUploadSize)
+
 	// Extract boundary from Content-Type header for direct multipart parsing
-	// This avoids ParseMultipartForm which buffers large files to temp disk
 	contentType := r.Header.Get("Content-Type")
 	_, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
@@ -89,28 +102,36 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create multipart reader directly from request body (NO temp files)
-	// This enables true streaming for multi-gigabyte uploads
 	mr := multipart.NewReader(r.Body, boundary)
 
 	var folderPath string = "/"
 	var fileProcessed bool
 	var originalFilename string
-	var filename string
 	var hash string
 	var actualSize int64
 	var mimeType string
-	var isDuplicate bool
+	var tempFilePath string
 
-	// Two-pass approach: First pass streams the file to storage and collects all form fields.
-	// This ensures that form field ordering doesn't matter - we process the file with whatever
-	// folder path is provided, regardless of whether "folder" comes before or after "file".
+	// Ensure temp file cleanup on all exit paths
+	defer func() {
+		if tempFilePath != "" {
+			os.Remove(tempFilePath)
+		}
+	}()
+
+	// Parse multipart form: stream file to temp while computing hash
 	for {
 		part, err := mr.NextPart()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
+			var maxBytesErr *http.MaxBytesError
+			if errors.As(err, &maxBytesErr) {
+				log.Printf("Upload rejected: exceeded max size during multipart parsing")
+				http.Error(w, fmt.Sprintf("File too large (max %d MB)", h.cfg.MaxUploadSize/(1024*1024)), http.StatusRequestEntityTooLarge)
+				return
+			}
 			http.Error(w, "Failed to parse multipart form", http.StatusBadRequest)
 			return
 		}
@@ -119,7 +140,6 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 		switch formName {
 		case "folder":
-			// Read small form field into memory (max 1KB)
 			data, err := io.ReadAll(io.LimitReader(part, 1024))
 			if err != nil {
 				log.Printf("Warning: failed to read folder field: %v", err)
@@ -131,7 +151,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		case "file":
 			if fileProcessed {
 				part.Close()
-				continue // Only process first file
+				continue
 			}
 
 			originalFilename = part.FileName()
@@ -140,61 +160,55 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// Get MIME type from part header
 			mimeType = part.Header.Get("Content-Type")
 			if mimeType == "" {
 				mimeType = "application/octet-stream"
 			}
 
-			log.Printf("Upload streaming: file=%s, limit=%d bytes", originalFilename, h.cfg.MaxUploadSize)
+			log.Printf("Upload: streaming %s to temp file", originalFilename)
 
-			// Stream directly to storage with size limit - single pass computes hash while writing
-			filename, hash, actualSize, err = h.storage.SaveFileWithLimit(part, originalFilename, h.cfg.MaxUploadSize)
+			// Create temp file (use configured temp dir, or system default if empty)
+			tempFile, err := os.CreateTemp(h.cfg.TempDir, "trove-upload-*")
 			if err != nil {
 				part.Close()
-				if errors.Is(err, storage.ErrFileTooLarge) {
-					log.Printf("File rejected: exceeds limit %d bytes", h.cfg.MaxUploadSize)
+				log.Printf("Failed to create temp file in %q: %v", h.cfg.TempDir, err)
+				http.Error(w, "Failed to create temp file", http.StatusInternalServerError)
+				return
+			}
+			tempFilePath = tempFile.Name()
+
+			// Stream to temp file while computing hash
+			hasher := sha256.New()
+			multiWriter := io.MultiWriter(tempFile, hasher)
+
+			written, err := io.Copy(multiWriter, part)
+			tempFile.Close()
+			part.Close()
+
+			if err != nil {
+				var maxBytesErr *http.MaxBytesError
+				if errors.As(err, &maxBytesErr) {
+					log.Printf("Upload rejected: file exceeds limit")
 					http.Error(w, fmt.Sprintf("File too large (max %d MB)", h.cfg.MaxUploadSize/(1024*1024)), http.StatusRequestEntityTooLarge)
 					return
 				}
-				http.Error(w, fmt.Sprintf("Failed to save file: %v", err), http.StatusInternalServerError)
+				http.Error(w, "Failed to process upload", http.StatusInternalServerError)
 				return
 			}
+
+			hash = hex.EncodeToString(hasher.Sum(nil))
+			actualSize = written
 
 			hashPreview := hash
 			if len(hash) > 16 {
 				hashPreview = hash[:16] + "..."
 			}
-			log.Printf("Upload complete: file=%s, size=%d bytes, hash=%s", originalFilename, actualSize, hashPreview)
-
-			// Check storage quota after upload (streaming means we don't know size upfront)
-			if user.StorageUsed+actualSize > user.StorageQuota {
-				h.storage.DeleteFile(filename)
-				part.Close()
-				http.Error(w, "Storage quota exceeded", http.StatusInsufficientStorage)
-				return
-			}
-
-			// Check for deduplication - if same hash exists, reuse that file
-			var existingFile models.File
-			result := h.db.Where("user_id = ? AND hash = ?", user.ID, hash).First(&existingFile)
-
-			if result.Error == nil {
-				// Duplicate found! Delete the just-uploaded file and reuse existing
-				h.storage.DeleteFile(filename)
-				filename = existingFile.Filename
-				actualSize = existingFile.FileSize
-				isDuplicate = true
-				log.Printf("Deduplication: reusing existing file %s", filename)
-			}
+			log.Printf("Upload: temp file complete, size=%d bytes, hash=%s", actualSize, hashPreview)
 
 			fileProcessed = true
 
 		default:
-			// Ignore unknown form fields
-			if _, err := io.Copy(io.Discard, part); err != nil {
-				log.Printf("Warning: failed to discard unknown form field %q: %v", formName, err)
-			}
+			io.Copy(io.Discard, part)
 		}
 
 		part.Close()
@@ -205,57 +219,95 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Second pass: Now that all form fields are collected (including folder),
-	// calculate the unique filename with the correct folder path
-	finalFilename := h.getUniqueFilename(user.ID, folderPath, originalFilename)
+	// Check storage quota before proceeding
+	if user.StorageUsed+actualSize > user.StorageQuota {
+		http.Error(w, "Storage quota exceeded", http.StatusInsufficientStorage)
+		return
+	}
+
+	ctx := r.Context()
+	var storagePath string
+	var isDuplicate bool
+
+	// Check for existing file with same hash BEFORE uploading to storage
+	var existingFile models.File
+	if err := h.db.Where("user_id = ? AND hash = ?", user.ID, hash).First(&existingFile).Error; err == nil {
+		// Duplicate found - reuse existing storage path, no upload needed
+		storagePath = existingFile.StoragePath
+		isDuplicate = true
+		log.Printf("Deduplication: hash %s exists, reusing %s (no upload needed)", hash[:16], storagePath)
+	} else {
+		// New file - upload from temp to storage backend
+		tempFile, err := os.Open(tempFilePath)
+		if err != nil {
+			http.Error(w, "Failed to read temp file", http.StatusInternalServerError)
+			return
+		}
+		defer tempFile.Close()
+
+		log.Printf("Upload: sending to storage backend")
+		result, err := h.storage.Save(ctx, tempFile, storage.SaveOptions{
+			OriginalFilename: originalFilename,
+			ContentType:      mimeType,
+		})
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to save file: %v", err), http.StatusInternalServerError)
+			return
+		}
+		storagePath = result.Path
+		log.Printf("Upload: stored as %s", storagePath)
+	}
+
+	// Calculate unique display filename for this folder
+	displayFilename := h.getUniqueFilename(user.ID, folderPath, originalFilename)
 
 	// Create database record
 	fileRecord := models.File{
 		UserID:           user.ID,
-		Filename:         filename,
-		OriginalFilename: finalFilename,
-		FilePath:         h.storage.GetFilePath(filename),
+		StoragePath:      storagePath,
+		LogicalPath:      folderPath,
+		Filename:         displayFilename,
+		OriginalFilename: originalFilename,
 		FileSize:         actualSize,
 		MimeType:         mimeType,
 		Hash:             hash,
-		FolderPath:       folderPath,
 	}
 
 	if err := h.db.Create(&fileRecord).Error; err != nil {
-		// Clean up file if database insert fails (only if not a duplicate)
+		// Clean up storage if not a duplicate
 		if !isDuplicate {
-			h.storage.DeleteFile(filename)
+			h.storage.Delete(ctx, storagePath)
 		}
 		http.Error(w, "Failed to save file metadata", http.StatusInternalServerError)
 		return
 	}
 
-	// Update user storage (only if not a duplicate)
+	// Update user storage quota (only for new files)
 	if !isDuplicate {
 		if err := h.db.Model(&models.User{}).Where("id = ?", user.ID).
 			UpdateColumn("storage_used", gorm.Expr("storage_used + ?", actualSize)).Error; err != nil {
-			// Don't fail the upload, but log it
-			fmt.Printf("Warning: failed to update user storage: %v\n", err)
+			log.Printf("Warning: failed to update user storage: %v", err)
 		}
 	}
 
-	// Show success message with renamed filename if applicable
-	if finalFilename != originalFilename {
-		flash.Success(w, fmt.Sprintf("File uploaded as '%s'", finalFilename))
+	// Success message
+	if isDuplicate {
+		flash.Success(w, fmt.Sprintf("File '%s' uploaded (deduplicated)", displayFilename))
+	} else if displayFilename != originalFilename {
+		flash.Success(w, fmt.Sprintf("File uploaded as '%s'", displayFilename))
 	} else {
 		flash.Success(w, "File uploaded successfully.")
 	}
 
-	// Redirect back to the folder we uploaded to
 	http.Redirect(w, r, folderRedirectURL(folderPath), http.StatusSeeOther)
 }
 
-// getUniqueFilename checks if a file with the same name exists and returns a unique name
-func (h *FileHandler) getUniqueFilename(userID uint, folderPath, originalFilename string) string {
-	// Check if file exists
+// getUniqueFilename checks if a file with the same name exists in the folder and returns a unique name
+func (h *FileHandler) getUniqueFilename(userID uint, logicalPath, originalFilename string) string {
+	// Check if file exists in this folder
 	var count int64
 	h.db.Model(&models.File{}).
-		Where("user_id = ? AND folder_path = ? AND original_filename = ?", userID, folderPath, originalFilename).
+		Where("user_id = ? AND logical_path = ? AND filename = ?", userID, logicalPath, originalFilename).
 		Count(&count)
 
 	if count == 0 {
@@ -269,7 +321,7 @@ func (h *FileHandler) getUniqueFilename(userID uint, folderPath, originalFilenam
 	for i := 1; ; i++ {
 		newName := fmt.Sprintf("%s (%d)%s", nameWithoutExt, i, ext)
 		h.db.Model(&models.File{}).
-			Where("user_id = ? AND folder_path = ? AND original_filename = ?", userID, folderPath, newName).
+			Where("user_id = ? AND logical_path = ? AND filename = ?", userID, logicalPath, newName).
 			Count(&count)
 
 		if count == 0 {
@@ -356,28 +408,38 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if file exists on disk
-	if !h.storage.FileExists(file.Filename) {
-		http.Error(w, "File not found on disk", http.StatusNotFound)
+	ctx := r.Context()
+
+	// Check if file exists in storage
+	_, err := h.storage.Stat(ctx, file.StoragePath)
+	if errors.Is(err, storage.ErrNotFound) {
+		http.Error(w, "File not found in storage", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Failed to access file", http.StatusInternalServerError)
 		return
 	}
 
-	// Open file
-	filePath := h.storage.GetFilePath(file.Filename)
-	f, err := h.storage.OpenFile(file.Filename)
+	// Open file from storage
+	reader, err := h.storage.Open(ctx, file.StoragePath)
 	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.Error(w, "File not found in storage", http.StatusNotFound)
+			return
+		}
 		http.Error(w, "Failed to open file", http.StatusInternalServerError)
 		return
 	}
-	defer f.Close()
+	defer reader.Close()
 
-	// Set headers
+	// Set headers - use Filename for display name
 	w.Header().Set("Content-Type", file.MimeType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, file.OriginalFilename))
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", file.FileSize))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, file.Filename))
+	w.Header().Set("Content-Length", strconv.FormatInt(file.FileSize, 10))
 
 	// Stream file to response
-	http.ServeFile(w, r, filePath)
+	io.Copy(w, reader)
 }
 
 func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -401,10 +463,9 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store the folder path and size before deletion
-	folderPath := file.FolderPath
+	// Store the size and storage path before deletion
 	fileSize := file.FileSize
-	physicalFilename := file.Filename
+	storagePath := file.StoragePath
 
 	// Delete from database
 	if err := h.db.Delete(&file).Error; err != nil {
@@ -412,16 +473,18 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context()
+
 	// Check if any other File records reference this physical file (deduplication check)
 	var refCount int64
-	h.db.Model(&models.File{}).Where("user_id = ? AND filename = ?", user.ID, physicalFilename).Count(&refCount)
+	h.db.Model(&models.File{}).Where("user_id = ? AND storage_path = ?", user.ID, storagePath).Count(&refCount)
 
-	// Only delete from disk if no other references exist
-	shouldDeleteFromDisk := refCount == 0
-	if shouldDeleteFromDisk {
-		if err := h.storage.DeleteFile(physicalFilename); err != nil {
+	// Only delete from storage if no other references exist
+	shouldDeleteFromStorage := refCount == 0
+	if shouldDeleteFromStorage {
+		if err := h.storage.Delete(ctx, storagePath); err != nil {
 			// Log the error but don't fail the request since DB record is already gone
-			fmt.Printf("Warning: failed to delete file from disk: %v\n", err)
+			fmt.Printf("Warning: failed to delete file from storage: %v\n", err)
 		}
 
 		// Update user storage quota (only if physical file was deleted)
@@ -433,8 +496,8 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	flash.Success(w, "File deleted successfully.")
 
-	// Redirect back to the folder
-	http.Redirect(w, r, folderRedirectURL(folderPath), http.StatusSeeOther)
+	// Redirect back to the folder the file was in
+	http.Redirect(w, r, folderRedirectURL(file.LogicalPath), http.StatusSeeOther)
 }
 
 func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
@@ -464,11 +527,31 @@ func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 	// Check if folder has any files
 	var fileCount int64
 	h.db.Model(&models.File{}).
-		Where("user_id = ? AND folder_path LIKE ?", user.ID, fullFolderPath+"%").
+		Where("user_id = ? AND logical_path = ?", user.ID, fullFolderPath).
 		Count(&fileCount)
 
 	if fileCount > 0 {
-		flash.Error(w, "Cannot delete folder: folder contains files. Please delete or move the files first.")
+		flash.Error(w, "Cannot delete folder: it contains files.")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Check if folder has any subfolders
+	var subfolderCount int64
+	h.db.Model(&models.Folder{}).
+		Where("user_id = ? AND folder_path LIKE ? AND folder_path != ?", user.ID, fullFolderPath+"/%", fullFolderPath).
+		Count(&subfolderCount)
+
+	if subfolderCount > 0 {
+		flash.Error(w, "Cannot delete folder: it contains subfolders.")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Check if folder exists
+	var existingFolder models.Folder
+	if err := h.db.Where("user_id = ? AND folder_path = ?", user.ID, fullFolderPath).First(&existingFolder).Error; err != nil {
+		flash.Error(w, "Folder not found.")
 		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
 	}
