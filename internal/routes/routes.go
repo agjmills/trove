@@ -3,6 +3,7 @@ package routes
 import (
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/agjmills/trove/internal/auth"
@@ -71,13 +72,28 @@ func isIPInCIDRs(ipStr string, cidrs []*net.IPNet) bool {
 	return false
 }
 
-// getClientIP extracts the client IP, preferring X-Real-IP if from a trusted proxy.
+// getClientIP extracts the client IP, preferring X-Real-IP or the leftmost
+// X-Forwarded-For entry if from a trusted proxy. For multi-hop proxy chains
+// (e.g., CDN → load balancer → app), X-Forwarded-For is parsed to get the
+// original client IP.
 func getClientIP(r *http.Request, trustedCIDRs []*net.IPNet) string {
 	// First check if RemoteAddr is from a trusted proxy
 	if len(trustedCIDRs) > 0 && isIPInCIDRs(r.RemoteAddr, trustedCIDRs) {
-		// Trust X-Real-IP header if set
+		// Trust X-Real-IP header if set (single-proxy setup)
 		if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
 			return realIP
+		}
+		// Trust X-Forwarded-For header (multi-hop proxy chains)
+		// Format: X-Forwarded-For: client, proxy1, proxy2
+		// We want the leftmost (original client) IP
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			ips := strings.Split(xff, ",")
+			if len(ips) > 0 {
+				clientIP := strings.TrimSpace(ips[0])
+				if clientIP != "" {
+					return clientIP
+				}
+			}
 		}
 	}
 	return r.RemoteAddr

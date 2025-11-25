@@ -205,11 +205,12 @@ func TestGetClientIP(t *testing.T) {
 	trustedCIDRs := parseTrustedCIDRs([]string{"10.0.0.0/8"})
 
 	tests := []struct {
-		name       string
-		remoteAddr string
-		xRealIP    string
-		cidrs      []*net.IPNet
-		want       string
+		name             string
+		remoteAddr       string
+		xRealIP          string
+		xForwardedFor    string
+		cidrs            []*net.IPNet
+		want             string
 	}{
 		{
 			name:       "trusted proxy with X-Real-IP",
@@ -239,6 +240,49 @@ func TestGetClientIP(t *testing.T) {
 			cidrs:      nil,
 			want:       "10.0.0.1:12345",
 		},
+		{
+			name:          "trusted proxy with X-Forwarded-For single IP",
+			remoteAddr:    "10.0.0.1:12345",
+			xForwardedFor: "203.0.113.50",
+			cidrs:         trustedCIDRs,
+			want:          "203.0.113.50",
+		},
+		{
+			name:          "trusted proxy with X-Forwarded-For multi-hop (returns leftmost)",
+			remoteAddr:    "10.0.0.1:12345",
+			xForwardedFor: "203.0.113.50, 198.51.100.1, 192.0.2.1",
+			cidrs:         trustedCIDRs,
+			want:          "203.0.113.50",
+		},
+		{
+			name:          "X-Real-IP takes precedence over X-Forwarded-For",
+			remoteAddr:    "10.0.0.1:12345",
+			xRealIP:       "203.0.113.100",
+			xForwardedFor: "203.0.113.50",
+			cidrs:         trustedCIDRs,
+			want:          "203.0.113.100",
+		},
+		{
+			name:          "untrusted IP ignores X-Forwarded-For",
+			remoteAddr:    "8.8.8.8:12345",
+			xForwardedFor: "203.0.113.50",
+			cidrs:         trustedCIDRs,
+			want:          "8.8.8.8:12345",
+		},
+		{
+			name:          "X-Forwarded-For with spaces",
+			remoteAddr:    "10.0.0.1:12345",
+			xForwardedFor: "  203.0.113.50  , 198.51.100.1 ",
+			cidrs:         trustedCIDRs,
+			want:          "203.0.113.50",
+		},
+		{
+			name:          "empty X-Forwarded-For falls back to RemoteAddr",
+			remoteAddr:    "10.0.0.1:12345",
+			xForwardedFor: "",
+			cidrs:         trustedCIDRs,
+			want:          "10.0.0.1:12345",
+		},
 	}
 
 	for _, tt := range tests {
@@ -247,6 +291,9 @@ func TestGetClientIP(t *testing.T) {
 			req.RemoteAddr = tt.remoteAddr
 			if tt.xRealIP != "" {
 				req.Header.Set("X-Real-IP", tt.xRealIP)
+			}
+			if tt.xForwardedFor != "" {
+				req.Header.Set("X-Forwarded-For", tt.xForwardedFor)
 			}
 
 			got := getClientIP(req, tt.cidrs)
