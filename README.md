@@ -1,8 +1,14 @@
-# Trove
+<p align="center">
+  <img src="trove.svg" alt="Trove Logo" width="150" height="150">
+  <br />
+</p>
+
+<h1 align="center">Trove</h1>
+
 
 Self-hosted file storage. Your personal Google Drive alternative.
 
-**Simple. Fast. Privacy-focused.**
+**Simple. Fast.**
 
 ## Features
 
