@@ -123,10 +123,10 @@ func plaintextCSRFMiddleware(cfg *config.Config) func(http.Handler) http.Handler
 // and rate limiting for authentication endpoints.
 //
 // When CSRF is enabled, the middleware is initialized with the session secret and its Secure flag is
-// determined from cfg.Env; when disabled, a no-op CSRF middleware is used. Authentication endpoints are
-// rate-limited to 5 attempts per 15 minutes per IP. The multipart upload endpoint is intentionally exempt
-// from the Gorilla CSRF middleware to allow streaming uploads while remaining protected by session-based
-// authentication and SameSite cookie policy.
+// determined from cfg.Env; when disabled, a no-op CSRF middleware is used. Authentication endpoints
+// (login, register, and change-password) are rate-limited to 5 attempts per 15 minutes per IP. The
+// multipart upload endpoint is intentionally exempt from the Gorilla CSRF middleware to allow streaming
+// uploads while remaining protected by session-based authentication and SameSite cookie policy.
 func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, version string) {
 	authHandler := handlers.NewAuthHandler(db, cfg, sessionManager)
 	pageHandler := handlers.NewPageHandler(db, cfg)
@@ -212,11 +212,22 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Use(csrfMiddleware)
 		r.Get("/files", pageHandler.ShowFiles)
 		r.Get("/settings", authHandler.ShowSettings)
-		r.Post("/settings/change-password", authHandler.ChangePassword)
 		r.Post("/folders/create", fileHandler.CreateFolder)
 		r.Get("/download/{id}", fileHandler.Download)
 		r.Post("/delete/{id}", fileHandler.Delete)
 		r.Post("/folders/delete/{name}", fileHandler.DeleteFolder)
+	})
+
+	// Change password endpoint - rate limited like login/register
+	r.Group(func(r chi.Router) {
+		r.Use(sessionManager.LoadAndSave)
+		r.Use(auth.RequireAuth(db, sessionManager))
+		r.Use(func(next http.Handler) http.Handler {
+			return tollbooth.LimitHandler(authRateLimiter, next)
+		})
+		r.Use(plaintextCSRFMiddleware(cfg))
+		r.Use(csrfMiddleware)
+		r.Post("/settings/change-password", authHandler.ChangePassword)
 	})
 
 	// Upload endpoint - exempt from Gorilla CSRF middleware
