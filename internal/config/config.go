@@ -27,12 +27,8 @@ type Config struct {
 	StorageBackend string // "disk", "memory", "s3"
 	StoragePath    string // For disk backend
 	TempDir        string // Temp directory for uploads (defaults to system temp)
-	S3Endpoint     string // For S3 backend
-	S3Region       string
-	S3Bucket       string
-	S3AccessKey    string
-	S3SecretKey    string
-	S3UsePathStyle bool // For S3-compatible services like rustfs
+	S3Bucket       string // S3 bucket name (required for s3 backend)
+	S3UsePathStyle bool   // Use path-style addressing (required for MinIO/rustfs)
 
 	DefaultUserQuota int64
 	MaxUploadSize    int64
@@ -68,12 +64,8 @@ func Load() (*Config, error) {
 		StorageBackend:          getEnv("STORAGE_BACKEND", "disk"),
 		StoragePath:             getEnv("STORAGE_PATH", "./data/files"),
 		TempDir:                 getEnv("TEMP_DIR", ""),
-		S3Endpoint:              getEnv("S3_ENDPOINT", ""),
-		S3Region:                getEnv("S3_REGION", "us-east-1"),
-		S3Bucket:                getEnv("S3_BUCKET", "trove"),
-		S3AccessKey:             getEnv("S3_ACCESS_KEY", ""),
-		S3SecretKey:             getEnv("S3_SECRET_KEY", ""),
-		S3UsePathStyle:          getEnvBool("S3_USE_PATH_STYLE", true),
+		S3Bucket:                getEnv("S3_BUCKET", ""),
+		S3UsePathStyle:          getEnvBool("S3_USE_PATH_STYLE", false),
 		DefaultUserQuota:        getEnvSize("DEFAULT_USER_QUOTA", "10G"),
 		MaxUploadSize:           getEnvSize("MAX_UPLOAD_SIZE", "500M"),
 		SessionSecret:           getEnv("SESSION_SECRET", "change_me_in_production"),

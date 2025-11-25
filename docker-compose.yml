@@ -42,7 +42,7 @@ services:
       - trove-network
 
   # Optional: S3-compatible storage using rustfs (for testing S3 backend)
-  # To use: set STORAGE_BACKEND=s3 in your .env
+  # To use: set STORAGE_BACKEND=s3 and AWS_* variables in your .env
   rustfs:
     image: rustfs/rustfs:latest
     container_name: trove-rustfs-dev
@@ -52,8 +52,8 @@ services:
     volumes:
       - rustfs-data:/data
     environment:
-      - RUSTFS_ACCESS_KEY=${S3_ACCESS_KEY:-rustfsadmin}
-      - RUSTFS_SECRET_KEY=${S3_SECRET_KEY:-rustfsadmin}
+      - RUSTFS_ACCESS_KEY=${AWS_ACCESS_KEY_ID:-rustfsadmin}
+      - RUSTFS_SECRET_KEY=${AWS_SECRET_ACCESS_KEY:-rustfsadmin}
     networks:
       - trove-network
     profiles:

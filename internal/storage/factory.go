@@ -19,11 +19,7 @@ func NewBackendFromConfig(cfg *config.Config) (StorageBackend, error) {
 		return NewMemoryBackend(), nil
 	case "s3":
 		return NewS3Backend(S3Config{
-			Endpoint:     cfg.S3Endpoint,
-			Region:       cfg.S3Region,
 			Bucket:       cfg.S3Bucket,
-			AccessKey:    cfg.S3AccessKey,
-			SecretKey:    cfg.S3SecretKey,
 			UsePathStyle: cfg.S3UsePathStyle,
 		})
 	default:

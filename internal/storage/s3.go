@@ -12,19 +12,19 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 )
 
 // S3Config holds configuration for the S3 storage backend.
+// All other S3 configuration (endpoint, region, credentials) uses AWS SDK defaults:
+//   - Environment variables (AWS_ENDPOINT_URL, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+//   - Shared credentials file (~/.aws/credentials)
+//   - Shared config file (~/.aws/config)
+//   - IAM roles (EC2/ECS/Lambda)
 type S3Config struct {
-	Endpoint     string // Custom endpoint for S3-compatible services (e.g., http://localhost:9000)
-	Region       string // AWS region (default: us-east-1)
-	Bucket       string // S3 bucket name
-	AccessKey    string // AWS access key ID
-	SecretKey    string // AWS secret access key
-	UsePathStyle bool   // Use path-style addressing (required for most S3-compatible services)
+	Bucket       string // S3 bucket name (required)
+	UsePathStyle bool   // Use path-style addressing (required for MinIO/rustfs)
 }
 
 // S3Backend implements StorageBackend using AWS S3 or compatible services.
@@ -34,36 +34,24 @@ type S3Backend struct {
 }
 
 // NewS3Backend creates a new S3 storage backend.
+// Uses the AWS SDK default credential chain for all configuration except bucket and path style:
+//   - Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_ENDPOINT_URL)
+//   - Shared credentials file (~/.aws/credentials)
+//   - Shared config file (~/.aws/config)
+//   - IAM roles (EC2/ECS/Lambda)
 func NewS3Backend(cfg S3Config) (*S3Backend, error) {
 	if cfg.Bucket == "" {
-		return nil, fmt.Errorf("S3 bucket name is required")
+		return nil, fmt.Errorf("S3 bucket name is required (set S3_BUCKET)")
 	}
 
-	// Build AWS config options
-	var opts []func(*config.LoadOptions) error
-
-	opts = append(opts, config.WithRegion(cfg.Region))
-
-	// Use static credentials if provided
-	if cfg.AccessKey != "" && cfg.SecretKey != "" {
-		opts = append(opts, config.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, ""),
-		))
-	}
-
-	awsCfg, err := config.LoadDefaultConfig(context.Background(), opts...)
+	// Load AWS config using SDK defaults (env vars, shared config, IAM roles)
+	awsCfg, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
 	// Build S3 client options
 	var s3Opts []func(*s3.Options)
-
-	if cfg.Endpoint != "" {
-		s3Opts = append(s3Opts, func(o *s3.Options) {
-			o.BaseEndpoint = aws.String(cfg.Endpoint)
-		})
-	}
 
 	if cfg.UsePathStyle {
 		s3Opts = append(s3Opts, func(o *s3.Options) {

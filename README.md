@@ -60,14 +60,32 @@ STORAGE_PATH=./data/files
 
 Stores files in S3 or any S3-compatible service (MinIO, Cloudflare R2, Backblaze B2, rustfs).
 
+Uses native AWS SDK environment variables and credential chain:
+
+| Variable | Description |
+|----------|-------------|
+| `S3_BUCKET` | Bucket name (required) |
+| `S3_USE_PATH_STYLE` | Set to `true` for MinIO/rustfs |
+| `AWS_REGION` | AWS region |
+| `AWS_ACCESS_KEY_ID` | Access key |
+| `AWS_SECRET_ACCESS_KEY` | Secret key |
+| `AWS_ENDPOINT_URL` | Custom endpoint for S3-compatible services |
+
+The SDK also supports `~/.aws/credentials`, `~/.aws/config`, and IAM roles.
+
 ```bash
+# AWS S3
 STORAGE_BACKEND=s3
-S3_ENDPOINT=https://s3.amazonaws.com    # Or custom endpoint for S3-compatible
-S3_REGION=us-east-1
 S3_BUCKET=my-trove-bucket
-S3_ACCESS_KEY=your-access-key
-S3_SECRET_KEY=your-secret-key
-S3_USE_PATH_STYLE=false                 # true for MinIO/rustfs
+AWS_REGION=us-east-1
+
+# S3-compatible (MinIO, rustfs)
+STORAGE_BACKEND=s3
+S3_BUCKET=my-trove-bucket
+S3_USE_PATH_STYLE=true
+AWS_ENDPOINT_URL=http://localhost:9000
+AWS_ACCESS_KEY_ID=minioadmin
+AWS_SECRET_ACCESS_KEY=minioadmin
 ```
 
 **Local development with rustfs:**
@@ -82,11 +100,11 @@ AWS_ACCESS_KEY_ID=rustfsadmin AWS_SECRET_ACCESS_KEY=rustfsadmin \
 
 # Run Trove with S3 backend
 STORAGE_BACKEND=s3 \
-S3_ENDPOINT=http://localhost:9000 \
 S3_BUCKET=trove \
-S3_ACCESS_KEY=rustfsadmin \
-S3_SECRET_KEY=rustfsadmin \
 S3_USE_PATH_STYLE=true \
+AWS_ENDPOINT_URL=http://localhost:9000 \
+AWS_ACCESS_KEY_ID=rustfsadmin \
+AWS_SECRET_ACCESS_KEY=rustfsadmin \
 go run ./cmd/server
 ```
 
@@ -174,13 +192,13 @@ STORAGE_BACKEND=disk                   # disk, s3, or memory
 STORAGE_PATH=./data/files              # for disk backend
 TEMP_DIR=/tmp                          # temp directory for uploads
 
-# S3 (if STORAGE_BACKEND=s3)
-S3_ENDPOINT=http://localhost:9000
-S3_REGION=us-east-1
-S3_BUCKET=trove
-S3_ACCESS_KEY=rustfsadmin
-S3_SECRET_KEY=rustfsadmin
-S3_USE_PATH_STYLE=true
+# S3 (if STORAGE_BACKEND=s3) - uses native AWS SDK variables
+S3_BUCKET=trove                        # required
+S3_USE_PATH_STYLE=false                # true for MinIO/rustfs
+# AWS_REGION=us-east-1
+# AWS_ACCESS_KEY_ID=...
+# AWS_SECRET_ACCESS_KEY=...
+# AWS_ENDPOINT_URL=http://localhost:9000  # for S3-compatible services
 
 # Limits
 DEFAULT_USER_QUOTA=10G                 # Per-user storage limit
