@@ -314,6 +314,21 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.NewPassword) > 72 {
+		if contentType == "application/json" {
+			http.Error(w, "New password must be at most 72 characters", http.StatusBadRequest)
+		} else {
+			render(w, "settings.html", map[string]any{
+				"Title":     "Settings",
+				"User":      user,
+				"CSRFToken": csrf.Token(r),
+				"Error":     "New password must be at most 72 characters",
+				"FullWidth": true,
+			})
+		}
+		return
+	}
+
 	// Fetch full user from database to get password hash
 	var dbUser models.User
 	if err := h.db.First(&dbUser, user.ID).Error; err != nil {
