@@ -112,10 +112,6 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			data, _ := io.ReadAll(io.LimitReader(part, 1024))
 			folderPath = sanitizeFolderPath(string(data))
 
-		case "csrf_token":
-			// CSRF token is validated by middleware, just consume it
-			io.ReadAll(io.LimitReader(part, 128))
-
 		case "file":
 			if fileProcessed {
 				part.Close()
