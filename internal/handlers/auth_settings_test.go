@@ -29,7 +29,9 @@ func setupTestAuthHandler(t *testing.T) (*AuthHandler, *gorm.DB, *scs.SessionMan
 		t.Fatalf("Failed to migrate database: %v", err)
 	}
 
-	cfg := &config.Config{}
+	cfg := &config.Config{
+		BcryptCost: 10,
+	}
 
 	sessionManager := scs.New()
 
@@ -251,7 +253,7 @@ func TestChangePassword_Unauthenticated(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ChangePassword(w, req)
 
-	if w.Code != http.StatusSeeOther && w.Code != http.StatusUnauthorized {
-		t.Errorf("Expected status 303 or 401, got %d", w.Code)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status 401, got %d", w.Code)
 	}
 }
