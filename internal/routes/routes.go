@@ -19,6 +19,27 @@ import (
 	"gorm.io/gorm"
 )
 
+// plaintextCSRFMiddleware returns middleware that marks requests as plaintext HTTP
+// for gorilla/csrf origin validation. In development, all requests are marked plaintext.
+// In production, only requests without HTTPS forwarding are marked plaintext.
+func plaintextCSRFMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if cfg.Env != "production" {
+				// Development: skip origin checks (plaintext HTTP)
+				r = csrf.PlaintextHTTPRequest(r)
+			} else {
+				// Production: check if behind TLS-terminating reverse proxy
+				proto := r.Header.Get("X-Forwarded-Proto")
+				if proto == "" || proto == "http" {
+					r = csrf.PlaintextHTTPRequest(r)
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // Setup configures HTTP routes and middleware on the provided chi.Router, wiring application handlers,
 // health and metrics endpoints, static file serving, authentication flows, CSRF protection (when enabled),
 // and rate limiting for authentication endpoints.
@@ -98,43 +119,18 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Post("/login", authHandler.Login)
 	})
 
-	// Logout endpoint needs session middleware
+	// Logout endpoint needs session middleware and CSRF protection
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
+		r.Use(plaintextCSRFMiddleware(cfg))
+		r.Use(csrfMiddleware)
 		r.Post("/logout", authHandler.Logout)
 	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
 		r.Use(auth.RequireAuth(db, sessionManager))
-		// Handle CSRF origin validation based on environment
-		// In development: skip origin checks (plaintext HTTP)
-		// In production behind reverse proxy: detect if request came via HTTPS
-		if cfg.Env != "production" {
-			r.Use(func(next http.Handler) http.Handler {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// Tell gorilla/csrf this is plaintext HTTP (skips origin checks)
-					r = csrf.PlaintextHTTPRequest(r)
-					next.ServeHTTP(w, r)
-				})
-			})
-		} else {
-			// In production, check if behind TLS-terminating reverse proxy
-			// If request came via HTTPS (X-Forwarded-Proto header), don't mark as plaintext
-			// This allows origin validation to work correctly
-			r.Use(func(next http.Handler) http.Handler {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// Check if behind reverse proxy without TLS forwarding
-					proto := r.Header.Get("X-Forwarded-Proto")
-					if proto == "" || proto == "http" {
-						// No TLS termination detected, mark as plaintext
-						r = csrf.PlaintextHTTPRequest(r)
-					}
-					// If X-Forwarded-Proto is "https", let gorilla/csrf do origin validation
-					next.ServeHTTP(w, r)
-				})
-			})
-		}
+		r.Use(plaintextCSRFMiddleware(cfg))
 		r.Use(csrfMiddleware)
 		r.Get("/files", pageHandler.ShowFiles)
 		r.Get("/settings", authHandler.ShowSettings)
