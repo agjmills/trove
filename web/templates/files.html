@@ -44,10 +44,11 @@
 			<h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">Your Files</h1>
 			
 			<!-- Storage Usage -->
-			<div class="rounded-full bg-gray-200 dark:bg-gray-700 px-4 py-2">
+			<div class="rounded-full bg-gray-200 dark:bg-gray-700 px-4 py-2" title="Storage quota shown may be approximate. Server performs authoritative validation on uploads.">
 				<div class="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
 					<span>Storage:</span>
 					<span>{{formatBytes .User.StorageUsed}} / {{formatBytes .User.StorageQuota}}</span>
+					<span class="text-gray-500 dark:text-gray-400 text-xs">~</span>
 				</div>
 			</div>
 		</div>
@@ -97,7 +98,7 @@
 		<form method="POST" action="/upload" enctype="multipart/form-data" id="upload-form" class="hidden">
 			<input type="hidden" name="folder" value="{{.CurrentFolder}}">
 			<input type="hidden" name="csrf_token" value="{{.CSRFToken}}" id="csrf-token">
-			<input type="file" name="file" id="file-input" required>
+			<input type="file" name="file" id="file-input">
 		</form>
 
 		<!-- Upload Progress (hidden by default, shows below action bar) -->
@@ -253,7 +254,6 @@
 	const progressFill = document.getElementById('upload-progress-fill');
 	const uploadPercentage = document.getElementById('upload-percentage');
 	const uploadFilename = document.getElementById('upload-filename');
-	let dragCounter = 0;
 
 	// File size limits from server config
 	const maxUploadSize = {{.MaxUploadSize}};
@@ -302,10 +302,12 @@
 		// Create XHR for upload with progress tracking
 		const xhr = new XMLHttpRequest();
 		
-		// Variables for speed calculation
+		// Variables for speed calculation with moving average
 		const startTime = Date.now();
 		let lastTime = startTime;
 		let lastLoaded = 0;
+		const speedSamples = []; // Store recent speed samples for averaging
+		const maxSpeedSamples = 5; // Average over last ~2.5 seconds (5 samples at 500ms)
 
 		// Track upload progress
 		xhr.upload.addEventListener('progress', function(e) {
@@ -321,12 +323,22 @@
 
 				// Update speed every 500ms to smooth out fluctuations
 				if (timeDiff >= 0.5) {
-					const speed = bytesDiff / timeDiff; // bytes per second
+					const instantSpeed = bytesDiff / timeDiff; // bytes per second
+					
+					// Add to speed samples and maintain window size
+					speedSamples.push(instantSpeed);
+					if (speedSamples.length > maxSpeedSamples) {
+						speedSamples.shift();
+					}
+					
+					// Calculate moving average speed
+					const avgSpeed = speedSamples.reduce((a, b) => a + b, 0) / speedSamples.length;
+					
 					const remainingBytes = e.total - e.loaded;
-					const eta = speed > 0 ? remainingBytes / speed : 0; // seconds
+					const eta = avgSpeed > 0 ? remainingBytes / avgSpeed : 0; // seconds
 
 					// Update UI
-					document.getElementById('upload-speed').textContent = 'Speed: ' + formatBytes(speed) + '/s';
+					document.getElementById('upload-speed').textContent = 'Speed: ' + formatBytes(avgSpeed) + '/s';
 					
 					if (eta > 0) {
 						const etaFormatted = eta < 60 
@@ -387,38 +399,39 @@
 		e.stopPropagation();
 	}
 
-	// Show overlay when dragging files over the window
-	document.body.addEventListener('dragenter', function(e) {
-		if (e.dataTransfer.types.includes('Files')) {
-			dragCounter++;
-			dragOverlay.classList.remove('hidden');
-			dragOverlay.classList.add('flex');
-		}
-	});
+	// Drag overlay visibility management using timeout-based approach
+	// This avoids issues with dragenter/dragleave event asymmetry on nested elements
+	let dragOverlayTimeout = null;
 
-	document.body.addEventListener('dragleave', function(e) {
-		dragCounter--;
-		if (dragCounter === 0) {
-			dragOverlay.classList.add('hidden');
-			dragOverlay.classList.remove('flex');
+	function showDragOverlay() {
+		dragOverlay.classList.remove('hidden');
+		dragOverlay.classList.add('flex');
+	}
+
+	function hideDragOverlay() {
+		dragOverlay.classList.add('hidden');
+		dragOverlay.classList.remove('flex');
+	}
+
+	// Show overlay on dragover (fires continuously while dragging)
+	document.body.addEventListener('dragover', function(e) {
+		if (e.dataTransfer.types.includes('Files')) {
+			showDragOverlay();
+			// Reset timeout on each dragover event
+			clearTimeout(dragOverlayTimeout);
+			dragOverlayTimeout = setTimeout(hideDragOverlay, 100);
 		}
 	});
 
 	// Handle file drop
 	document.body.addEventListener('drop', function(e) {
-		dragCounter = 0;
-		dragOverlay.classList.add('hidden');
-		dragOverlay.classList.remove('flex');
+		clearTimeout(dragOverlayTimeout);
+		hideDragOverlay();
 		
 		const files = e.dataTransfer.files;
 		if (files.length > 0) {
 			uploadFile(files[0]);
 		}
-	});
-
-	// Also hide overlay when dragging over it
-	dragOverlay.addEventListener('dragover', function(e) {
-		e.preventDefault();
 	});
 
 	// Handle file selection via button
