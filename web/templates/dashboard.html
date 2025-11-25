@@ -242,7 +242,9 @@
 
 	// Function to upload file with progress tracking
 	function uploadFile(file) {
-		// Client-side validation before upload
+		// Best-effort client-side validation based on page load data.
+		// Note: Quota may be stale if uploads occur in other tabs/windows.
+		// Server-side validation is authoritative; page reloads after successful uploads.
 		if (file.size > maxUploadSize) {
 			alert('File too large. Maximum size is ' + formatBytes(maxUploadSize) + '.\nYour file: ' + formatBytes(file.size));
 			return;
