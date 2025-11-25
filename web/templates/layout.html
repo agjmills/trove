@@ -16,47 +16,146 @@
 	</script>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-	<nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-		<div class="{{if .FullWidth}}max-w-full px-4{{else}}max-w-7xl mx-auto px-4{{end}} py-4 flex justify-between items-center gap-4">
-			{{if .FullWidth}}
-			<button id="sidebar-toggle-nav" class="lg:hidden text-gray-900 dark:text-gray-100 text-2xl p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
-				☰
-			</button>
-			{{end}}
-			<a href="/" class="text-2xl font-bold text-gray-900 dark:text-gray-100 no-underline">Trove</a>
-			<div class="flex gap-4 items-center">
-				<button id="theme-toggle" class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-xl" title="Toggle theme">
-					<span class="dark:hidden">🌙</span>
-					<span class="hidden dark:inline">☀️</span>
-				</button>
+	<nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm sticky top-0 z-50">
+		<div class="max-w-full px-4 py-3">
+			<div class="flex justify-between items-center">
+				<div class="flex items-center gap-3">
+					<a href="/" class="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent no-underline">Trove</a>
+				</div>
+
+				<div class="hidden sm:flex items-center gap-2">
+					{{if .User}}
+						<a href="/files" class="px-3 py-2 rounded-lg {{if eq .Title "Files"}}bg-gray-900 dark:bg-gray-600 text-white{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}} transition-colors no-underline font-medium">
+							📁 Files
+						</a>
+						<a href="/settings" class="px-3 py-2 rounded-lg {{if eq .Title "Settings"}}bg-gray-900 dark:bg-gray-600 text-white{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}} transition-colors no-underline font-medium">
+							⚙️ Settings
+						</a>
+						<div class="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2"></div>
+						<span class="text-sm text-gray-600 dark:text-gray-400 px-2">{{.User.Username}}</span>
+						<form action="/logout" method="POST" class="inline">
+							<button type="submit" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-500 transition-colors font-medium">
+								Logout
+							</button>
+						</form>
+					{{else}}
+						<a href="/login" class="px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors no-underline font-medium">
+							Login
+						</a>
+						<a href="/register" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-500 transition-colors no-underline font-medium">
+							Register
+						</a>
+					{{end}}
+				</div>
+
 				{{if .User}}
-					<span class="text-gray-600 dark:text-gray-400">{{.User.Username}}</span>
-					<form action="/logout" method="POST" class="inline">
-						<button type="submit" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 dark:hover:bg-gray-500">Logout</button>
-					</form>
-				{{else}}
-					<a href="/login" class="text-gray-600 dark:text-gray-400 no-underline hover:text-gray-900 dark:hover:text-gray-100">Login</a>
-					<a href="/register" class="text-gray-600 dark:text-gray-400 no-underline hover:text-gray-900 dark:hover:text-gray-100">Register</a>
+				<button id="mobile-menu-toggle-right" class="sm:hidden text-gray-900 dark:text-gray-100 text-2xl p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative z-[60]" aria-label="Toggle menu" type="button">
+					<span class="menu-icon-right">☰</span>
+				</button>
 				{{end}}
 			</div>
+
+			{{if and .User (not .FullWidth)}}
+			<div id="mobile-menu" class="sm:hidden hidden mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
+				<div class="text-xs text-gray-600 dark:text-gray-400 px-3 pb-2">
+					Signed in as <strong class="text-gray-900 dark:text-gray-100">{{.User.Username}}</strong>
+				</div>
+				<a href="/files" class="block px-3 py-2 rounded-lg {{if eq .Title "Files"}}bg-gray-900 dark:bg-gray-600 text-white{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}} transition-colors no-underline font-medium">
+					📁 Files
+				</a>
+				<a href="/settings" class="block px-3 py-2 rounded-lg {{if eq .Title "Settings"}}bg-gray-900 dark:bg-gray-600 text-white{{else}}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{{end}} transition-colors no-underline font-medium">
+					⚙️ Settings
+				</a>
+				<form action="/logout" method="POST">
+					<button type="submit" class="w-full text-left px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-medium">
+						🚪 Logout
+					</button>
+				</form>
+			</div>
+			{{end}}
 		</div>
 	</nav>
 	<main class="{{if not .FullWidth}}max-w-7xl mx-auto px-4{{end}}">
 		{{template "content" .}}
 	</main>
 	<script>
-		// Theme toggle functionality
-		const themeToggle = document.getElementById('theme-toggle');
-		if (themeToggle) {
-			themeToggle.addEventListener('click', function() {
-				if (document.documentElement.classList.contains('dark')) {
-					document.documentElement.classList.remove('dark');
-					localStorage.theme = 'light';
-				} else {
-					document.documentElement.classList.add('dark');
-					localStorage.theme = 'dark';
+		const mobileMenuToggleRight = document.getElementById('mobile-menu-toggle-right');
+		const mobileMenu = document.getElementById('mobile-menu');
+		const sidebar = document.getElementById('sidebar');
+		
+		function updateMenuIcon(isOpen) {
+			const icon = document.querySelector('.menu-icon-right');
+			if (icon) {
+				icon.textContent = isOpen ? '✕' : '☰';
+			}
+		}
+		
+		if (mobileMenuToggleRight) {
+			mobileMenuToggleRight.addEventListener('click', function(e) {
+				e.stopPropagation();
+				e.preventDefault();
+				
+				// If on dashboard with sidebar
+				if (sidebar) {
+					if (sidebar.classList.contains('-translate-x-full')) {
+						sidebar.classList.remove('-translate-x-full');
+						sidebar.classList.add('translate-x-0');
+						updateMenuIcon(true);
+					} else {
+						sidebar.classList.remove('translate-x-0');
+						sidebar.classList.add('-translate-x-full');
+						updateMenuIcon(false);
+					}
+				}
+				// If on other pages with mobile menu
+				else if (mobileMenu) {
+					const isOpen = !mobileMenu.classList.contains('hidden');
+					mobileMenu.classList.toggle('hidden');
+					updateMenuIcon(!isOpen);
 				}
 			});
+
+			// Close when clicking outside
+			document.addEventListener('click', function(e) {
+				// Close sidebar if open
+				if (sidebar && 
+					window.innerWidth < 1024 && 
+					!sidebar.contains(e.target) && 
+					!mobileMenuToggleRight.contains(e.target) &&
+					sidebar.classList.contains('translate-x-0')) {
+					sidebar.classList.remove('translate-x-0');
+					sidebar.classList.add('-translate-x-full');
+					updateMenuIcon(false);
+				}
+				
+				// Close mobile menu if open
+				if (mobileMenu && 
+					!mobileMenu.contains(e.target) && 
+					!mobileMenuToggleRight.contains(e.target)) {
+					mobileMenu.classList.add('hidden');
+					updateMenuIcon(false);
+				}
+			});
+
+			// Close mobile menu when clicking a link
+			if (mobileMenu) {
+				mobileMenu.querySelectorAll('a').forEach(link => {
+					link.addEventListener('click', function() {
+						mobileMenu.classList.add('hidden');
+						updateMenuIcon(false);
+					});
+				});
+			}
+			
+			// Handle window resize for sidebar
+			if (sidebar) {
+				window.addEventListener('resize', function() {
+					if (window.innerWidth >= 1024) {
+						sidebar.classList.remove('-translate-x-full');
+						sidebar.classList.add('translate-x-0');
+					}
+				});
+			}
 		}
 	</script>
 </body>

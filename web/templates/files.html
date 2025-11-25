@@ -11,7 +11,9 @@
 <div class="flex gap-0 min-h-[calc(100vh-80px)] bg-gray-50 dark:bg-gray-900">
 	<aside id="sidebar" class="w-[280px] bg-white dark:bg-gray-800 p-6 border-r border-gray-200 dark:border-gray-700 h-[calc(100vh-80px)] sticky top-0 flex-shrink-0 overflow-y-auto transition-transform duration-300 max-lg:fixed max-lg:top-0 max-lg:left-0 max-lg:w-4/5 max-lg:max-w-[320px] max-lg:h-screen max-lg:z-[999] max-lg:shadow-xl -translate-x-full lg:translate-x-0">
 		<div class="lg:hidden mb-6 pb-6 border-b border-gray-100 dark:border-gray-700">
-			<h4 class="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">Navigation</h4>
+			<div class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+				Signed in as <strong class="text-gray-900 dark:text-gray-100">{{.User.Username}}</strong>
+			</div>
 			<div class="space-y-2">
 				<a href="/files" class="block px-3 py-2 rounded-lg bg-gray-900 dark:bg-gray-600 text-white transition-colors no-underline font-medium">
 					📁 Files
@@ -19,14 +21,9 @@
 				<a href="/settings" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors no-underline font-medium">
 					⚙️ Settings
 				</a>
-			</div>
-			<div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-				<div class="text-xs text-gray-600 dark:text-gray-400 mb-2">
-					Signed in as <strong class="text-gray-900 dark:text-gray-100">{{.User.Username}}</strong>
-				</div>
 				<form action="/logout" method="POST">
-					<button type="submit" class="w-full bg-gray-900 dark:bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-500 transition-colors font-medium text-sm">
-						Logout
+					<button type="submit" class="w-full text-left px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-medium">
+						🚪 Logout
 					</button>
 				</form>
 			</div>
@@ -48,14 +45,35 @@
 
 		<div class="mb-6 pb-6 border-b border-gray-100 dark:border-gray-700">
 			<h4 class="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">Upload File</h4>
-			<form method="POST" action="/upload" enctype="multipart/form-data" id="upload-form">
-				<input type="hidden" name="folder" value="{{.CurrentFolder}}">
-				<input type="hidden" name="csrf_token" value="{{.CSRFToken}}" id="csrf-token">
-				<input type="file" name="file" id="file-input" required class="hidden">
-				<button type="button" id="upload-button" class="w-full bg-gray-900 dark:bg-gray-600 text-white py-2.5 rounded text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-500 transition-colors" onclick="document.getElementById('file-input').click()">
-					📤 Choose File
-				</button>
-			</form>
+			
+			<!-- Upload button (shown by default) -->
+			<div id="upload-button-container">
+				<form method="POST" action="/upload" enctype="multipart/form-data" id="upload-form">
+					<input type="hidden" name="folder" value="{{.CurrentFolder}}">
+					<input type="hidden" name="csrf_token" value="{{.CSRFToken}}" id="csrf-token">
+					<input type="file" name="file" id="file-input" required class="hidden">
+					<button type="button" id="upload-button" class="w-full bg-gray-900 dark:bg-gray-600 text-white py-2.5 rounded text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-500 transition-colors" onclick="document.getElementById('file-input').click()">
+						📤 Choose File
+					</button>
+				</form>
+			</div>
+
+			<!-- Upload Progress (hidden by default, replaces button) -->
+			<div id="upload-progress-container" class="hidden">
+				<div class="bg-gray-100 dark:bg-gray-700 p-4 rounded border border-gray-300 dark:border-gray-600">
+					<div class="flex justify-between items-center mb-2 text-sm">
+						<span id="upload-filename" class="text-gray-900 dark:text-gray-100 truncate">Uploading...</span>
+						<span id="upload-percentage" class="text-gray-600 dark:text-gray-400 ml-2">0%</span>
+					</div>
+					<div class="h-2 bg-gray-200 dark:bg-gray-600 rounded overflow-hidden mb-2">
+						<div id="upload-progress-fill" class="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300" style="width: 0%"></div>
+					</div>
+					<div class="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+						<div id="upload-speed">Speed: calculating...</div>
+						<div id="upload-eta">Time remaining: calculating...</div>
+					</div>
+				</div>
+			</div>
 		</div>
 
 		<div class="mb-6 pb-6 border-b border-gray-100 dark:border-gray-700">
@@ -66,23 +84,6 @@
 				<input type="text" name="folder_name" placeholder="Folder name" required class="w-full px-2 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm mb-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-gray-900 dark:focus:border-gray-400">
 				<button type="submit" class="w-full bg-gray-900 dark:bg-gray-600 text-white py-2.5 rounded text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-500 transition-colors">📁 Create</button>
 			</form>
-		</div>
-
-		<!-- Upload Progress in Sidebar -->
-		<div id="upload-progress-container" class="hidden mb-6">
-			<div class="bg-gray-100 dark:bg-gray-700 p-4 rounded border border-gray-300 dark:border-gray-600">
-				<div class="flex justify-between items-center mb-2 text-sm">
-					<span id="upload-filename" class="text-gray-900 dark:text-gray-100 truncate">Uploading...</span>
-					<span id="upload-percentage" class="text-gray-600 dark:text-gray-400 ml-2">0%</span>
-				</div>
-				<div class="h-2 bg-gray-200 dark:bg-gray-600 rounded overflow-hidden mb-2">
-					<div id="upload-progress-fill" class="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300" style="width: 0%"></div>
-				</div>
-				<div class="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-					<div id="upload-speed">Speed: calculating...</div>
-					<div id="upload-eta">Time remaining: calculating...</div>
-				</div>
-			</div>
 		</div>
 	</aside>
 
@@ -240,7 +241,8 @@
 		formData.append('folder', uploadForm.querySelector('input[name="folder"]').value);
 		formData.append('csrf_token', document.getElementById('csrf-token').value);
 
-		// Show progress bar
+		// Hide upload button and show progress bar
+		uploadButton.classList.add('hidden');
 		progressContainer.classList.remove('hidden');
 		uploadFilename.textContent = file.name;
 		uploadPercentage.textContent = '0%';
@@ -248,13 +250,11 @@
 		document.getElementById('upload-speed').textContent = 'Speed: calculating...';
 		document.getElementById('upload-eta').textContent = 'Time remaining: calculating...';
 
-		// Disable upload button during upload
-		uploadButton.disabled = true;
-
+		// Create XHR for upload with progress tracking
 		const xhr = new XMLHttpRequest();
-
+		
 		// Variables for speed calculation
-		let startTime = Date.now();
+		const startTime = Date.now();
 		let lastTime = startTime;
 		let lastLoaded = 0;
 
@@ -303,7 +303,7 @@
 				// Error
 				alert('Upload failed. Please try again.');
 				progressContainer.classList.add('hidden');
-				uploadButton.disabled = false;
+				uploadButton.classList.remove('hidden');
 			}
 		});
 
@@ -311,7 +311,7 @@
 		xhr.addEventListener('error', function() {
 			alert('Upload failed. Please try again.');
 			progressContainer.classList.add('hidden');
-			uploadButton.disabled = false;
+			uploadButton.classList.remove('hidden');
 		});
 
 		// Note: /upload is exempted from CSRF middleware for streaming and is

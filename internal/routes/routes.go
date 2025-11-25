@@ -127,7 +127,9 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 			})
 		}
 		r.Use(csrfMiddleware)
-		r.Get("/dashboard", pageHandler.ShowDashboard)
+		r.Get("/files", pageHandler.ShowFiles)
+		r.Get("/settings", authHandler.ShowSettings)
+		r.Post("/settings/change-password", authHandler.ChangePassword)
 		r.Post("/folders/create", fileHandler.CreateFolder)
 		r.Get("/download/{id}", fileHandler.Download)
 		r.Post("/delete/{id}", fileHandler.Delete)
