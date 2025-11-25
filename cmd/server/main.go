@@ -87,12 +87,13 @@ func main() {
 	// Configure server with appropriate timeouts for large file uploads
 	// ReadHeaderTimeout protects against Slowloris attacks while allowing
 	// unlimited body streaming for multi-gigabyte uploads.
-	// WriteTimeout set to 10 minutes to allow large file downloads while preventing slow-read attacks.
+	// WriteTimeout set to 1 hour to match Nginx proxy timeouts (proxy_read_timeout, proxy_send_timeout)
+	// for consistent behavior during large file uploads and downloads.
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           r,
 		ReadHeaderTimeout: 10 * time.Second,
-		WriteTimeout:      10 * time.Minute, // Set a reasonable write timeout to prevent slow-read attacks
+		WriteTimeout:      time.Hour, // Matches Nginx proxy_read_timeout/proxy_send_timeout (3600s)
 		IdleTimeout:       120 * time.Second,
 	}
 
