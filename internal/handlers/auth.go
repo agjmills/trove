@@ -62,8 +62,9 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "All fields are required", http.StatusBadRequest)
 		} else {
 			render(w, "register.html", map[string]any{
-				"Title": "Register",
-				"Error": "All fields are required",
+				"Title":              "Register",
+				"Error":              "All fields are required",
+				"EnableRegistration": h.cfg.EnableRegistration,
 			})
 		}
 		return
@@ -133,8 +134,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		} else {
 			render(w, "login.html", map[string]any{
-				"Title": "Login",
-				"Error": "Invalid credentials",
+				"Title":              "Login",
+				"Error":              "Invalid credentials",
+				"EnableRegistration": h.cfg.EnableRegistration,
 			})
 		}
 		return
@@ -145,8 +147,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		} else {
 			render(w, "login.html", map[string]any{
-				"Title": "Login",
-				"Error": "Invalid credentials",
+				"Title":              "Login",
+				"Error":              "Invalid credentials",
+				"EnableRegistration": h.cfg.EnableRegistration,
 			})
 		}
 		return
@@ -198,12 +201,18 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	render(w, "login.html", map[string]any{
-		"Title":     "Login",
-		"CSRFToken": csrf.Token(r),
+		"Title":              "Login",
+		"CSRFToken":          csrf.Token(r),
+		"EnableRegistration": h.cfg.EnableRegistration,
 	})
 }
 
 func (h *AuthHandler) ShowRegister(w http.ResponseWriter, r *http.Request) {
+	if !h.cfg.EnableRegistration {
+		http.NotFound(w, r)
+		return
+	}
+
 	user := auth.GetUser(r)
 	if user != nil {
 		http.Redirect(w, r, "/files", http.StatusSeeOther)
@@ -211,8 +220,9 @@ func (h *AuthHandler) ShowRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	render(w, "register.html", map[string]any{
-		"Title":     "Register",
-		"CSRFToken": csrf.Token(r),
+		"Title":              "Register",
+		"CSRFToken":          csrf.Token(r),
+		"EnableRegistration": h.cfg.EnableRegistration,
 	})
 }
 
