@@ -65,7 +65,6 @@
 				{{end}}
 			</div>
 
-			{{if or .Files .Folders (ne .CurrentFolder "/")}}
 			<div class="flex gap-2">
 				<button id="upload-button" onclick="document.getElementById('file-input').click()" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-gray-700 dark:text-gray-300 text-sm font-medium" title="Upload File(s)">
 					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -85,35 +84,33 @@
 					New Folder
 				</button>
 			</div>
-			{{end}}
+		</div>
+
+		<!-- Hidden upload form -->
+		<form method="POST" action="/upload" enctype="multipart/form-data" id="upload-form" class="hidden">
+			<input type="hidden" name="folder" value="{{.CurrentFolder}}">
+			<input type="hidden" name="csrf_token" value="{{.CSRFToken}}" id="csrf-token">
+			<input type="file" name="file" id="file-input" required>
+		</form>
+
+		<!-- Upload Progress (hidden by default, shows below action bar) -->
+		<div id="upload-progress-container" class="hidden mb-4">
+			<div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+				<div class="flex justify-between items-center mb-2 text-sm">
+					<span id="upload-filename" class="text-gray-900 dark:text-gray-100 truncate">Uploading...</span>
+					<span id="upload-percentage" class="text-gray-600 dark:text-gray-400 ml-2">0%</span>
+				</div>
+				<div class="h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden mb-2">
+					<div id="upload-progress-fill" class="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300 rounded-full" style="width: 0%"></div>
+				</div>
+				<div class="flex justify-between text-xs text-gray-600 dark:text-gray-400">
+					<span id="upload-speed">Speed: calculating...</span>
+					<span id="upload-eta">Time remaining: calculating...</span>
+				</div>
+			</div>
 		</div>
 
 		{{if or .Files .Folders (ne .CurrentFolder "/")}}
-			<!-- Hidden upload form -->
-			<form method="POST" action="/upload" enctype="multipart/form-data" id="upload-form" class="hidden">
-				<input type="hidden" name="folder" value="{{.CurrentFolder}}">
-				<input type="hidden" name="csrf_token" value="{{.CSRFToken}}" id="csrf-token">
-				<input type="file" name="file" id="file-input" required>
-			</form>
-
-			<!-- Upload Progress (hidden by default, shows below action bar) -->
-			<div id="upload-progress-container" class="hidden mb-4">
-				<div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-					<div class="flex justify-between items-center mb-2 text-sm">
-						<span id="upload-filename" class="text-gray-900 dark:text-gray-100 truncate">Uploading...</span>
-						<span id="upload-percentage" class="text-gray-600 dark:text-gray-400 ml-2">0%</span>
-					</div>
-					<div class="h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden mb-2">
-						<div id="upload-progress-fill" class="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300 rounded-full" style="width: 0%"></div>
-					</div>
-					<div class="flex justify-between text-xs text-gray-600 dark:text-gray-400">
-						<span id="upload-speed">Speed: calculating...</span>
-						<span id="upload-eta">Time remaining: calculating...</span>
-					</div>
-				</div>
-			</div>
-
-			<!-- Files Table -->
 			<div class="overflow-x-auto">
 				<table class="w-full border-collapse">
 					<thead>
