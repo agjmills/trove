@@ -69,4 +69,3 @@ type FileInfo struct {
 	ModTime     time.Time
 	ContentType string
 }
-

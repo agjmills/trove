@@ -37,15 +37,15 @@ type Folder struct {
 type File struct {
 	ID               uint                                  `gorm:"primaryKey" json:"id"`
 	UserID           uint                                  `gorm:"not null;index" json:"user_id"`
-	StoragePath      string                                `gorm:"not null;size:1024;index" json:"storage_path"`         // UUID-based path for storage operations (not unique - deduplication)
+	StoragePath      string                                `gorm:"not null;size:1024;index" json:"storage_path"`             // UUID-based path for storage operations (not unique - deduplication)
 	LogicalPath      string                                `gorm:"not null;size:1024;default:'/';index" json:"logical_path"` // Logical folder path for UI navigation
-	Filename         string                                `gorm:"not null;size:255" json:"filename"`                    // Display name (editable)
-	OriginalFilename string                                `gorm:"not null;size:255" json:"original_filename"`           // Original name (immutable)
+	Filename         string                                `gorm:"not null;size:255" json:"filename"`                        // Display name (editable)
+	OriginalFilename string                                `gorm:"not null;size:255" json:"original_filename"`               // Original name (immutable)
 	FileSize         int64                                 `gorm:"not null" json:"file_size"`
 	MimeType         string                                `gorm:"size:100" json:"mime_type"`
 	Hash             string                                `gorm:"index;size:64" json:"hash"`
-	Metadata         datatypes.JSONType[map[string]string] `json:"metadata"`                                             // Arbitrary key-value metadata
-	Tags             datatypes.JSONType[[]string]          `json:"tags"`                                                 // Simple string tags for filtering
+	Metadata         datatypes.JSONType[map[string]string] `json:"metadata"` // Arbitrary key-value metadata
+	Tags             datatypes.JSONType[[]string]          `json:"tags"`     // Simple string tags for filtering
 	CreatedAt        time.Time                             `json:"created_at"`
 	UpdatedAt        time.Time                             `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt                        `gorm:"index" json:"-"`

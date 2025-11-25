@@ -24,15 +24,15 @@ type Config struct {
 	DBPath     string
 
 	// Storage configuration
-	StorageBackend   string // "disk", "memory", "s3"
-	StoragePath      string // For disk backend
-	TempDir          string // Temp directory for uploads (defaults to system temp)
-	S3Endpoint       string // For S3 backend
-	S3Region         string
-	S3Bucket         string
-	S3AccessKey      string
-	S3SecretKey      string
-	S3UsePathStyle   bool // For S3-compatible services like rustfs
+	StorageBackend string // "disk", "memory", "s3"
+	StoragePath    string // For disk backend
+	TempDir        string // Temp directory for uploads (defaults to system temp)
+	S3Endpoint     string // For S3 backend
+	S3Region       string
+	S3Bucket       string
+	S3AccessKey    string
+	S3SecretKey    string
+	S3UsePathStyle bool // For S3-compatible services like rustfs
 
 	DefaultUserQuota int64
 	MaxUploadSize    int64
