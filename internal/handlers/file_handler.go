@@ -22,6 +22,7 @@ import (
 	"github.com/agjmills/trove/internal/flash"
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -214,6 +215,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Upload: temp file complete, size=%d bytes, hash=%s", actualSize, hashPreview)
 
 			fileProcessed = true
+			continue
 
 		default:
 			io.Copy(io.Discard, part)
@@ -284,7 +286,9 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.Create(&fileRecord).Error; err != nil {
 		// Clean up storage if not a duplicate
 		if !isDuplicate {
-			h.storage.Delete(ctx, storagePath)
+			if delErr := h.storage.Delete(ctx, storagePath); delErr != nil {
+				log.Printf("Warning: failed to clean up storage after DB error: %v", delErr)
+			}
 		}
 		http.Error(w, "Failed to save file metadata", http.StatusInternalServerError)
 		return
@@ -326,7 +330,7 @@ func (h *FileHandler) getUniqueFilename(userID uint, logicalPath, originalFilena
 	ext := filepath.Ext(originalFilename)
 	nameWithoutExt := strings.TrimSuffix(originalFilename, ext)
 
-	for i := 1; ; i++ {
+	for i := 1; i <= 10000; i++ {
 		newName := fmt.Sprintf("%s (%d)%s", nameWithoutExt, i, ext)
 		h.db.Model(&models.File{}).
 			Where("user_id = ? AND logical_path = ? AND filename = ?", userID, logicalPath, newName).
@@ -336,6 +340,9 @@ func (h *FileHandler) getUniqueFilename(userID uint, logicalPath, originalFilena
 			return newName
 		}
 	}
+
+	// Fallback: use UUID suffix if too many collisions
+	return fmt.Sprintf("%s (%s)%s", nameWithoutExt, uuid.New().String()[:8], ext)
 }
 
 func (h *FileHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
@@ -443,11 +450,16 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 
 	// Set headers - use Filename for display name
 	w.Header().Set("Content-Type", file.MimeType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, file.Filename))
+	// Escape quotes in filename and add UTF-8 encoded version for non-ASCII support
+	safeFilename := strings.ReplaceAll(file.Filename, `"`, `\"`)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`,
+		safeFilename, url.PathEscape(file.Filename)))
 	w.Header().Set("Content-Length", strconv.FormatInt(file.FileSize, 10))
 
 	// Stream file to response
-	io.Copy(w, reader)
+	if _, err := io.Copy(w, reader); err != nil {
+		log.Printf("Warning: error streaming file %s: %v", file.StoragePath, err)
+	}
 }
 
 func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
