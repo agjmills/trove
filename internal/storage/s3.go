@@ -74,36 +74,41 @@ func (s *S3Backend) Save(ctx context.Context, r io.Reader, opts SaveOptions) (Sa
 	ext := filepath.Ext(opts.OriginalFilename)
 	key := uuid.New().String() + ext
 
-	// Read content and compute hash
+	// Create a hashing reader that computes SHA256 while streaming to S3
 	// Note: For very large files, consider using multipart upload with streaming hash
 	hasher := sha256.New()
-	teeReader := io.TeeReader(r, hasher)
-
-	content, err := io.ReadAll(teeReader)
-	if err != nil {
-		return SaveResult{}, fmt.Errorf("failed to read content: %w", err)
+	hashingReader := &hashingReader{
+		reader: r,
+		hasher: hasher,
 	}
 
-	// Upload to S3
+	// Upload to S3 using streaming reader
 	input := &s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
-		Body:   bytes.NewReader(content),
+		Body:   hashingReader,
 	}
 
 	if opts.ContentType != "" {
 		input.ContentType = aws.String(opts.ContentType)
 	}
 
-	_, err = s.client.PutObject(ctx, input)
+	output, err := s.client.PutObject(ctx, input)
 	if err != nil {
 		return SaveResult{}, fmt.Errorf("failed to upload to S3: %w", err)
+	}
+
+	// Get the actual size uploaded (AWS SDK tracks this)
+	size := int64(0)
+	if output.ETag != nil {
+		// The hashingReader tracks bytes read
+		size = hashingReader.bytesRead
 	}
 
 	return SaveResult{
 		Path: key,
 		Hash: hex.EncodeToString(hasher.Sum(nil)),
-		Size: int64(len(content)),
+		Size: size,
 	}, nil
 }
 
@@ -229,4 +234,22 @@ func isS3NotFoundError(err error) bool {
 	return strings.Contains(errStr, "NoSuchKey") ||
 		strings.Contains(errStr, "NotFound") ||
 		strings.Contains(errStr, "404")
+}
+
+// hashingReader wraps an io.Reader and computes a hash as data is read.
+// This allows streaming uploads to S3 without buffering entire files in memory.
+type hashingReader struct {
+	reader    io.Reader
+	hasher    io.Writer
+	bytesRead int64
+}
+
+func (hr *hashingReader) Read(p []byte) (n int, err error) {
+	n, err = hr.reader.Read(p)
+	if n > 0 {
+		hr.bytesRead += int64(n)
+		// Write to hasher (hash.Hash.Write never returns an error)
+		hr.hasher.Write(p[:n])
+	}
+	return n, err
 }

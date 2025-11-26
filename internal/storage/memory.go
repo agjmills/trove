@@ -37,18 +37,22 @@ func (m *MemoryBackend) Save(ctx context.Context, r io.Reader, opts SaveOptions)
 	ext := filepath.Ext(opts.OriginalFilename)
 	filename := uuid.New().String() + ext
 
-	// Read all content (memoryfs needs complete content for WriteFile)
+	// Stream content into buffer while computing hash (avoids reading entire payload upfront)
+	// memoryfs.WriteFile requires complete content, so we still need to buffer,
+	// but we use io.CopyBuffer with the shared copyBufferSize for consistency
 	hasher := sha256.New()
-	teeReader := io.TeeReader(r, hasher)
+	var buf bytes.Buffer
+	writer := io.MultiWriter(&buf, hasher)
 
-	content, err := io.ReadAll(teeReader)
+	copyBuf := make([]byte, copyBufferSize)
+	size, err := io.CopyBuffer(writer, r, copyBuf)
 	if err != nil {
 		return SaveResult{}, fmt.Errorf("failed to read content: %w", err)
 	}
 
 	// Write to memoryfs
 	m.mu.Lock()
-	err = m.fs.WriteFile(filename, content, 0644)
+	err = m.fs.WriteFile(filename, buf.Bytes(), 0644)
 	m.mu.Unlock()
 	if err != nil {
 		return SaveResult{}, fmt.Errorf("failed to write file: %w", err)
@@ -57,7 +61,7 @@ func (m *MemoryBackend) Save(ctx context.Context, r io.Reader, opts SaveOptions)
 	return SaveResult{
 		Path: filename,
 		Hash: hex.EncodeToString(hasher.Sum(nil)),
-		Size: int64(len(content)),
+		Size: size,
 	}, nil
 }
 
