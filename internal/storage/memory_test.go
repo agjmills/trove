@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -262,24 +263,31 @@ func TestMemoryBackend_Save_MultipleConcurrent(t *testing.T) {
 	ctx := context.Background()
 
 	// Save multiple files concurrently
-	done := make(chan bool, 5)
+	var wg sync.WaitGroup
+	errChan := make(chan error, 5)
+
 	for i := 0; i < 5; i++ {
+		wg.Add(1)
 		go func(n int) {
+			defer wg.Done()
 			content := []byte(strings.Repeat("x", n*100))
 			reader := bytes.NewReader(content)
 			_, err := backend.Save(ctx, reader, SaveOptions{
 				OriginalFilename: "concurrent.txt",
 			})
 			if err != nil {
-				t.Errorf("Concurrent Save failed: %v", err)
+				errChan <- err
 			}
-			done <- true
 		}(i + 1)
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 5; i++ {
-		<-done
+	wg.Wait()
+	close(errChan)
+
+	// Check for any errors
+	for err := range errChan {
+		t.Errorf("Concurrent Save failed: %v", err)
 	}
 
 	// Verify 5 files were saved
