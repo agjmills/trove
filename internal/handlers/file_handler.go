@@ -414,6 +414,8 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Warning: upload queue full, file %d will retry", fileRecord.ID)
 			// Queue is full - mark as failed so it can be retried
 			h.db.Model(&fileRecord).Update("upload_status", "failed")
+			// Clean up temp file since no worker will process it
+			os.Remove(tempPathForDB)
 		}
 	}
 
