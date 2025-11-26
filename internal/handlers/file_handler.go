@@ -70,6 +70,14 @@ func folderRedirectURL(folderPath string) string {
 	return "/files?folder=" + url.QueryEscape(folderPath)
 }
 
+// escapeSQLLike escapes special characters in a string for use in SQL LIKE patterns.
+// It escapes the backslash itself, percent signs, and underscores to prevent
+// them from being interpreted as SQL wildcards.
+func escapeSQLLike(s string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return replacer.Replace(s)
+}
+
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Upload handler: MaxUploadSize configured as %d bytes (%.2f MB)", h.cfg.MaxUploadSize, float64(h.cfg.MaxUploadSize)/(1024*1024))
 
@@ -538,8 +546,9 @@ func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 
 	// Check if folder has any subfolders
 	var subfolderCount int64
+	escapedFullFolderPath := escapeSQLLike(fullFolderPath)
 	h.db.Model(&models.Folder{}).
-		Where("user_id = ? AND folder_path LIKE ? AND folder_path != ?", user.ID, fullFolderPath+"/%", fullFolderPath).
+		Where("user_id = ? AND folder_path LIKE ? ESCAPE '\\' AND folder_path != ?", user.ID, escapedFullFolderPath+"/%", fullFolderPath).
 		Count(&subfolderCount)
 
 	if subfolderCount > 0 {
