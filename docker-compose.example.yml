@@ -7,6 +7,7 @@ services:
     volumes:
       - ./data:/app/data
       - trove-files:/app/data/files
+      - /tmp
     env_file:
       - .env
     environment:

@@ -25,10 +25,13 @@ docker run -d \
   --name trove \
   -p 8080:8080 \
   -v trove-data:/app/data \
+  -v /tmp \
   -e SESSION_SECRET="your-random-secret-here" \
   -e DB_TYPE=sqlite \
   ghcr.io/agjmills/trove:latest
 ```
+
+> **Note:** The `-v /tmp` mount is required for file uploads as the image uses a minimal scratch base without a `/tmp` directory.
 
 Access Trove at `http://localhost:8080`
 
@@ -50,6 +53,7 @@ docker run -d \
   --link trove-db \
   -p 8080:8080 \
   -v trove-data:/app/data \
+  -v /tmp \
   -e SESSION_SECRET="your-random-secret-here" \
   -e DB_TYPE=postgres \
   -e DB_HOST=trove-db \
@@ -88,6 +92,7 @@ services:
       - "8080:8080"
     volumes:
       - ./data:/app/data
+      - /tmp  # Required for file uploads (scratch-based image)
     env_file:
       - .env
     depends_on:
