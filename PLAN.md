@@ -45,11 +45,11 @@ Self-hostable file storage in Go with server-side rendering, minimal JS, Docker 
 - [x] Full-width responsive layout with collapsible sidebar
 - [x] Mobile optimizations (hidden columns, truncated filenames)
 
-### Docker & Deployment
+### Docker & Deployment ✅
 - [x] Dev: Dockerfile + Compose with PostgreSQL, hot reload, health checks
 - [x] Prod: Multi-stage Dockerfile with scratch base (~18MB image)
 - [x] Production docker-compose.yml with restart policies
-- [ ] Documentation (README deployment guide)
+- [x] Documentation (README deployment guide, INSTALL.md)
 
 ### Testing & Polish
 - [x] Unit tests for core logic (password, config, CSRF, flash, rate limiting, storage)
@@ -79,22 +79,23 @@ Self-hostable file storage in Go with server-side rendering, minimal JS, Docker 
 ## Phase 2 (Optional)
 Sharing links, versioning, thumbnails, bulk ops, admin dashboard, REST API
 
-## Phase 3 (Future Enhancements)
+## Phase 3 (Enhancements) ✅
 
-### UI/UX Improvements
-- [ ] **Tailwind CSS Migration**: Replace custom CSS with Tailwind for easier styling and proper dark mode support
+### UI/UX Improvements ✅
+- [x] **Tailwind CSS Migration**: Replaced custom CSS with Tailwind for easier styling and proper dark mode support
   - Minimal JS philosophy maintained
   - System preference detection + manual toggle
   - Consistent dark/light theme across all pages
-  - Alternative: Consider other lightweight CSS frameworks (Pico CSS, etc.)
+  - Responsive design with mobile optimizations
 
 ### Storage Abstraction ✅
 - [x] **Storage Interface/Adapter Pattern**: Abstract storage layer for multiple backends
-  - Interface: `StorageBackend` with methods: `SaveFile()`, `SaveFileWithLimit()`, `DeleteFile()`, `GetFilePath()`, `FileExists()`, `OpenFile()`, `CalculateHash()`
-  - Local filesystem implementation (active)
-  - Ready for S3-compatible storage (MinIO, AWS S3, Backblaze B2, etc.)
-  - Configuration: `STORAGE_BACKEND=local|s3` in .env (future)
-  - Maintains deduplication support across backends
+  - Interface: `StorageBackend` with methods: `Save()`, `Open()`, `Delete()`, `Stat()`, `HealthCheck()`, `ValidateAccess()`
+  - **Disk backend**: Local filesystem with path traversal protection (Go 1.23+ `os.Root`)
+  - **S3 backend**: Full AWS S3 and S3-compatible storage support (MinIO, Cloudflare R2, Backblaze B2, rustfs)
+  - **Memory backend**: In-memory storage for testing
+  - Configuration: `STORAGE_BACKEND=disk|s3|memory` in .env
+  - Maintains deduplication support across all backends
   - 8MB copy buffer aligned with S3 multipart upload parts
 
 ## Tech Stack
@@ -220,10 +221,13 @@ Upload/download/delete with quota management, SHA-256 hash-based deduplication, 
 CSRF protection, custom error pages with panic recovery, responsive full-width layout with collapsible sidebar, mobile optimizations, comprehensive unit tests (83 tests, 70-90% coverage on core modules)
 
 ### ✅ Phase 4: Production Ready (COMPLETE)
-Production Dockerfile (~18MB), security headers, rate limiting, storage abstraction with interface pattern
+Production Dockerfile (~18MB), security headers, rate limiting, pluggable storage backends (disk, S3, memory)
 
-### 🔄 Phase 5: Documentation & Polish (NEXT)
-**Priority**: README deployment guide → template caching → integration tests
+### ✅ Phase 5: UI & Polish (COMPLETE)
+Tailwind CSS migration with dark mode, responsive design, system preference detection
+
+### 🔄 Phase 6: Documentation & Optimization (NEXT)
+**Priority**: Integration tests → template caching → performance optimization
 
 ## Security Status
 - [x] Bcrypt password hashing (configurable cost)
@@ -246,15 +250,15 @@ Production Dockerfile (~18MB), security headers, rate limiting, storage abstract
 
 ## Current Status
 
-**Working**: Full authentication system with alexedwards/scs session management, file upload/download/delete with SHA-256 deduplication, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, responsive full-width layout with collapsible sidebar, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints, production-ready Docker image (~18MB), storage abstraction layer with interface pattern, comprehensive unit tests (88+ tests, 70-90% coverage), streaming uploads for multi-GB files
+**Working**: Full authentication system with alexedwards/scs session management, file upload/download/delete with SHA-256 deduplication, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, Tailwind CSS with responsive dark mode, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints, production-ready Docker image (~18MB), pluggable storage backends (disk/S3/memory), comprehensive unit tests (88+ tests, 70-90% coverage), streaming uploads for multi-GB files, health checks and Prometheus metrics
 
-**Next**: Deployment documentation (README), template caching, integration tests, chunked/resumable uploads
+**Next**: Integration tests, template caching, performance optimization, file sharing links
 
 **Recent**:
-- Implemented streaming uploads for large files (multi-GB support) using direct multipart parsing
-- Added SaveFileWithLimit for early termination of oversized uploads
-- Configured HTTP server timeouts for long-running transfers
-- Added client-side file size and quota validation
-- 8MB copy buffer for improved throughput (aligned with S3 multipart parts)
-- Refactored session management to use alexedwards/scs (removed ~90 lines of custom session code)
-- Implemented storage abstraction with StorageBackend interface for future S3/cloud support
+- ✅ Implemented pluggable storage backend system (disk, S3, memory)
+- ✅ Full S3 support with AWS SDK v2 (MinIO, Cloudflare R2, Backblaze B2, rustfs compatible)
+- ✅ Migrated to Tailwind CSS with dark mode support
+- ✅ Implemented streaming uploads for large files (multi-GB support) using direct multipart parsing
+- ✅ Added comprehensive health checks and Prometheus metrics
+- ✅ Refactored session management to use alexedwards/scs
+- ✅ 8MB copy buffer for improved throughput (aligned with S3 multipart parts)
