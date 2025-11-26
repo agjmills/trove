@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -225,21 +226,7 @@ func isS3NotFoundError(err error) bool {
 	}
 	// AWS SDK v2 uses typed errors
 	errStr := err.Error()
-	return contains(errStr, "NoSuchKey") ||
-		contains(errStr, "NotFound") ||
-		contains(errStr, "404")
-}
-
-// contains is a simple string contains check.
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsImpl(s, substr))
-}
-
-func containsImpl(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(errStr, "NoSuchKey") ||
+		strings.Contains(errStr, "NotFound") ||
+		strings.Contains(errStr, "404")
 }
