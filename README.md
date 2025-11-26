@@ -17,10 +17,11 @@ Self-hosted file storage. Your personal Google Drive alternative.
 - 🔄 Content-addressed deduplication (saves storage space)
 - 👥 Multi-user support with authentication and per-user quotas
 - 📁 Virtual folder hierarchy with file organization
-- 🎨 Modern UI with dark mode
+- 🎨 Tailwind CSS with responsive dark mode (system preference aware)
 - 🔒 Secure by default (CSRF protection, bcrypt, rate limiting)
-- 🐳 Easy Docker deployment
-- 🗄️ PostgreSQL or SQLite
+- 🐳 Easy Docker deployment with multi-arch support
+- 🗄️ PostgreSQL or SQLite database options
+- 📊 Health checks and Prometheus metrics
 
 ## Quick Start
 
@@ -327,15 +328,16 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
 ## Roadmap
 
 **Completed:**
-- Authentication & multi-user support
-- File management with streaming uploads
-- Storage quotas & deduplication
-- Multiple storage backends (disk, S3, memory)
-- Virtual folder hierarchy
-- CSRF protection & rate limiting
-- Health checks & Prometheus metrics
-- Structured logging
-- Dark mode UI
+- ✅ Authentication & multi-user support
+- ✅ File management with streaming uploads
+- ✅ Storage quotas & deduplication
+- ✅ Multiple storage backends (disk, S3, memory)
+- ✅ Virtual folder hierarchy
+- ✅ CSRF protection & rate limiting
+- ✅ Health checks & Prometheus metrics
+- ✅ Structured logging
+- ✅ Tailwind CSS with responsive dark mode
+- ✅ Production-ready Docker images (~18MB)
 
 **Planned:**
 - File sharing links
