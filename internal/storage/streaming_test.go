@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -246,12 +247,8 @@ func TestMemoryBackend_Save_StreamingError(t *testing.T) {
 		t.Fatal("Expected error from failing reader, got nil")
 	}
 
-	if !errors.Is(err, errors.New("simulated read failure")) {
-		// Check error message contains indication of read failure
-		errStr := err.Error()
-		if errStr == "" {
-			t.Error("Expected non-empty error message")
-		}
+	if err != nil && !strings.Contains(err.Error(), "simulated read failure") {
+		t.Errorf("Expected error message to contain 'simulated read failure', got: %v", err)
 	}
 }
 
