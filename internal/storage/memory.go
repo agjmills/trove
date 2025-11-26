@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -154,7 +155,7 @@ func isNotExist(err error) bool {
 	if err == nil {
 		return false
 	}
-	if err == fs.ErrNotExist {
+	if errors.Is(err, fs.ErrNotExist) {
 		return true
 	}
 	// memoryfs wraps errors, so check the error message
