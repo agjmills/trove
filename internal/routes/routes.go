@@ -143,7 +143,9 @@ func plaintextCSRFMiddleware(cfg *config.Config) func(http.Handler) http.Handler
 // (login, register, and change-password) are rate-limited to 5 attempts per 15 minutes per IP. The
 // multipart upload endpoint is intentionally exempt from the Gorilla CSRF middleware to allow streaming
 // uploads while remaining protected by session-based authentication and SameSite cookie policy.
-func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, version string) {
+//
+// Returns the file handler for graceful shutdown support.
+func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, version string) *handlers.FileHandler {
 	authHandler := handlers.NewAuthHandler(db, cfg, sessionManager)
 	pageHandler := handlers.NewPageHandler(db, cfg)
 	fileHandler := handlers.NewFileHandler(db, cfg, storageService)
@@ -257,4 +259,6 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		// No CSRF middleware - streaming uploads handle their own protection
 		r.Post("/upload", fileHandler.Upload)
 	})
+
+	return fileHandler
 }

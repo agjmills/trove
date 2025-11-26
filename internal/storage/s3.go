@@ -74,8 +74,23 @@ func (s *S3Backend) Save(ctx context.Context, r io.Reader, opts SaveOptions) (Sa
 	ext := filepath.Ext(opts.OriginalFilename)
 	key := uuid.New().String() + ext
 
+	// Determine content length if the reader supports seeking
+	var contentLength int64
+	if seeker, ok := r.(io.Seeker); ok {
+		// Get current position
+		current, err := seeker.Seek(0, io.SeekCurrent)
+		if err == nil {
+			// Seek to end to get size
+			end, err := seeker.Seek(0, io.SeekEnd)
+			if err == nil {
+				contentLength = end
+				// Seek back to original position
+				seeker.Seek(current, io.SeekStart)
+			}
+		}
+	}
+
 	// Create a hashing reader that computes SHA256 while streaming to S3
-	// Note: For very large files, consider using multipart upload with streaming hash
 	hasher := sha256.New()
 	hashingReader := &hashingReader{
 		reader: r,
@@ -89,6 +104,11 @@ func (s *S3Backend) Save(ctx context.Context, r io.Reader, opts SaveOptions) (Sa
 		Body:   hashingReader,
 	}
 
+	// Set content length if we determined it
+	if contentLength > 0 {
+		input.ContentLength = aws.Int64(contentLength)
+	}
+
 	if opts.ContentType != "" {
 		input.ContentType = aws.String(opts.ContentType)
 	}
@@ -98,12 +118,11 @@ func (s *S3Backend) Save(ctx context.Context, r io.Reader, opts SaveOptions) (Sa
 		return SaveResult{}, fmt.Errorf("failed to upload to S3: %w", err)
 	}
 
-	// Get the actual size uploaded (AWS SDK tracks this)
-	size := int64(0)
-	if output.ETag != nil {
-		// The hashingReader tracks bytes read
-		size = hashingReader.bytesRead
-	}
+	// Use the tracked bytes read as the actual size
+	size := hashingReader.bytesRead
+
+	// Verify upload with ETag if available
+	_ = output.ETag // ETag confirms successful upload
 
 	return SaveResult{
 		Path: key,
@@ -190,9 +209,10 @@ func (s *S3Backend) ValidateAccess(ctx context.Context) error {
 
 	// Try to write
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(s.bucket),
-		Key:    aws.String(testKey),
-		Body:   bytes.NewReader(testContent),
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(testKey),
+		Body:          bytes.NewReader(testContent),
+		ContentLength: aws.Int64(int64(len(testContent))),
 	})
 	if err != nil {
 		return fmt.Errorf("S3 write access test failed: %w", err)

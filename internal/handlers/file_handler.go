@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
@@ -26,18 +28,128 @@ import (
 	"gorm.io/gorm"
 )
 
+type uploadJob struct {
+	fileID   uint
+	tempPath string
+}
+
 type FileHandler struct {
-	db      *gorm.DB
-	cfg     *config.Config
-	storage storage.StorageBackend
+	db          *gorm.DB
+	cfg         *config.Config
+	storage     storage.StorageBackend
+	uploadQueue chan uploadJob
+	wg          sync.WaitGroup
 }
 
 func NewFileHandler(db *gorm.DB, cfg *config.Config, storage storage.StorageBackend) *FileHandler {
-	return &FileHandler{
-		db:      db,
-		cfg:     cfg,
-		storage: storage,
+	h := &FileHandler{
+		db:          db,
+		cfg:         cfg,
+		storage:     storage,
+		uploadQueue: make(chan uploadJob, 100), // Buffer up to 100 pending uploads
 	}
+
+	// Start background workers (adjust number based on your needs)
+	numWorkers := 3
+	for i := 0; i < numWorkers; i++ {
+		h.wg.Add(1)
+		go h.uploadWorker()
+	}
+
+	return h
+}
+
+// Shutdown gracefully stops the background workers
+func (h *FileHandler) Shutdown() {
+	close(h.uploadQueue)
+	h.wg.Wait()
+}
+
+// uploadWorker processes background uploads
+func (h *FileHandler) uploadWorker() {
+	defer h.wg.Done()
+
+	for job := range h.uploadQueue {
+		h.processUpload(job)
+	}
+}
+
+// processUpload handles the actual S3 upload in the background
+func (h *FileHandler) processUpload(job uploadJob) {
+	ctx := context.Background()
+
+	// Get file record
+	var file models.File
+	if err := h.db.First(&file, job.fileID).Error; err != nil {
+		log.Printf("Upload worker: failed to find file %d: %v", job.fileID, err)
+		os.Remove(job.tempPath)
+		return
+	}
+
+	// Update status to uploading
+	h.db.Model(&file).Update("upload_status", "uploading")
+
+	// Check for deduplication
+	var existingFile models.File
+	if err := h.db.Where("user_id = ? AND hash = ? AND upload_status = ?", file.UserID, file.Hash, "completed").
+		Where("id != ?", file.ID).First(&existingFile).Error; err == nil {
+		// Duplicate found - reuse existing storage path
+		log.Printf("Upload worker: deduplication - reusing storage path %s", existingFile.StoragePath)
+
+		if err := h.db.Model(&file).Updates(map[string]interface{}{
+			"storage_path":  existingFile.StoragePath,
+			"upload_status": "completed",
+			"temp_path":     "",
+		}).Error; err != nil {
+			log.Printf("Upload worker: failed to update file record: %v", err)
+		}
+
+		// Clean up temp file
+		os.Remove(job.tempPath)
+		return
+	}
+
+	// Open temp file
+	tempFile, err := os.Open(job.tempPath)
+	if err != nil {
+		log.Printf("Upload worker: failed to open temp file: %v", err)
+		h.db.Model(&file).Update("upload_status", "failed")
+		os.Remove(job.tempPath)
+		return
+	}
+	defer tempFile.Close()
+
+	// Upload to storage backend
+	log.Printf("Upload worker: uploading file %d to storage backend", job.fileID)
+	result, err := h.storage.Save(ctx, tempFile, storage.SaveOptions{
+		OriginalFilename: file.OriginalFilename,
+		ContentType:      file.MimeType,
+	})
+
+	if err != nil {
+		log.Printf("Upload worker: failed to upload file %d: %v", job.fileID, err)
+		h.db.Model(&file).Update("upload_status", "failed")
+		os.Remove(job.tempPath)
+		return
+	}
+
+	// Update file record with storage path and mark as completed
+	if err := h.db.Model(&file).Updates(map[string]interface{}{
+		"storage_path":  result.Path,
+		"upload_status": "completed",
+		"temp_path":     "",
+	}).Error; err != nil {
+		log.Printf("Upload worker: failed to update file record: %v", err)
+		// Try to clean up the uploaded file
+		h.storage.Delete(ctx, result.Path)
+		os.Remove(job.tempPath)
+		return
+	}
+
+	log.Printf("Upload worker: successfully uploaded file %d as %s", job.fileID, result.Path)
+
+	// Clean up temp file
+	os.Remove(job.tempPath)
 }
 
 // sanitizeFolderPath cleans and validates a folder path
@@ -235,43 +347,40 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-	var storagePath string
-	var isDuplicate bool
-
-	// Check for existing file with same hash BEFORE uploading to storage
-	var existingFile models.File
-	if err := h.db.Where("user_id = ? AND hash = ?", user.ID, hash).First(&existingFile).Error; err == nil {
-		// Duplicate found - reuse existing storage path, no upload needed
-		storagePath = existingFile.StoragePath
-		isDuplicate = true
-		log.Printf("Deduplication: hash %s exists, reusing %s (no upload needed)", hash[:16], storagePath)
-	} else {
-		// New file - upload from temp to storage backend
-		tempFile, err := os.Open(tempFilePath)
-		if err != nil {
-			http.Error(w, "Failed to read temp file", http.StatusInternalServerError)
-			return
-		}
-		defer tempFile.Close()
-
-		log.Printf("Upload: sending to storage backend")
-		result, err := h.storage.Save(ctx, tempFile, storage.SaveOptions{
-			OriginalFilename: originalFilename,
-			ContentType:      mimeType,
-		})
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to save file: %v", err), http.StatusInternalServerError)
-			return
-		}
-		storagePath = result.Path
-		log.Printf("Upload: stored as %s", storagePath)
-	}
-
 	// Calculate unique display filename for this folder
 	displayFilename := h.getUniqueFilename(user.ID, folderPath, originalFilename)
 
-	// Create database record
+	// Check if we already have a completed file with this hash (fast deduplication)
+	var existingFile models.File
+	existingErr := h.db.Where("user_id = ? AND hash = ? AND upload_status = ?", user.ID, hash, "completed").
+		First(&existingFile).Error
+
+	var storagePath string
+	var uploadStatus string
+	var tempPathForDB string
+	var isDuplicate bool
+
+	if existingErr == nil {
+		// Immediate deduplication - reuse existing storage path
+		storagePath = existingFile.StoragePath
+		uploadStatus = "completed"
+		isDuplicate = true
+		log.Printf("Deduplication: hash %s exists, reusing %s (no upload needed)", hash[:16], storagePath)
+		// Can delete temp file immediately
+		defer os.Remove(tempFilePath)
+	} else {
+		// New file - will be uploaded in background
+		// Use a placeholder path that will be updated by the worker
+		storagePath = fmt.Sprintf("pending-%s%s", uuid.New().String(), filepath.Ext(originalFilename))
+		uploadStatus = "pending"
+		tempPathForDB = tempFilePath
+		isDuplicate = false
+		log.Printf("Upload: queued for background processing")
+		// DON'T delete temp file yet - worker will do it
+		tempFilePath = "" // Clear so defer doesn't delete it
+	}
+
+	// Create database record immediately
 	fileRecord := models.File{
 		UserID:           user.ID,
 		StoragePath:      storagePath,
@@ -281,24 +390,30 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		FileSize:         actualSize,
 		MimeType:         mimeType,
 		Hash:             hash,
+		UploadStatus:     uploadStatus,
+		TempPath:         tempPathForDB,
 	}
 
 	if err := h.db.Create(&fileRecord).Error; err != nil {
-		// Clean up storage if not a duplicate
-		if !isDuplicate {
-			if delErr := h.storage.Delete(ctx, storagePath); delErr != nil {
-				log.Printf("Warning: failed to clean up storage after DB error: %v", delErr)
-			}
-		}
 		http.Error(w, "Failed to save file metadata", http.StatusInternalServerError)
 		return
 	}
 
-	// Update user storage quota (only for new files)
+	// Update user storage quota (always count it immediately)
+	if err := h.db.Model(&models.User{}).Where("id = ?", user.ID).
+		UpdateColumn("storage_used", gorm.Expr("storage_used + ?", actualSize)).Error; err != nil {
+		log.Printf("Warning: failed to update user storage: %v", err)
+	}
+
+	// Queue background upload if not a duplicate
 	if !isDuplicate {
-		if err := h.db.Model(&models.User{}).Where("id = ?", user.ID).
-			UpdateColumn("storage_used", gorm.Expr("storage_used + ?", actualSize)).Error; err != nil {
-			log.Printf("Warning: failed to update user storage: %v", err)
+		select {
+		case h.uploadQueue <- uploadJob{fileID: fileRecord.ID, tempPath: tempPathForDB}:
+			log.Printf("Upload: queued file %d for background upload", fileRecord.ID)
+		default:
+			log.Printf("Warning: upload queue full, file %d will retry", fileRecord.ID)
+			// Queue is full - mark as failed so it can be retried
+			h.db.Model(&fileRecord).Update("upload_status", "failed")
 		}
 	}
 

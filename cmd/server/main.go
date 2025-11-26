@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/agjmills/trove/internal/auth"
@@ -75,7 +79,7 @@ func main() {
 	r.Use(internalMiddleware.SecurityHeaders)
 
 	versionInfo := fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date)
-	routes.Setup(r, db, cfg, storageService, sessionManager, versionInfo)
+	fileHandler := routes.Setup(r, db, cfg, storageService, sessionManager, versionInfo)
 
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	logger.Info("starting trove server",
@@ -96,7 +100,28 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	if err := server.ListenAndServe(); err != nil {
+	// Graceful shutdown support
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+		<-sigChan
+
+		logger.Info("shutdown signal received, draining upload queue...")
+
+		// Stop accepting new uploads
+		fileHandler.Shutdown()
+
+		// Shutdown HTTP server
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			logger.Error("server shutdown error", "error", err)
+		}
+	}()
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Server failed to start: %v", err)
 	}
+
+	logger.Info("server shutdown complete")
 }
