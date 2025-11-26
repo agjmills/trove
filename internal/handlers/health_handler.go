@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/agjmills/trove/internal/storage"
@@ -111,25 +110,13 @@ func (h *HealthHandler) checkDatabase() Check {
 // checkStorage verifies storage backend is accessible
 func (h *HealthHandler) checkStorage() Check {
 	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
-	// Try to get a file path to verify storage is accessible
-	// Use a non-existent file to just check the base path
-	testPath := h.storageService.GetFilePath("health-check-test")
-	baseDir := testPath[:len(testPath)-len("health-check-test")]
-
-	info, err := os.Stat(baseDir)
-	if err != nil {
+	if err := h.storageService.HealthCheck(ctx); err != nil {
 		return Check{
 			Status:  "unhealthy",
-			Message: "storage path not accessible: " + err.Error(),
-			Latency: time.Since(start).String(),
-		}
-	}
-
-	if !info.IsDir() {
-		return Check{
-			Status:  "unhealthy",
-			Message: "storage path is not a directory",
+			Message: "storage health check failed: " + err.Error(),
 			Latency: time.Since(start).String(),
 		}
 	}

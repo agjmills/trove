@@ -5,16 +5,18 @@
 
 <h1 align="center">Trove</h1>
 
-
 Self-hosted file storage. Your personal Google Drive alternative.
 
-**Simple. Fast.**
+**Simple. Fast. Extensible.**
 
 ## Features
 
 - 📤 Upload, organize, and manage files with drag-and-drop
 - 📦 Streaming uploads for large files (multi-GB support)
+- 💾 Pluggable storage backends (local disk, S3, in-memory)
+- 🔄 Content-addressed deduplication (saves storage space)
 - 👥 Multi-user support with authentication and per-user quotas
+- 📁 Virtual folder hierarchy with file organization
 - 🎨 Modern UI with dark mode
 - 🔒 Secure by default (CSRF protection, bcrypt, rate limiting)
 - 🐳 Easy Docker deployment
@@ -41,6 +43,115 @@ docker pull ghcr.io/agjmills/trove:latest
 
 Multi-arch images available for `linux/amd64` and `linux/arm64`.
 
+## Storage Backends
+
+Trove supports multiple storage backends, configured via the `STORAGE_BACKEND` environment variable.
+
+### Local Disk (Default)
+
+Stores files on the local filesystem with path traversal protection using Go 1.23+ `os.Root`.
+
+```bash
+STORAGE_BACKEND=disk
+STORAGE_PATH=./data/files
+```
+
+### Amazon S3 / S3-Compatible
+
+Stores files in S3 or any S3-compatible service (MinIO, Cloudflare R2, Backblaze B2, rustfs).
+
+Uses native AWS SDK environment variables and credential chain:
+
+| Variable | Description |
+|----------|-------------|
+| `S3_BUCKET` | Bucket name (required) |
+| `S3_USE_PATH_STYLE` | Set to `true` for MinIO/rustfs |
+| `AWS_REGION` | AWS region |
+| `AWS_ACCESS_KEY_ID` | Access key |
+| `AWS_SECRET_ACCESS_KEY` | Secret key |
+| `AWS_ENDPOINT_URL` | Custom endpoint for S3-compatible services |
+
+The SDK also supports `~/.aws/credentials`, `~/.aws/config`, and IAM roles.
+
+```bash
+# AWS S3
+STORAGE_BACKEND=s3
+S3_BUCKET=my-trove-bucket
+AWS_REGION=us-east-1
+
+# S3-compatible (MinIO, rustfs)
+STORAGE_BACKEND=s3
+S3_BUCKET=my-trove-bucket
+S3_USE_PATH_STYLE=true
+AWS_ENDPOINT_URL=http://localhost:9000
+AWS_ACCESS_KEY_ID=minioadmin
+AWS_SECRET_ACCESS_KEY=minioadmin
+```
+
+**Local development with rustfs:**
+
+```bash
+# Start rustfs (S3-compatible storage)
+docker compose --profile s3 up rustfs -d
+
+# Create the bucket
+AWS_ACCESS_KEY_ID=rustfsadmin AWS_SECRET_ACCESS_KEY=rustfsadmin \
+  aws --endpoint-url http://localhost:9000 s3 mb s3://trove
+
+# Run Trove with S3 backend
+STORAGE_BACKEND=s3 \
+S3_BUCKET=trove \
+S3_USE_PATH_STYLE=true \
+AWS_ENDPOINT_URL=http://localhost:9000 \
+AWS_ACCESS_KEY_ID=rustfsadmin \
+AWS_SECRET_ACCESS_KEY=rustfsadmin \
+go run ./cmd/server
+```
+
+### In-Memory (Testing)
+
+Stores files in memory. Useful for integration tests. Data is lost on restart. Best used in conjunction with sqlite in memory mode for metadata.
+
+```bash
+STORAGE_BACKEND=memory
+```
+
+## Architecture
+
+### File Storage Model
+
+Trove separates physical storage from logical organization:
+
+| Field | Purpose | Example |
+|-------|---------|---------|
+| `StoragePath` | Physical location (UUID-based) | `a48f0152-cbcb-4483.bin` |
+| `LogicalPath` | UI folder hierarchy | `/photos/2024` |
+| `Filename` | Display name (editable) | `vacation.jpg` |
+| `OriginalFilename` | Original upload name (immutable) | `IMG_1234.jpg` |
+
+This design enables:
+- **Backend portability**: Move between disk/S3 without changing file references
+- **Safe storage**: UUID paths prevent path traversal attacks
+- **Flexible organization**: Rename and move files without touching physical storage
+
+### Deduplication
+
+Files are content-addressed by SHA-256 hash. The upload flow ensures duplicates never touch the storage backend:
+
+```
+Client → Temp file (computing SHA-256) → Check DB → Storage (if new)
+```
+
+1. Upload streams to local temp file while computing hash
+2. Database checked for existing file with same hash
+3. **If duplicate**: temp file discarded, new DB record points to existing storage path
+4. **If new**: temp file uploaded to storage backend
+5. Storage quota only charged once per unique file
+
+When deleting files, the physical file is only removed when all references are deleted.
+
+**Note:** Uploads require a writable temp directory. Configure `TEMP_DIR` for containerized deployments (see Configuration).
+
 ## Development
 
 ```bash
@@ -50,17 +161,52 @@ make shell    # Container shell
 make psql     # Database console
 ```
 
+**Running locally without Docker:**
+
+```bash
+# SQLite (simplest)
+DB_TYPE=sqlite DB_PATH=./data/trove.db go run ./cmd/server
+
+# In-memory database (ephemeral)
+DB_TYPE=sqlite DB_PATH=:memory: go run ./cmd/server
+```
+
 ## Configuration
 
 Edit `.env` for your setup:
 
 ```bash
-TROVE_PORT=8080                    # Host port
-DB_TYPE=postgres                   # or sqlite
-SESSION_SECRET=random_secret_here  # Required
-DEFAULT_USER_QUOTA=10G             # Per-user limit
-MAX_UPLOAD_SIZE=500M               # Max file size
-ENV=development                    # or production
+# Server
+TROVE_PORT=8080
+ENV=development                        # or production
+
+# Database
+DB_TYPE=postgres                       # or sqlite
+DB_HOST=postgres
+DB_NAME=trove
+DB_USER=trove
+DB_PASSWORD=secret
+
+# Storage
+STORAGE_BACKEND=disk                   # disk, s3, or memory
+STORAGE_PATH=./data/files              # for disk backend
+TEMP_DIR=/tmp                          # temp directory for uploads
+
+# S3 (if STORAGE_BACKEND=s3) - uses native AWS SDK variables
+S3_BUCKET=trove                        # required
+S3_USE_PATH_STYLE=false                # true for MinIO/rustfs
+# AWS_REGION=us-east-1
+# AWS_ACCESS_KEY_ID=...
+# AWS_SECRET_ACCESS_KEY=...
+# AWS_ENDPOINT_URL=http://localhost:9000  # for S3-compatible services
+
+# Limits
+DEFAULT_USER_QUOTA=10G                 # Per-user storage limit
+MAX_UPLOAD_SIZE=500M                   # Max file size per upload
+
+# Security
+SESSION_SECRET=change-in-production
+CSRF_ENABLED=true
 ```
 
 See `.env.example` for all options.
@@ -69,35 +215,47 @@ See `.env.example` for all options.
 
 ```bash
 # 1. Setup
-cp .env.example .env                          # Configure
-cp docker-compose.example.yml docker-compose.prod.yml  # Customize
+cp .env.example .env
+cp docker-compose.example.yml docker-compose.prod.yml
 
-# 2. Deploy
+# 2. Configure
+# Edit .env with production values (strong SESSION_SECRET, etc.)
+
+# 3. Deploy
 docker compose -f docker-compose.prod.yml up -d
 
-# 3. Monitor
+# 4. Monitor
 docker compose -f docker-compose.prod.yml logs -f
 ```
 
 **Recommended:** Run behind a reverse proxy (Caddy/Nginx) for HTTPS.
 
-**Security Best Practices:**
+### Docker Volumes
+
+For production Docker deployments, ensure writable volumes for:
+
+```yaml
+services:
+  app:
+    volumes:
+      - trove-data:/app/data          # Database and files (disk backend)
+      - trove-temp:/tmp               # Temp directory for uploads
+    environment:
+      - TEMP_DIR=/tmp
+```
+
+### Security Best Practices
+
 - Use a strong `SESSION_SECRET` (generate with `openssl rand -base64 32`)
 - Restrict `/metrics` endpoint access via firewall or reverse proxy auth
-- **Enable HTTPS in production:** Set `ENV=production` to enable strict CSRF origin validation
-  - For HTTP-only environments (homelab), use `ENV=development` (CSRF token validation still active)
-  - **Behind reverse proxy with TLS termination:** Ensure proxy forwards `X-Forwarded-Proto` header
-    - Traefik: automatic with `--providers.docker.exposedByDefault=false`
-    - Nginx: `proxy_set_header X-Forwarded-Proto $scheme;`
-    - Caddy: automatic
-- Keep database credentials secure and use strong passwords
+- **Enable HTTPS in production:** Set `ENV=production` for strict CSRF validation
+  - Behind reverse proxy with TLS termination: Ensure `X-Forwarded-Proto` header is forwarded
+- Keep database credentials secure
 - Regularly update to latest version
 
 See [INSTALL.md](INSTALL.md) for detailed deployment options.
 
 ## Observability
-
-Trove includes comprehensive monitoring and logging capabilities:
 
 ### Health Checks
 
@@ -106,7 +264,7 @@ Trove includes comprehensive monitoring and logging capabilities:
 ```json
 {
   "status": "healthy",
-  "version": "dev (commit: abc123, built: 2025-11-24)",
+  "version": "1.0.0 (commit: abc123)",
   "checks": {
     "database": {"status": "healthy", "latency": "2.1ms"},
     "storage": {"status": "healthy", "latency": "0.5ms"}
@@ -119,11 +277,6 @@ Trove includes comprehensive monitoring and logging capabilities:
 
 `GET /metrics` - Prometheus-compatible metrics endpoint
 
-**Security Note:** The metrics endpoint is unauthenticated by default and may expose sensitive operational data (user IDs, request patterns, etc.). In production:
-- Use firewall rules to restrict access to trusted IPs
-- Place behind a reverse proxy with authentication
-- Or bind Trove to `127.0.0.1` and access via SSH tunnel
-
 Available metrics:
 - `trove_http_requests_total` - HTTP request counters by method, path, status
 - `trove_http_request_duration_seconds` - Request latency histograms
@@ -132,24 +285,40 @@ Available metrics:
 - `trove_files_total` - File upload counters
 - `trove_login_attempts_total` - Authentication metrics
 
-Example Prometheus scrape config:
-
-```yaml
-scrape_configs:
-  - job_name: 'trove'
-    static_configs:
-      - targets: ['localhost:8080']
-```
+**Security Note:** The metrics endpoint is unauthenticated. Restrict access in production.
 
 ### Structured Logging
 
-Logs use JSON format in production for machine parsing:
-
+Production uses JSON format:
 ```json
 {"time":"2025-11-24T10:30:00Z","level":"INFO","msg":"http request","method":"POST","path":"/upload","status":200,"duration_ms":145}
 ```
 
 Development uses human-readable text format.
+
+## API Reference
+
+### Files
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/upload` | Upload file (multipart/form-data) |
+| `GET` | `/download/{id}` | Download file |
+| `POST` | `/delete/{id}` | Delete file |
+
+### Folders
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/folder/create` | Create folder |
+| `POST` | `/folder/delete/{name}` | Delete empty folder |
+
+### System
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Health check |
+| `GET` | `/metrics` | Prometheus metrics |
 
 ## Contributing
 
@@ -157,9 +326,23 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Roadmap
 
-**Completed:** Authentication, file management, quotas, CSRF, rate limiting, dark mode, health checks, metrics, structured logging
+**Completed:**
+- Authentication & multi-user support
+- File management with streaming uploads
+- Storage quotas & deduplication
+- Multiple storage backends (disk, S3, memory)
+- Virtual folder hierarchy
+- CSRF protection & rate limiting
+- Health checks & Prometheus metrics
+- Structured logging
+- Dark mode UI
 
-**Planned:** File sharing links, version history, thumbnails, bulk operations, API
+**Planned:**
+- File sharing links
+- Version history
+- Thumbnail generation
+- Bulk operations
+- REST API with authentication
 
 ## License
 

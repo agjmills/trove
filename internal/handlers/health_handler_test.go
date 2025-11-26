@@ -24,11 +24,8 @@ func TestHealthHandler(t *testing.T) {
 		t.Fatalf("Failed to connect to test database: %v", err)
 	}
 
-	// Setup test storage
-	storageService, err := storage.NewService(t.TempDir())
-	if err != nil {
-		t.Fatalf("Failed to create storage service: %v", err)
-	}
+	// Setup test storage (use memory backend for testing)
+	storageService := storage.NewMemoryBackend()
 
 	// Create handler
 	handler := NewHealthHandler(db, storageService, "test-version")
