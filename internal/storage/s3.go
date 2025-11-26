@@ -193,12 +193,17 @@ func (s *S3Backend) ValidateAccess(ctx context.Context) error {
 	}
 
 	// Try to read
-	_, err = s.client.GetObject(ctx, &s3.GetObjectInput{
+	resp, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(testKey),
 	})
 	if err != nil {
 		return fmt.Errorf("S3 read access test failed: %w", err)
+	}
+	// Drain and close the response body to allow connection reuse
+	defer resp.Body.Close()
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		return fmt.Errorf("S3 read access test - failed to drain response body: %w", err)
 	}
 
 	// Try to delete
