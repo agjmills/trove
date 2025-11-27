@@ -67,7 +67,6 @@
 					<span class="menu-icon-right">☰</span>
 				</button>
 			</div>
-			</div>
 		</div>
 	</nav>
 
@@ -126,6 +125,11 @@
 			{{end}}
 			{{end}}
 		</div>
+	</div>
+
+	<!-- Toast Notification Container -->
+	<div id="toast-container" style="position: fixed; top: 80px; right: 16px; left: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 12px; max-width: 400px; margin-left: auto; pointer-events: none;">
+		<!-- Toasts will be dynamically added here -->
 	</div>
 
 	<main class="{{if not .FullWidth}}max-w-7xl mx-auto px-4{{end}}">
@@ -193,6 +197,105 @@
 				link.addEventListener('click', closeMobileMenu);
 			});
 		}
+
+		// Toast notification system
+		const toastContainer = document.getElementById('toast-container');
+		
+		function showToast(message, type = 'info', duration = 5000) {
+			const toast = document.createElement('div');
+			const id = 'toast-' + Date.now();
+			toast.id = id;
+			
+			// Determine colors based on type
+			let bgColor, borderColor, textColor, iconColor, iconPath;
+			const isDark = document.documentElement.classList.contains('dark');
+			
+			switch(type) {
+				case 'success':
+					bgColor = isDark ? '#14532d' : '#dcfce7';
+					borderColor = isDark ? '#166534' : '#86efac';
+					textColor = isDark ? '#bbf7d0' : '#166534';
+					iconColor = isDark ? '#4ade80' : '#22c55e';
+					iconPath = 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z';
+					break;
+				case 'error':
+					bgColor = isDark ? '#7f1d1d' : '#fef2f2';
+					borderColor = isDark ? '#991b1b' : '#fecaca';
+					textColor = isDark ? '#fecaca' : '#991b1b';
+					iconColor = isDark ? '#f87171' : '#ef4444';
+					iconPath = 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
+					break;
+				default: // info
+					bgColor = isDark ? '#1e3a5f' : '#eff6ff';
+					borderColor = isDark ? '#1e40af' : '#bfdbfe';
+					textColor = isDark ? '#bfdbfe' : '#1e40af';
+					iconColor = isDark ? '#60a5fa' : '#3b82f6';
+					iconPath = 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
+			}
+			
+			// Apply inline styles for reliable rendering
+			toast.style.cssText = `
+				display: flex;
+				align-items: flex-start;
+				gap: 14px;
+				padding: 16px 20px;
+				border-radius: 10px;
+				border: 1px solid ${borderColor};
+				background-color: ${bgColor};
+				color: ${textColor};
+				box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+				pointer-events: auto;
+				transform: translateX(100%);
+				opacity: 0;
+				transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+				width: 100%;
+				box-sizing: border-box;
+			`;
+			
+			toast.innerHTML = `
+				<svg style="width: 24px; height: 24px; flex-shrink: 0; color: ${iconColor};" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${iconPath}"></path>
+				</svg>
+				<div style="flex: 1; font-size: 15px; font-weight: 500; line-height: 1.5;">${message}</div>
+				<button onclick="dismissToast('${id}')" style="flex-shrink: 0; background: none; border: none; padding: 4px; cursor: pointer; color: ${textColor}; opacity: 0.7;">
+					<svg style="width: 18px; height: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+					</svg>
+				</button>
+			`;
+			
+			toastContainer.appendChild(toast);
+			
+			// Trigger animation
+			requestAnimationFrame(() => {
+				toast.style.transform = 'translateX(0)';
+				toast.style.opacity = '1';
+			});
+			
+			// Auto dismiss
+			if (duration > 0) {
+				setTimeout(() => {
+					dismissToast(id);
+				}, duration);
+			}
+			
+			return id;
+		}
+		
+		function dismissToast(id) {
+			const toast = document.getElementById(id);
+			if (toast) {
+				toast.style.transform = 'translateX(100%)';
+				toast.style.opacity = '0';
+				setTimeout(() => {
+					toast.remove();
+				}, 300);
+			}
+		}
+		
+		// Make functions globally available
+		window.showToast = showToast;
+		window.dismissToast = dismissToast;
 	</script>
 </body>
 </html>

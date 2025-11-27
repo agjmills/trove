@@ -3,17 +3,21 @@
 	<main class="p-6 max-w-4xl mx-auto">
 		<h1 class="text-3xl font-bold mb-6 text-gray-900 dark:text-gray-100">Settings</h1>
 
-		<!-- Flash Messages -->
+		<!-- Flash Messages (shown as toast) -->
 		{{if .Success}}
-		<div class="p-4 rounded mb-4 border-l-4 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 border-green-600">
-			{{.Success}}
-		</div>
+		<script>
+			document.addEventListener('DOMContentLoaded', function() {
+				showToast({{.Success}}, 'success');
+			});
+		</script>
 		{{end}}
 
 		{{if .Error}}
-		<div class="p-4 rounded mb-4 border-l-4 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-600">
-			{{.Error}}
-		</div>
+		<script>
+			document.addEventListener('DOMContentLoaded', function() {
+				showToast({{.Error}}, 'error');
+			});
+		</script>
 		{{end}}
 
 		<!-- Appearance -->

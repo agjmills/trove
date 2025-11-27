@@ -39,6 +39,9 @@ data/
 tmp/
 build-errors.log
 
+# Generated CSS (built by Tailwind)
+web/static/css/style.css
+
 # Editor/IDE
 # .idea/
 # .vscode/
