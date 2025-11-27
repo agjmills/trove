@@ -265,7 +265,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
 		r.Use(auth.RequireAuth(db, sessionManager))
-		r.Use(auth.RequireAdmin(db, sessionManager))
+		r.Use(auth.RequireAdmin())
 		r.Use(plaintextCSRFMiddleware(cfg))
 		r.Use(csrfMiddleware)
 		r.Get("/admin", adminHandler.ShowDashboard)
