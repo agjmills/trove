@@ -2,13 +2,13 @@
 {{template "flash_messages" .}}
 
 <!-- Create User Modal -->
-<div id="create-user-modal" class="hidden fixed inset-0 z-[9999] overflow-y-auto">
+<div id="create-user-modal" class="hidden fixed inset-0 z-[9999] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="create-user-modal-title">
 	<div class="flex min-h-full items-center justify-center p-4">
-		<div class="fixed inset-0 bg-gray-900/50 dark:bg-black/70" onclick="closeCreateUserModal()"></div>
+		<div class="fixed inset-0 bg-gray-900/50 dark:bg-black/70 modal-backdrop" data-modal="create-user-modal"></div>
 		<div class="relative bg-white dark:bg-gray-800 rounded-lg w-full max-w-md p-6 border-2 border-gray-300 dark:border-gray-600" style="box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
 			<div class="flex items-center justify-between mb-4">
-				<h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Create New User</h3>
-				<button onclick="closeCreateUserModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none">&times;</button>
+				<h3 id="create-user-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">Create New User</h3>
+				<button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none modal-close-btn" data-modal="create-user-modal" aria-label="Close modal">&times;</button>
 			</div>
 			<form method="POST" action="/admin/users/create">
 				<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
@@ -40,7 +40,7 @@
 				</div>
 
 				<div class="flex gap-3 justify-end">
-					<button type="button" onclick="closeCreateUserModal()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">Cancel</button>
+					<button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors modal-close-btn" data-modal="create-user-modal">Cancel</button>
 					<button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-gray-900 dark:bg-gray-600 hover:bg-gray-700 dark:hover:bg-gray-500 rounded-lg transition-colors">Create User</button>
 				</div>
 			</form>
@@ -49,13 +49,13 @@
 </div>
 
 <!-- Reset Password Modal -->
-<div id="reset-password-modal" class="hidden fixed inset-0 z-[9999] overflow-y-auto">
+<div id="reset-password-modal" class="hidden fixed inset-0 z-[9999] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="reset-password-modal-title">
 	<div class="flex min-h-full items-center justify-center p-4">
-		<div class="fixed inset-0 bg-gray-900/50 dark:bg-black/70" onclick="closeResetPasswordModal()"></div>
+		<div class="fixed inset-0 bg-gray-900/50 dark:bg-black/70 modal-backdrop" data-modal="reset-password-modal"></div>
 		<div class="relative bg-white dark:bg-gray-800 rounded-lg w-full max-w-md p-6 border-2 border-gray-300 dark:border-gray-600" style="box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
 			<div class="flex items-center justify-between mb-4">
-				<h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Reset Password</h3>
-				<button onclick="closeResetPasswordModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none">&times;</button>
+				<h3 id="reset-password-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">Reset Password</h3>
+				<button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none modal-close-btn" data-modal="reset-password-modal" aria-label="Close modal">&times;</button>
 			</div>
 			<form id="reset-password-form" method="POST" action="">
 				<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
@@ -69,7 +69,7 @@
 				</div>
 
 				<div class="flex gap-3 justify-end">
-					<button type="button" onclick="closeResetPasswordModal()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">Cancel</button>
+					<button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors modal-close-btn" data-modal="reset-password-modal">Cancel</button>
 					<button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-gray-900 dark:bg-gray-600 hover:bg-gray-700 dark:hover:bg-gray-500 rounded-lg transition-colors">Reset Password</button>
 				</div>
 			</form>
@@ -78,13 +78,13 @@
 </div>
 
 <!-- Update Quota Modal -->
-<div id="update-quota-modal" class="hidden fixed inset-0 z-[9999] overflow-y-auto">
+<div id="update-quota-modal" class="hidden fixed inset-0 z-[9999] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="update-quota-modal-title">
 	<div class="flex min-h-full items-center justify-center p-4">
-		<div class="fixed inset-0 bg-gray-900/50 dark:bg-black/70" onclick="closeUpdateQuotaModal()"></div>
+		<div class="fixed inset-0 bg-gray-900/50 dark:bg-black/70 modal-backdrop" data-modal="update-quota-modal"></div>
 		<div class="relative bg-white dark:bg-gray-800 rounded-lg w-full max-w-md p-6 border-2 border-gray-300 dark:border-gray-600" style="box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
 			<div class="flex items-center justify-between mb-4">
-				<h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Update Storage Quota</h3>
-				<button onclick="closeUpdateQuotaModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none">&times;</button>
+				<h3 id="update-quota-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">Update Storage Quota</h3>
+				<button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none modal-close-btn" data-modal="update-quota-modal" aria-label="Close modal">&times;</button>
 			</div>
 			<form id="update-quota-form" method="POST" action="">
 				<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
@@ -105,7 +105,7 @@
 				</div>
 
 				<div class="flex gap-3 justify-end">
-					<button type="button" onclick="closeUpdateQuotaModal()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">Cancel</button>
+					<button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors modal-close-btn" data-modal="update-quota-modal">Cancel</button>
 					<button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-gray-900 dark:bg-gray-600 hover:bg-gray-700 dark:hover:bg-gray-500 rounded-lg transition-colors">Update Quota</button>
 				</div>
 			</form>
@@ -124,7 +124,7 @@
 				</a>
 				<h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">User Management</h1>
 			</div>
-			<button onclick="openCreateUserModal()" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900 dark:bg-gray-600 text-white hover:bg-gray-700 dark:hover:bg-gray-500 transition-colors font-medium">
+			<button id="open-create-user-modal-btn" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900 dark:bg-gray-600 text-white hover:bg-gray-700 dark:hover:bg-gray-500 transition-colors font-medium">
 				<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 					<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
 					<circle cx="8.5" cy="7" r="4"></circle>
@@ -200,7 +200,7 @@
 									{{end}}
 
 									<!-- Update Quota -->
-									<button onclick="openUpdateQuotaModal({{.ID}}, '{{.Username}}', {{.StorageQuota}})" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Update Quota">
+									<button class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors update-quota-btn" data-user-id="{{.ID}}" data-username="{{.Username}}" data-quota="{{.StorageQuota}}" title="Update Quota">
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600 dark:text-gray-400" aria-hidden="true">
 											<ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
 											<path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
@@ -209,7 +209,7 @@
 									</button>
 
 									<!-- Reset Password -->
-									<button onclick="openResetPasswordModal({{.ID}}, '{{.Username}}')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Reset Password">
+									<button class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors reset-password-btn" data-user-id="{{.ID}}" data-username="{{.Username}}" title="Reset Password">
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600 dark:text-gray-400" aria-hidden="true">
 											<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
 											<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -220,7 +220,7 @@
 									{{if ne .ID $.User.ID}}
 									<form method="POST" action="/admin/users/{{.ID}}/delete" id="delete-form-{{.ID}}" class="inline">
 										<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-										<button type="button" onclick="confirmDeleteUser({{.ID}}, '{{.Username}}', {{.FileCount}}, '{{formatBytes .StorageUsed}}')" class="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="Delete User">
+										<button type="button" class="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors delete-user-btn" data-user-id="{{.ID}}" data-username="{{.Username}}" data-file-count="{{.FileCount}}" data-storage-used="{{formatBytes .StorageUsed}}" title="Delete User">
 											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-600 dark:text-red-400" aria-hidden="true">
 												<polyline points="3 6 5 6 21 6"></polyline>
 												<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -252,78 +252,189 @@
 </div>
 
 <script>
+	// Modal management utilities
+	const ModalManager = {
+		activeModal: null,
+		previouslyFocusedElement: null,
+
+		open: function(modalId, focusElementId) {
+			const modal = document.getElementById(modalId);
+			if (!modal) return;
+
+			this.previouslyFocusedElement = document.activeElement;
+			this.activeModal = modal;
+			modal.classList.remove('hidden');
+			
+			if (focusElementId) {
+				const focusElement = document.getElementById(focusElementId);
+				if (focusElement) focusElement.focus();
+			}
+
+			// Prevent body scroll when modal is open
+			document.body.style.overflow = 'hidden';
+		},
+
+		close: function(modalId) {
+			const modal = document.getElementById(modalId);
+			if (!modal) return;
+
+			modal.classList.add('hidden');
+			this.activeModal = null;
+
+			// Restore body scroll
+			document.body.style.overflow = '';
+
+			// Return focus to the previously focused element
+			if (this.previouslyFocusedElement) {
+				this.previouslyFocusedElement.focus();
+				this.previouslyFocusedElement = null;
+			}
+		},
+
+		closeActive: function() {
+			if (this.activeModal) {
+				this.close(this.activeModal.id);
+			}
+		},
+
+		getFocusableElements: function(modal) {
+			return modal.querySelectorAll(
+				'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+			);
+		},
+
+		trapFocus: function(e) {
+			if (!ModalManager.activeModal) return;
+
+			const focusable = ModalManager.getFocusableElements(ModalManager.activeModal);
+			if (focusable.length === 0) return;
+
+			const firstFocusable = focusable[0];
+			const lastFocusable = focusable[focusable.length - 1];
+
+			if (e.shiftKey && document.activeElement === firstFocusable) {
+				e.preventDefault();
+				lastFocusable.focus();
+			} else if (!e.shiftKey && document.activeElement === lastFocusable) {
+				e.preventDefault();
+				firstFocusable.focus();
+			}
+		}
+	};
+
 	// Create User Modal
-	function openCreateUserModal() {
-		document.getElementById('create-user-modal').classList.remove('hidden');
-		document.getElementById('username').focus();
-	}
-	
-	function closeCreateUserModal() {
-		document.getElementById('create-user-modal').classList.add('hidden');
-		document.getElementById('username').value = '';
-		document.getElementById('email').value = '';
-		document.getElementById('password').value = '';
-	}
+	document.getElementById('open-create-user-modal-btn').addEventListener('click', function() {
+		ModalManager.open('create-user-modal', 'username');
+	});
 
-	// Reset Password Modal
-	function openResetPasswordModal(userId, username) {
-		document.getElementById('reset-password-form').action = '/admin/users/' + userId + '/reset-password';
-		document.getElementById('reset-password-username').textContent = 'Reset password for: ' + username;
-		document.getElementById('reset-password-modal').classList.remove('hidden');
-		document.getElementById('new_password').focus();
-	}
-	
-	function closeResetPasswordModal() {
-		document.getElementById('reset-password-modal').classList.add('hidden');
-		document.getElementById('new_password').value = '';
-	}
+	// Reset Password Modal - using event delegation
+	document.addEventListener('click', function(e) {
+		const resetBtn = e.target.closest('.reset-password-btn');
+		if (resetBtn) {
+			const userId = resetBtn.dataset.userId;
+			const username = resetBtn.dataset.username;
+			
+			document.getElementById('reset-password-form').action = '/admin/users/' + userId + '/reset-password';
+			document.getElementById('reset-password-username').textContent = 'Reset password for: ' + username;
+			ModalManager.open('reset-password-modal', 'new_password');
+		}
+	});
 
-	// Update Quota Modal
-	function openUpdateQuotaModal(userId, username, currentQuota) {
-		document.getElementById('update-quota-form').action = '/admin/users/' + userId + '/quota';
-		document.getElementById('update-quota-username').textContent = 'Update quota for: ' + username;
-		document.getElementById('quota').value = currentQuota;
-		document.getElementById('update-quota-modal').classList.remove('hidden');
-		document.getElementById('quota').focus();
-	}
-	
-	function closeUpdateQuotaModal() {
-		document.getElementById('update-quota-modal').classList.add('hidden');
-	}
+	// Update Quota Modal - using event delegation
+	document.addEventListener('click', function(e) {
+		const quotaBtn = e.target.closest('.update-quota-btn');
+		if (quotaBtn) {
+			const userId = quotaBtn.dataset.userId;
+			const username = quotaBtn.dataset.username;
+			const currentQuota = quotaBtn.dataset.quota;
+			
+			document.getElementById('update-quota-form').action = '/admin/users/' + userId + '/quota';
+			document.getElementById('update-quota-username').textContent = 'Update quota for: ' + username;
+			document.getElementById('quota').value = currentQuota;
+			ModalManager.open('update-quota-modal', 'quota');
+		}
+	});
+
+	// Delete User Confirmation - using event delegation
+	document.addEventListener('click', function(e) {
+		const deleteBtn = e.target.closest('.delete-user-btn');
+		if (deleteBtn) {
+			const userId = deleteBtn.dataset.userId;
+			const username = deleteBtn.dataset.username;
+			const fileCount = parseInt(deleteBtn.dataset.fileCount, 10);
+			const storageUsed = deleteBtn.dataset.storageUsed;
+			
+			let message = 'Are you sure you want to delete user "' + username + '"?\n\n';
+			
+			if (fileCount > 0) {
+				message += 'This will permanently delete:\n';
+				message += '• ' + fileCount + ' file' + (fileCount !== 1 ? 's' : '') + '\n';
+				message += '• ' + storageUsed + ' of storage\n\n';
+				
+				if (fileCount > 100) {
+					message += '⚠️ WARNING: This user has many files. File deletion will happen in the background and may take some time to complete.\n\n';
+				}
+			} else {
+				message += 'This user has no files.\n\n';
+			}
+			
+			message += 'This action cannot be undone.';
+			
+			if (confirm(message)) {
+				document.getElementById('delete-form-' + userId).submit();
+			}
+		}
+	});
+
+	// Modal close buttons and backdrop clicks - using event delegation
+	document.addEventListener('click', function(e) {
+		const closeBtn = e.target.closest('.modal-close-btn');
+		if (closeBtn) {
+			const modalId = closeBtn.dataset.modal;
+			ModalManager.close(modalId);
+			clearModalForm(modalId);
+		}
+
+		const backdrop = e.target.closest('.modal-backdrop');
+		if (backdrop) {
+			const modalId = backdrop.dataset.modal;
+			ModalManager.close(modalId);
+			clearModalForm(modalId);
+		}
+	});
+
+	// Quota preset buttons
+	document.addEventListener('click', function(e) {
+		if (e.target.matches('[data-quota-preset]') || e.target.closest('[data-quota-preset]')) {
+			const btn = e.target.closest('[data-quota-preset]') || e.target;
+			const bytes = btn.dataset.quotaPreset;
+			document.getElementById('quota').value = bytes;
+		}
+	});
 
 	function setQuota(bytes) {
 		document.getElementById('quota').value = bytes;
 	}
 
-	// Delete User Confirmation
-	function confirmDeleteUser(userId, username, fileCount, storageUsed) {
-		let message = `Are you sure you want to delete user "${username}"?\n\n`;
-		
-		if (fileCount > 0) {
-			message += `This will permanently delete:\n`;
-			message += `• ${fileCount} file${fileCount !== 1 ? 's' : ''}\n`;
-			message += `• ${storageUsed} of storage\n\n`;
-			
-			if (fileCount > 100) {
-				message += `⚠️ WARNING: This user has many files. File deletion will happen in the background and may take some time to complete.\n\n`;
-			}
-		} else {
-			message += `This user has no files.\n\n`;
-		}
-		
-		message += `This action cannot be undone.`;
-		
-		if (confirm(message)) {
-			document.getElementById('delete-form-' + userId).submit();
+	function clearModalForm(modalId) {
+		if (modalId === 'create-user-modal') {
+			document.getElementById('username').value = '';
+			document.getElementById('email').value = '';
+			document.getElementById('password').value = '';
+		} else if (modalId === 'reset-password-modal') {
+			document.getElementById('new_password').value = '';
 		}
 	}
 
-	// Close modals on Escape key
+	// Close modals on Escape key and trap focus with Tab
 	document.addEventListener('keydown', function(e) {
 		if (e.key === 'Escape') {
-			closeCreateUserModal();
-			closeResetPasswordModal();
-			closeUpdateQuotaModal();
+			if (ModalManager.activeModal) {
+				clearModalForm(ModalManager.activeModal.id);
+				ModalManager.closeActive();
+			}
+		} else if (e.key === 'Tab') {
+			ModalManager.trapFocus(e);
 		}
 	});
 </script>
