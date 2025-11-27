@@ -262,6 +262,9 @@
 </div>
 
 <script>
+	// Auto-refresh timer ID (used to cancel refresh when starting a new upload)
+	let autoRefreshTimerId = null;
+
 	// Create folder modal functions
 	function openCreateFolderModal() {
 		document.getElementById('create-folder-modal').classList.remove('hidden');
@@ -481,9 +484,6 @@
 			uploadFile(this.files[0]);
 		}
 	});
-
-	// Auto-refresh timer ID (used to cancel refresh when starting a new upload)
-	let autoRefreshTimerId = null;
 
 	// Auto-refresh if there are pending/uploading files
 	{{if .Files}}
