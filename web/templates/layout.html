@@ -202,6 +202,11 @@
 		const toastContainer = document.getElementById('toast-container');
 		
 		function showToast(message, type = 'info', duration = 5000) {
+			if (!toastContainer) {
+				console.warn('Toast container not found');
+				return;
+			}
+			
 			const toast = document.createElement('div');
 			const id = 'toast-' + Date.now();
 			toast.id = id;
