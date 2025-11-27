@@ -53,12 +53,7 @@
 			</div>
 		</div>
 
-		<!-- Flash Messages -->
-		{{if .Flash}}
-		<div class="p-4 rounded mb-4 border-l-4 {{if eq .Flash.Type "error"}}bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-600{{else if eq .Flash.Type "success"}}bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 border-green-600{{else}}bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-600{{end}}">
-			{{.Flash.Content}}
-		</div>
-		{{end}}
+		{{template "flash_messages" .}}
 
 		<!-- Breadcrumb Navigation and Actions -->
 		<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
