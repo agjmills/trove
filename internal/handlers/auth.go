@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -91,20 +92,26 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if this is the first user - if so, make them an admin
-	var userCount int64
-	h.db.Model(&models.User{}).Count(&userCount)
-	isFirstUser := userCount == 0
-
 	user := models.User{
 		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: passwordHash,
 		StorageQuota: h.cfg.DefaultUserQuota,
-		IsAdmin:      isFirstUser,
 	}
 
-	if err := h.db.Create(&user).Error; err != nil {
+	// Use a serializable transaction to atomically check count and create user.
+	// This prevents race condition where multiple concurrent registrations
+	// could all see zero users and all become admins.
+	// SERIALIZABLE isolation works on both SQLite and PostgreSQL.
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		var userCount int64
+		if err := tx.Model(&models.User{}).Count(&userCount).Error; err != nil {
+			return err
+		}
+		user.IsAdmin = userCount == 0
+		return tx.Create(&user).Error
+	}, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
 		http.Error(w, "Failed to create user", http.StatusInternalServerError)
 		return
 	}
