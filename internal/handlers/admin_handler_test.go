@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -75,7 +77,10 @@ func setupTestAdminHandler(t *testing.T) (*AdminHandler, *gorm.DB, *scs.SessionM
 }
 
 func createAdminTestUser(t *testing.T, db *gorm.DB, username, email string, isAdmin bool) *models.User {
-	hash, _ := auth.HashPassword("password123", 4)
+	hash, err := auth.HashPassword("password123", 4)
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
 	user := &models.User{
 		Username:     username,
 		Email:        email,
@@ -152,13 +157,13 @@ func TestToggleAdmin_CannotToggleSelf(t *testing.T) {
 	handler, db, sessionManager, _ := setupTestAdminHandler(t)
 	adminUser := createAdminTestUser(t, db, "admin", "admin@example.com", true)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/users/1/toggle-admin", nil)
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%d/toggle-admin", adminUser.ID), nil)
 	req = csrf.UnsafeSkipCheck(req)
 	req = withUser(req, adminUser)
 
 	// Set up chi URL params
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "1") // adminUser.ID
+	rctx.URLParams.Add("id", strconv.FormatUint(uint64(adminUser.ID), 10))
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
@@ -174,12 +179,12 @@ func TestToggleAdmin_CanToggleOthers(t *testing.T) {
 	adminUser := createAdminTestUser(t, db, "admin", "admin@example.com", true)
 	regularUser := createAdminTestUser(t, db, "regular", "regular@example.com", false)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/users/2/toggle-admin", nil)
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%d/toggle-admin", regularUser.ID), nil)
 	req = csrf.UnsafeSkipCheck(req)
 	req = withUser(req, adminUser)
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "2") // regularUser.ID
+	rctx.URLParams.Add("id", strconv.FormatUint(uint64(regularUser.ID), 10))
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
@@ -201,12 +206,12 @@ func TestDeleteUser_CannotDeleteSelf(t *testing.T) {
 	handler, db, sessionManager, _ := setupTestAdminHandler(t)
 	adminUser := createAdminTestUser(t, db, "admin", "admin@example.com", true)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/users/1/delete", nil)
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%d/delete", adminUser.ID), nil)
 	req = csrf.UnsafeSkipCheck(req)
 	req = withUser(req, adminUser)
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "1")
+	rctx.URLParams.Add("id", strconv.FormatUint(uint64(adminUser.ID), 10))
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
@@ -228,15 +233,24 @@ func TestDeleteUser_DeletesUserAndFiles(t *testing.T) {
 		{UserID: targetUser.ID, Filename: "file2.txt", OriginalFilename: "file2.txt", StoragePath: "path/to/file2.bin"},
 	}
 	for _, f := range files {
-		db.Create(&f)
+		if err := db.Create(&f).Error; err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/users/2/delete", nil)
+	// Sanity-check we actually created files
+	var before int64
+	db.Model(&models.File{}).Where("user_id = ?", targetUser.ID).Count(&before)
+	if before != int64(len(files)) {
+		t.Fatalf("expected %d files before delete, got %d", len(files), before)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%d/delete", targetUser.ID), nil)
 	req = csrf.UnsafeSkipCheck(req)
 	req = withUser(req, adminUser)
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "2")
+	rctx.URLParams.Add("id", strconv.FormatUint(uint64(targetUser.ID), 10))
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
