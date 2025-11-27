@@ -265,6 +265,19 @@
 	// Auto-refresh timer ID (used to cancel refresh when starting a new upload)
 	let autoRefreshTimerId = null;
 
+	// Track active upload state for unload warning
+	let isUploading = false;
+
+	// Warn user if they try to leave during an active upload
+	window.addEventListener('beforeunload', function(e) {
+		if (isUploading) {
+			e.preventDefault();
+			// Modern browsers ignore custom messages, but we need to return something
+			e.returnValue = 'You have an upload in progress. Are you sure you want to leave?';
+			return e.returnValue;
+		}
+	});
+
 	// Create folder modal functions
 	function openCreateFolderModal() {
 		document.getElementById('create-folder-modal').classList.remove('hidden');
@@ -334,6 +347,9 @@
 		formData.append('folder', uploadForm.querySelector('input[name="folder"]').value);
 		formData.append('csrf_token', document.getElementById('csrf-token').value);
 
+		// Mark upload as active for beforeunload warning
+		isUploading = true;
+
 		// Hide upload button and show progress bar
 		uploadButton.classList.add('hidden');
 		progressContainer.classList.remove('hidden');
@@ -401,6 +417,7 @@
 
 		// Handle completion
 		xhr.addEventListener('load', function() {
+			isUploading = false;
 			if (xhr.status === 200 || xhr.status === 302 || xhr.status === 303) {
 				// Success - reload page to show updated file list
 				window.location.reload();
@@ -422,6 +439,7 @@
 
 		// Handle errors
 		xhr.addEventListener('error', function() {
+			isUploading = false;
 			alert('Upload failed. Please try again.');
 			progressContainer.classList.add('hidden');
 			uploadButton.classList.remove('hidden');
