@@ -52,6 +52,20 @@ func Div(a, b int64) int64 {
 	return a / b
 }
 
+// DivFloat returns the quotient of two uint64 values as a float64.
+// Returns 0 if the divisor is 0.
+func DivFloat(a, b uint64) float64 {
+	if b == 0 {
+		return 0
+	}
+	return float64(a) / float64(b)
+}
+
+// MulFloat multiplies a float64 by an integer.
+func MulFloat(a float64, b int) float64 {
+	return a * float64(b)
+}
+
 // SanitizeID converts a string into a safe HTML element ID.
 // It replaces spaces and non-alphanumeric characters (except hyphen and underscore)
 // with underscores, and prefixes with "id-" to ensure the ID starts with a letter.
@@ -76,6 +90,8 @@ func FuncMap() template.FuncMap {
 		"add":               Add,
 		"mul":               Mul,
 		"div":               Div,
+		"divFloat":          DivFloat,
+		"mulFloat":          MulFloat,
 		"sanitizeID":        SanitizeID,
 	}
 }

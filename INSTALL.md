@@ -411,9 +411,9 @@ services:
 ## Post-Installation
 
 1. **Access Trove** at your configured URL
-2. **Create first user** (if registration is enabled)
+2. **Register first user** — this account automatically becomes an admin
 3. **Test upload/download**
-4. **Configure quotas** as needed
+4. **Configure quotas** as needed via the admin panel
 5. **Setup backups**
 
 ## Troubleshooting
