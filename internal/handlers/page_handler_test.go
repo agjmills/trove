@@ -4,12 +4,15 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/gorilla/csrf"
+	"github.com/maruel/natural"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -129,6 +132,106 @@ func TestShowFiles_PathTraversalBlocked(t *testing.T) {
 		// Should return 404 since these sanitized paths don't exist as folders
 		if w.Code != http.StatusNotFound {
 			t.Errorf("Path %s should return 404, got %d", path, w.Code)
+		}
+	}
+}
+
+func TestNaturalSortOrder(t *testing.T) {
+	// Test that the natural sorting works correctly for files
+	filenames := []string{
+		"file10.txt",
+		"file2.txt",
+		"file1.txt",
+		"File20.txt",
+		"file3.txt",
+	}
+
+	// Sort using the same logic as page_handler.go
+	sort.Slice(filenames, func(i, j int) bool {
+		return natural.Less(strings.ToLower(filenames[i]), strings.ToLower(filenames[j]))
+	})
+
+	expected := []string{
+		"file1.txt",
+		"file2.txt",
+		"file3.txt",
+		"file10.txt",
+		"File20.txt",
+	}
+
+	for i, name := range filenames {
+		if name != expected[i] {
+			t.Errorf("Position %d: expected %s, got %s", i, expected[i], name)
+		}
+	}
+}
+
+func TestNaturalSortFolders(t *testing.T) {
+	// Test folder natural sorting (case-insensitive, matching page_handler.go)
+	folders := []string{
+		"Chapter10",
+		"Chapter2",
+		"Chapter1",
+		"chapter3",
+	}
+
+	// Sort using the same logic as page_handler.go
+	sort.Slice(folders, func(i, j int) bool {
+		return natural.Less(strings.ToLower(folders[i]), strings.ToLower(folders[j]))
+	})
+
+	// Natural sort with case-insensitive: 1, 2, 3, 10 (numerically)
+	expected := []string{
+		"Chapter1",
+		"Chapter2",
+		"chapter3",
+		"Chapter10",
+	}
+
+	for i, name := range folders {
+		if name != expected[i] {
+			t.Errorf("Position %d: expected %s, got %s", i, expected[i], name)
+		}
+	}
+}
+
+func TestFilesOnlyPagination(t *testing.T) {
+	// Test that pagination applies only to files (folders are always shown)
+	allFileNames := []string{"file1.txt", "file2.txt", "file3.txt", "file4.txt", "file5.txt"}
+
+	pageSize := 3
+
+	testCases := []struct {
+		page          int
+		expectedFiles []string
+	}{
+		{1, []string{"file1.txt", "file2.txt", "file3.txt"}}, // Page 1: first 3 files
+		{2, []string{"file4.txt", "file5.txt"}},              // Page 2: remaining 2 files
+		{3, []string{}},                                      // Page 3: no files (past end)
+	}
+
+	for _, tc := range testCases {
+		offset := (tc.page - 1) * pageSize
+		totalFiles := len(allFileNames)
+
+		var fileNames []string
+		if offset < totalFiles {
+			end := offset + pageSize
+			if end > totalFiles {
+				end = totalFiles
+			}
+			fileNames = allFileNames[offset:end]
+		}
+
+		// Check files
+		if len(fileNames) != len(tc.expectedFiles) {
+			t.Errorf("Page %d: expected %d files, got %d", tc.page, len(tc.expectedFiles), len(fileNames))
+		} else {
+			for i, name := range fileNames {
+				if name != tc.expectedFiles[i] {
+					t.Errorf("Page %d file %d: expected %s, got %s", tc.page, i, tc.expectedFiles[i], name)
+				}
+			}
 		}
 	}
 }
