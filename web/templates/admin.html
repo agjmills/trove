@@ -1,0 +1,74 @@
+{{define "content"}}
+{{template "flash_messages" .}}
+<div class="min-h-[calc(100vh-80px)] bg-white dark:bg-gray-800">
+	<main class="p-6 max-w-7xl mx-auto">
+		<div class="flex items-center justify-between mb-6">
+			<h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">Admin Dashboard</h1>
+			<a href="/admin/users" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900 dark:bg-gray-600 text-white hover:bg-gray-700 dark:hover:bg-gray-500 transition-colors font-medium">
+				<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+					<circle cx="8.5" cy="7" r="4"></circle>
+					<line x1="20" y1="8" x2="20" y2="14"></line>
+					<line x1="23" y1="11" x2="17" y2="11"></line>
+				</svg>
+				Manage Users
+			</a>
+		</div>
+
+		<!-- Overview Stats Cards -->
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+			<!-- Total Users -->
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+				<div class="flex items-center justify-between">
+					<div>
+						<p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Users</p>
+						<p class="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-1">{{.Stats.TotalUsers}}</p>
+					</div>
+					<div class="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-600 dark:text-blue-400" aria-hidden="true">
+							<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+							<circle cx="8.5" cy="7" r="4"></circle>
+							<path d="M20 8v6"></path>
+							<path d="M23 11h-6"></path>
+						</svg>
+					</div>
+				</div>
+			</div>
+
+			<!-- Total Files -->
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+				<div class="flex items-center justify-between">
+					<div>
+						<p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Files</p>
+						<p class="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-1">{{.Stats.TotalFiles}}</p>
+					</div>
+					<div class="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600 dark:text-green-400" aria-hidden="true">
+							<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+							<polyline points="14 2 14 8 20 8"></polyline>
+						</svg>
+					</div>
+				</div>
+			</div>
+
+			<!-- Total Storage Used -->
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+				<div class="flex items-center justify-between">
+					<div>
+						<p class="text-sm font-medium text-gray-500 dark:text-gray-400">Storage Used</p>
+						<p class="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-1">{{formatBytes .Stats.TotalStorageUsed}}</p>
+					</div>
+					<div class="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-full">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-purple-600 dark:text-purple-400" aria-hidden="true">
+							<ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+							<path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+							<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+						</svg>
+					</div>
+				</div>
+			</div>
+
+		</div>
+	</main>
+</div>
+{{end}}

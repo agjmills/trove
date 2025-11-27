@@ -91,11 +91,17 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if this is the first user - if so, make them an admin
+	var userCount int64
+	h.db.Model(&models.User{}).Count(&userCount)
+	isFirstUser := userCount == 0
+
 	user := models.User{
 		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: passwordHash,
 		StorageQuota: h.cfg.DefaultUserQuota,
+		IsAdmin:      isFirstUser,
 	}
 
 	if err := h.db.Create(&user).Error; err != nil {

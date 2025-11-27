@@ -229,3 +229,68 @@ func TestRegister_MissingFields(t *testing.T) {
 		})
 	}
 }
+
+func TestRegister_FirstUserIsAdmin(t *testing.T) {
+	cfg := &config.Config{
+		EnableRegistration: true,
+		BcryptCost:         4, // Low cost for faster tests
+		DefaultUserQuota:   1024 * 1024 * 100,
+	}
+	handler, db, sessionManager := setupTestAuthHandlerWithConfig(t, cfg)
+
+	// Register first user
+	reqBody1 := RegisterRequest{
+		Username: "firstuser",
+		Email:    "first@example.com",
+		Password: "securepassword123",
+	}
+	body1, _ := json.Marshal(reqBody1)
+
+	req1 := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(body1))
+	req1.Header.Set("Content-Type", "application/json")
+	req1 = csrf.UnsafeSkipCheck(req1)
+
+	w1 := httptest.NewRecorder()
+	sessionManager.LoadAndSave(http.HandlerFunc(handler.Register)).ServeHTTP(w1, req1)
+
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("Expected status 201 for first user, got %d: %s", w1.Code, w1.Body.String())
+	}
+
+	// Verify first user is admin
+	var firstUser models.User
+	if err := db.Where("username = ?", "firstuser").First(&firstUser).Error; err != nil {
+		t.Fatalf("First user was not created: %v", err)
+	}
+	if !firstUser.IsAdmin {
+		t.Error("First user should be an admin")
+	}
+
+	// Register second user
+	reqBody2 := RegisterRequest{
+		Username: "seconduser",
+		Email:    "second@example.com",
+		Password: "securepassword123",
+	}
+	body2, _ := json.Marshal(reqBody2)
+
+	req2 := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(body2))
+	req2.Header.Set("Content-Type", "application/json")
+	req2 = csrf.UnsafeSkipCheck(req2)
+
+	w2 := httptest.NewRecorder()
+	sessionManager.LoadAndSave(http.HandlerFunc(handler.Register)).ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusCreated {
+		t.Fatalf("Expected status 201 for second user, got %d: %s", w2.Code, w2.Body.String())
+	}
+
+	// Verify second user is NOT admin
+	var secondUser models.User
+	if err := db.Where("username = ?", "seconduser").First(&secondUser).Error; err != nil {
+		t.Fatalf("Second user was not created: %v", err)
+	}
+	if secondUser.IsAdmin {
+		t.Error("Second user should NOT be an admin")
+	}
+}

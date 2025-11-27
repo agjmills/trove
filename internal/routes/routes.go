@@ -150,6 +150,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	pageHandler := handlers.NewPageHandler(db, cfg)
 	fileHandler := handlers.NewFileHandler(db, cfg, storageService)
 	healthHandler := handlers.NewHealthHandler(db, storageService, version)
+	adminHandler := handlers.NewAdminHandler(db, cfg, sessionManager, storageService)
 
 	// Create rate limiter for auth endpoints
 	// Allow 5 login/register attempts per 15 minutes per IP
@@ -258,6 +259,22 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Use(auth.RequireAuth(db, sessionManager))
 		// No CSRF middleware - streaming uploads handle their own protection
 		r.Post("/upload", fileHandler.Upload)
+	})
+
+	// Admin routes - require admin privileges
+	r.Group(func(r chi.Router) {
+		r.Use(sessionManager.LoadAndSave)
+		r.Use(auth.RequireAuth(db, sessionManager))
+		r.Use(auth.RequireAdmin(db, sessionManager))
+		r.Use(plaintextCSRFMiddleware(cfg))
+		r.Use(csrfMiddleware)
+		r.Get("/admin", adminHandler.ShowDashboard)
+		r.Get("/admin/users", adminHandler.ShowUsers)
+		r.Post("/admin/users/create", adminHandler.CreateUser)
+		r.Post("/admin/users/{id}/toggle-admin", adminHandler.ToggleAdmin)
+		r.Post("/admin/users/{id}/quota", adminHandler.UpdateUserQuota)
+		r.Post("/admin/users/{id}/delete", adminHandler.DeleteUser)
+		r.Post("/admin/users/{id}/reset-password", adminHandler.ResetUserPassword)
 	})
 
 	return fileHandler
