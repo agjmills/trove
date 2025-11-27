@@ -4,11 +4,14 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
+	"github.com/facette/natsort"
 	"github.com/gorilla/csrf"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -129,6 +132,145 @@ func TestShowFiles_PathTraversalBlocked(t *testing.T) {
 		// Should return 404 since these sanitized paths don't exist as folders
 		if w.Code != http.StatusNotFound {
 			t.Errorf("Path %s should return 404, got %d", path, w.Code)
+		}
+	}
+}
+
+func TestNaturalSortOrder(t *testing.T) {
+	// Test that the natural sorting works correctly for files
+	filenames := []string{
+		"file10.txt",
+		"file2.txt",
+		"file1.txt",
+		"File20.txt",
+		"file3.txt",
+	}
+
+	// Sort using the same logic as page_handler.go
+	sort.Slice(filenames, func(i, j int) bool {
+		return natsort.Compare(strings.ToLower(filenames[i]), strings.ToLower(filenames[j]))
+	})
+
+	expected := []string{
+		"file1.txt",
+		"file2.txt",
+		"file3.txt",
+		"file10.txt",
+		"File20.txt",
+	}
+
+	for i, name := range filenames {
+		if name != expected[i] {
+			t.Errorf("Position %d: expected %s, got %s", i, expected[i], name)
+		}
+	}
+}
+
+func TestNaturalSortFolders(t *testing.T) {
+	// Test folder natural sorting (case-insensitive, matching page_handler.go)
+	folders := []string{
+		"Chapter10",
+		"Chapter2",
+		"Chapter1",
+		"chapter3",
+	}
+
+	// Sort using the same logic as page_handler.go
+	sort.Slice(folders, func(i, j int) bool {
+		return natsort.Compare(strings.ToLower(folders[i]), strings.ToLower(folders[j]))
+	})
+
+	// Natural sort with case-insensitive: 1, 2, 3, 10 (numerically)
+	expected := []string{
+		"Chapter1",
+		"Chapter2",
+		"chapter3",
+		"Chapter10",
+	}
+
+	for i, name := range folders {
+		if name != expected[i] {
+			t.Errorf("Position %d: expected %s, got %s", i, expected[i], name)
+		}
+	}
+}
+
+func TestCombinedPagination(t *testing.T) {
+	// Test the combined pagination logic (folders first, then files)
+	allFolderNames := []string{"folderA", "folderB", "folderC", "folderD", "folderE"}
+	allFileNames := []string{"file1.txt", "file2.txt", "file3.txt", "file4.txt", "file5.txt"}
+
+	pageSize := 3
+
+	testCases := []struct {
+		page            int
+		expectedFolders []string
+		expectedFiles   []string
+	}{
+		{1, []string{"folderA", "folderB", "folderC"}, []string{}},       // Page 1: 3 folders
+		{2, []string{"folderD", "folderE"}, []string{"file1.txt"}},       // Page 2: 2 folders + 1 file
+		{3, []string{}, []string{"file2.txt", "file3.txt", "file4.txt"}}, // Page 3: 3 files
+		{4, []string{}, []string{"file5.txt"}},                           // Page 4: 1 file
+	}
+
+	for _, tc := range testCases {
+		offset := (tc.page - 1) * pageSize
+		totalFolders := len(allFolderNames)
+		totalFiles := len(allFileNames)
+
+		var folderNames []string
+		var fileNames []string
+
+		if offset < totalFolders {
+			// Page starts within folders
+			folderEnd := offset + pageSize
+			if folderEnd > totalFolders {
+				folderEnd = totalFolders
+			}
+			folderNames = allFolderNames[offset:folderEnd]
+
+			// If we have room left on this page, add files
+			remainingSlots := pageSize - len(folderNames)
+			if remainingSlots > 0 && totalFiles > 0 {
+				fileEnd := remainingSlots
+				if fileEnd > totalFiles {
+					fileEnd = totalFiles
+				}
+				fileNames = allFileNames[0:fileEnd]
+			}
+		} else {
+			// Page starts within files (all folders already shown)
+			fileOffset := offset - totalFolders
+			if fileOffset < totalFiles {
+				fileEnd := fileOffset + pageSize
+				if fileEnd > totalFiles {
+					fileEnd = totalFiles
+				}
+				fileNames = allFileNames[fileOffset:fileEnd]
+			}
+			folderNames = []string{}
+		}
+
+		// Check folders
+		if len(folderNames) != len(tc.expectedFolders) {
+			t.Errorf("Page %d: expected %d folders, got %d", tc.page, len(tc.expectedFolders), len(folderNames))
+		} else {
+			for i, name := range folderNames {
+				if name != tc.expectedFolders[i] {
+					t.Errorf("Page %d folder %d: expected %s, got %s", tc.page, i, tc.expectedFolders[i], name)
+				}
+			}
+		}
+
+		// Check files
+		if len(fileNames) != len(tc.expectedFiles) {
+			t.Errorf("Page %d: expected %d files, got %d", tc.page, len(tc.expectedFiles), len(fileNames))
+		} else {
+			for i, name := range fileNames {
+				if name != tc.expectedFiles[i] {
+					t.Errorf("Page %d file %d: expected %s, got %s", tc.page, i, tc.expectedFiles[i], name)
+				}
+			}
 		}
 	}
 }

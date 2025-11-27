@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/flash"
+	"github.com/facette/natsort"
 	"github.com/gorilla/csrf"
 	"gorm.io/gorm"
 )
@@ -59,28 +59,6 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	offset := (page - 1) * pageSize
-
-	// Get total count of files in current folder
-	var totalFiles int64
-	h.db.Model(&models.File{}).Where("user_id = ? AND logical_path = ?", user.ID, currentFolder).Count(&totalFiles)
-
-	// Get files in current folder with pagination
-	var files []models.File
-	h.db.Where("user_id = ? AND logical_path = ?", user.ID, currentFolder).
-		Offset(offset).
-		Limit(pageSize).
-		Find(&files)
-
-	// Sort files with natural ordering (handles numbered files correctly)
-	sort.Slice(files, func(i, j int) bool {
-		return naturalLess(files[i].OriginalFilename, files[j].OriginalFilename)
-	})
-
-	// Calculate pagination info
-	totalPages := int((totalFiles + int64(pageSize) - 1) / int64(pageSize))
-	if totalPages == 0 {
-		totalPages = 1
-	}
 
 	// Get direct subfolders from Folders table
 	var folders []models.Folder
@@ -149,10 +127,68 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Convert to slice for template
-	folderNames := make([]string, 0, len(folderMap))
+	// Convert to slice and sort naturally (case-insensitive)
+	allFolderNames := make([]string, 0, len(folderMap))
 	for name := range folderMap {
-		folderNames = append(folderNames, name)
+		allFolderNames = append(allFolderNames, name)
+	}
+	sort.Slice(allFolderNames, func(i, j int) bool {
+		return natsort.Compare(strings.ToLower(allFolderNames[i]), strings.ToLower(allFolderNames[j]))
+	})
+
+	// Get all files in current folder for natural sorting
+	var allFiles []models.File
+	h.db.Where("user_id = ? AND logical_path = ?", user.ID, currentFolder).Find(&allFiles)
+
+	// Sort files naturally (handles "file2" before "file10" correctly)
+	sort.Slice(allFiles, func(i, j int) bool {
+		return natsort.Compare(strings.ToLower(allFiles[i].OriginalFilename), strings.ToLower(allFiles[j].OriginalFilename))
+	})
+
+	// Combined pagination: folders first, then files
+	totalFolders := len(allFolderNames)
+	totalFiles := len(allFiles)
+	totalItems := totalFolders + totalFiles
+
+	// Calculate which folders and files to show on this page
+	var folderNames []string
+	var files []models.File
+
+	if offset < totalFolders {
+		// Page starts within folders
+		folderEnd := offset + pageSize
+		if folderEnd > totalFolders {
+			folderEnd = totalFolders
+		}
+		folderNames = allFolderNames[offset:folderEnd]
+
+		// If we have room left on this page, add files
+		remainingSlots := pageSize - len(folderNames)
+		if remainingSlots > 0 && totalFiles > 0 {
+			fileEnd := remainingSlots
+			if fileEnd > totalFiles {
+				fileEnd = totalFiles
+			}
+			files = allFiles[0:fileEnd]
+		}
+	} else {
+		// Page starts within files (all folders already shown)
+		fileOffset := offset - totalFolders
+		if fileOffset < totalFiles {
+			fileEnd := fileOffset + pageSize
+			if fileEnd > totalFiles {
+				fileEnd = totalFiles
+			}
+			files = allFiles[fileOffset:fileEnd]
+		}
+		// No folders on this page
+		folderNames = []string{}
+	}
+
+	// Calculate pagination info
+	totalPages := (totalItems + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		totalPages = 1
 	}
 
 	// Build breadcrumb trail
@@ -199,47 +235,8 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		"CSRFToken":     csrf.Token(r),
 		"Page":          page,
 		"TotalPages":    totalPages,
-		"TotalFiles":    totalFiles,
+		"TotalItems":    totalItems,
 		"FullWidth":     true,
 		"MaxUploadSize": h.cfg.MaxUploadSize,
 	})
-}
-
-// naturalLess compares two strings using natural ordering (numbers are compared numerically)
-func naturalLess(a, b string) bool {
-	// Extract numbers from strings like "file (1).txt" and "file (10).txt"
-	re := regexp.MustCompile(`\s*\((\d+)\)`)
-
-	aMatches := re.FindStringSubmatch(a)
-	bMatches := re.FindStringSubmatch(b)
-
-	// Remove " (n)" pattern to get base name
-	aBase := re.ReplaceAllString(a, "")
-	bBase := re.ReplaceAllString(b, "")
-
-	// If base names are different, compare alphabetically
-	if aBase != bBase {
-		return aBase < bBase
-	}
-
-	// Same base name - file without number comes first
-	aHasNum := len(aMatches) > 1
-	bHasNum := len(bMatches) > 1
-
-	if !aHasNum && bHasNum {
-		return true // a (no number) comes before b (has number)
-	}
-	if aHasNum && !bHasNum {
-		return false // b (no number) comes before a (has number)
-	}
-
-	// Both have numbers, compare numerically
-	if aHasNum && bHasNum {
-		aNum, _ := strconv.Atoi(aMatches[1])
-		bNum, _ := strconv.Atoi(bMatches[1])
-		return aNum < bNum
-	}
-
-	// Default to string comparison
-	return a < b
 }
