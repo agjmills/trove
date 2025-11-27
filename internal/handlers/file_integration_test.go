@@ -48,7 +48,7 @@ func newFileTestApp(t *testing.T) *fileTestApp {
 	}
 
 	cfg := &config.Config{
-		MaxUploadSize:    10 * 1024 * 1024, // 10MB
+		MaxUploadSize:    10 * 1024 * 1024,  // 10MB
 		DefaultUserQuota: 100 * 1024 * 1024, // 100MB
 		Env:              "test",
 	}
@@ -345,7 +345,7 @@ func TestUploadDeduplication(t *testing.T) {
 
 	// Storage should not have grown (deduplication)
 	if app.storage.FileCount() > initialStorageCount {
-		t.Logf("Note: Storage count increased from %d to %d (dedup may happen async)", 
+		t.Logf("Note: Storage count increased from %d to %d (dedup may happen async)",
 			initialStorageCount, app.storage.FileCount())
 	}
 }
@@ -648,7 +648,7 @@ func TestDeleteFolderIntegration(t *testing.T) {
 
 	t.Run("delete folder with files fails", func(t *testing.T) {
 		app.createTestFolder(t, user, "/withfiles")
-		
+
 		// Create a file in the folder
 		file := &models.File{
 			UserID:           user.ID,

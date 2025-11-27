@@ -330,7 +330,7 @@ func TestShowFilesIsolation(t *testing.T) {
 		// Verify files in database are correctly filtered
 		var files []models.File
 		app.db.Where("user_id = ?", user1.ID).Find(&files)
-		
+
 		for _, f := range files {
 			if f.UserID != user1.ID {
 				t.Errorf("Found file belonging to another user: %v", f)

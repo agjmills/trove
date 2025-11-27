@@ -155,9 +155,9 @@ func TestRegisterIntegration_FullFlow(t *testing.T) {
 			},
 		},
 		{
-			name:        "Form registration success",
-			contentType: "application/x-www-form-urlencoded",
-			body:        "username=formuser&email=form@example.com&password=securepass123",
+			name:           "Form registration success",
+			contentType:    "application/x-www-form-urlencoded",
+			body:           "username=formuser&email=form@example.com&password=securepass123",
 			expectedStatus: http.StatusSeeOther, // Redirect on success
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
 				location := w.Header().Get("Location")
