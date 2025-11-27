@@ -69,7 +69,7 @@ func setupTestAdminHandler(t *testing.T) (*AdminHandler, *gorm.DB, *scs.SessionM
 
 	sessionManager := scs.New()
 	mockStore := &mockStorage{}
-	handler := NewAdminHandler(db, cfg, sessionManager, mockStore)
+	handler := NewAdminHandler(db, cfg, mockStore)
 
 	return handler, db, sessionManager, mockStore
 }

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -11,34 +12,23 @@ import (
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/storage"
-	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/csrf"
 	"gorm.io/gorm"
 )
 
 type AdminHandler struct {
-	db             *gorm.DB
-	cfg            *config.Config
-	sessionManager *scs.SessionManager
-	storage        storage.StorageBackend
+	db      *gorm.DB
+	cfg     *config.Config
+	storage storage.StorageBackend
 }
 
-func NewAdminHandler(db *gorm.DB, cfg *config.Config, sessionManager *scs.SessionManager, storageBackend storage.StorageBackend) *AdminHandler {
+func NewAdminHandler(db *gorm.DB, cfg *config.Config, storageBackend storage.StorageBackend) *AdminHandler {
 	return &AdminHandler{
-		db:             db,
-		cfg:            cfg,
-		sessionManager: sessionManager,
-		storage:        storageBackend,
+		db:      db,
+		cfg:     cfg,
+		storage: storageBackend,
 	}
-}
-
-// UserStats holds per-user statistics
-type UserStats struct {
-	User       models.User
-	FileCount  int64
-	TotalSize  int64
-	UsageRatio float64
 }
 
 // DashboardStats holds overall dashboard statistics
@@ -59,13 +49,25 @@ func (h *AdminHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 	var stats DashboardStats
 
 	// Get total users
-	h.db.Model(&models.User{}).Count(&stats.TotalUsers)
+	if err := h.db.Model(&models.User{}).Count(&stats.TotalUsers).Error; err != nil {
+		logger.Error("Failed to count users", "error", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
 
 	// Get total files
-	h.db.Model(&models.File{}).Count(&stats.TotalFiles)
+	if err := h.db.Model(&models.File{}).Count(&stats.TotalFiles).Error; err != nil {
+		logger.Error("Failed to count files", "error", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
 
 	// Get total storage used across all users
-	h.db.Model(&models.User{}).Select("COALESCE(SUM(storage_used), 0)").Scan(&stats.TotalStorageUsed)
+	if err := h.db.Model(&models.User{}).Select("COALESCE(SUM(storage_used), 0)").Scan(&stats.TotalStorageUsed).Error; err != nil {
+		logger.Error("Failed to sum storage used", "error", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
 
 	render(w, "admin.html", map[string]any{
 		"Title":     "Admin Dashboard",
@@ -85,20 +87,42 @@ func (h *AdminHandler) ShowUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var users []models.User
-	h.db.Order("created_at DESC").Find(&users)
+	if err := h.db.Order("created_at DESC").Find(&users).Error; err != nil {
+		logger.Error("Failed to fetch users", "error", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
 
-	// Calculate file counts for each user
+	// Get file counts for all users in a single query to avoid N+1
+	type fileAgg struct {
+		UserID    uint
+		FileCount int64
+	}
+	var aggs []fileAgg
+	if err := h.db.Model(&models.File{}).
+		Select("user_id, COUNT(*) as file_count").
+		Group("user_id").
+		Scan(&aggs).Error; err != nil {
+		logger.Error("Failed to aggregate file counts", "error", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	// Build a map for quick lookup
+	fileCountMap := make(map[uint]int64)
+	for _, agg := range aggs {
+		fileCountMap[agg.UserID] = agg.FileCount
+	}
+
 	type UserWithStats struct {
 		models.User
 		FileCount int64
 	}
 	var usersWithStats []UserWithStats
 	for _, u := range users {
-		var fileCount int64
-		h.db.Model(&models.File{}).Where("user_id = ?", u.ID).Count(&fileCount)
 		usersWithStats = append(usersWithStats, UserWithStats{
 			User:      u,
-			FileCount: fileCount,
+			FileCount: fileCountMap[u.ID],
 		})
 	}
 
@@ -158,6 +182,10 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.Where("username = ? OR email = ?", req.Username, req.Email).First(&existing).Error; err == nil {
 		http.Error(w, "Username or email already exists", http.StatusConflict)
 		return
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		logger.Error("Database error checking for existing user", "error", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
 	}
 
 	// Hash password
@@ -182,6 +210,7 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isJSON {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{
 			"id":       newUser.ID,
@@ -259,6 +288,14 @@ func (h *AdminHandler) UpdateUserQuota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Warn if setting quota below current usage
+	if quota < targetUser.StorageUsed {
+		logger.Warn("Setting quota below current storage usage",
+			"user_id", userID,
+			"new_quota", quota,
+			"current_usage", targetUser.StorageUsed)
+	}
+
 	targetUser.StorageQuota = quota
 	if err := h.db.Save(&targetUser).Error; err != nil {
 		http.Error(w, "Failed to update user quota", http.StatusInternalServerError)
@@ -323,6 +360,8 @@ func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete actual files from storage in the background
+	// TODO: Consider passing an app-lifecycle context for graceful shutdown support
+	// instead of context.Background() so long-running deletions can be cancelled.
 	if len(files) > 0 {
 		go func(filesToDelete []models.File, username string) {
 			logger.Info("Starting background file deletion", "user", username, "file_count", len(filesToDelete))

@@ -150,7 +150,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	pageHandler := handlers.NewPageHandler(db, cfg)
 	fileHandler := handlers.NewFileHandler(db, cfg, storageService)
 	healthHandler := handlers.NewHealthHandler(db, storageService, version)
-	adminHandler := handlers.NewAdminHandler(db, cfg, sessionManager, storageService)
+	adminHandler := handlers.NewAdminHandler(db, cfg, storageService)
 
 	// Create rate limiter for auth endpoints
 	// Allow 5 login/register attempts per 15 minutes per IP
