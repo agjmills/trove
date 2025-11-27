@@ -89,7 +89,7 @@ func newRouteTestApp(t *testing.T) *routeTestApp {
 
 	router := chi.NewRouter()
 	fileHandler := Setup(router, db, cfg, memStorage, sessionManager, "test-version")
-	
+
 	// Ensure cleanup
 	t.Cleanup(func() {
 		fileHandler.Shutdown()
@@ -728,4 +728,403 @@ func TestUserIsolation(t *testing.T) {
 	// Verify user references for the test
 	_ = user1
 	_ = user2
+}
+
+// createAdminTestUser creates an admin user in the database
+func (app *routeTestApp) createAdminTestUser(t *testing.T, username, password string) *models.User {
+	t.Helper()
+
+	hashedPassword, err := auth.HashPassword(password, app.cfg.BcryptCost)
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
+
+	user := &models.User{
+		Username:     username,
+		Email:        username + "@example.com",
+		PasswordHash: hashedPassword,
+		StorageQuota: app.cfg.DefaultUserQuota,
+		IsAdmin:      true,
+	}
+
+	if err := app.db.Create(user).Error; err != nil {
+		t.Fatalf("Failed to create admin test user: %v", err)
+	}
+
+	return user
+}
+
+// TestAdminRoutesRequireAuth tests that admin routes require authentication
+func TestAdminRoutesRequireAuth(t *testing.T) {
+	app := newRouteTestApp(t)
+
+	adminRoutes := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/admin"},
+		{http.MethodGet, "/admin/users"},
+		{http.MethodPost, "/admin/users/create"},
+		{http.MethodPost, "/admin/users/1/toggle-admin"},
+		{http.MethodPost, "/admin/users/1/quota"},
+		{http.MethodPost, "/admin/users/1/delete"},
+		{http.MethodPost, "/admin/users/1/reset-password"},
+	}
+
+	for _, route := range adminRoutes {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			req := httptest.NewRequest(route.method, route.path, nil)
+			req.RemoteAddr = uniqueTestIP()
+
+			w := httptest.NewRecorder()
+			app.router.ServeHTTP(w, req)
+
+			// Should redirect to login
+			if w.Code != http.StatusSeeOther {
+				t.Errorf("Expected redirect (303), got %d for %s %s", w.Code, route.method, route.path)
+			}
+
+			location := w.Header().Get("Location")
+			if location != "/login" {
+				t.Errorf("Expected redirect to /login, got %s", location)
+			}
+		})
+	}
+}
+
+// TestAdminRoutesRequireAdmin tests that admin routes require admin privileges
+func TestAdminRoutesRequireAdmin(t *testing.T) {
+	app := newRouteTestApp(t)
+	app.createTestUser(t, "regularuser", "password123")
+
+	// Login as regular user
+	loginForm := url.Values{}
+	loginForm.Set("username", "regularuser")
+	loginForm.Set("password", "password123")
+
+	loginReq := app.newFormRequest(http.MethodPost, "/login", loginForm)
+	loginResp := httptest.NewRecorder()
+	app.router.ServeHTTP(loginResp, loginReq)
+
+	var sessionCookie *http.Cookie
+	for _, c := range loginResp.Result().Cookies() {
+		if c.Name == "session" {
+			sessionCookie = c
+			break
+		}
+	}
+
+	if sessionCookie == nil {
+		t.Fatal("No session cookie after login")
+	}
+
+	adminRoutes := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/admin"},
+		{http.MethodGet, "/admin/users"},
+		{http.MethodPost, "/admin/users/create"},
+		{http.MethodPost, "/admin/users/1/toggle-admin"},
+		{http.MethodPost, "/admin/users/1/quota"},
+		{http.MethodPost, "/admin/users/1/delete"},
+		{http.MethodPost, "/admin/users/1/reset-password"},
+	}
+
+	for _, route := range adminRoutes {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			req := httptest.NewRequest(route.method, route.path, nil)
+			req.AddCookie(sessionCookie)
+			req.RemoteAddr = uniqueTestIP()
+
+			w := httptest.NewRecorder()
+			app.router.ServeHTTP(w, req)
+
+			// Should get forbidden
+			if w.Code != http.StatusForbidden {
+				t.Errorf("Expected 403 Forbidden, got %d for %s %s", w.Code, route.method, route.path)
+			}
+		})
+	}
+}
+
+// TestAdminDashboardAccess tests that admin users can access admin routes
+func TestAdminDashboardAccess(t *testing.T) {
+	app := newRouteTestApp(t)
+	app.createAdminTestUser(t, "admin", "password123")
+
+	// Login as admin
+	loginForm := url.Values{}
+	loginForm.Set("username", "admin")
+	loginForm.Set("password", "password123")
+
+	loginReq := app.newFormRequest(http.MethodPost, "/login", loginForm)
+	loginResp := httptest.NewRecorder()
+	app.router.ServeHTTP(loginResp, loginReq)
+
+	var sessionCookie *http.Cookie
+	for _, c := range loginResp.Result().Cookies() {
+		if c.Name == "session" {
+			sessionCookie = c
+			break
+		}
+	}
+
+	if sessionCookie == nil {
+		t.Fatal("No session cookie after login")
+	}
+
+	t.Run("admin can access dashboard", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		req.AddCookie(sessionCookie)
+		req.RemoteAddr = uniqueTestIP()
+
+		w := httptest.NewRecorder()
+		app.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected 200 OK, got %d", w.Code)
+		}
+	})
+
+	t.Run("admin can access user management", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
+		req.AddCookie(sessionCookie)
+		req.RemoteAddr = uniqueTestIP()
+
+		w := httptest.NewRecorder()
+		app.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected 200 OK, got %d", w.Code)
+		}
+	})
+}
+
+// TestAdminCreateUserViaRoutes tests creating a user through the full route
+func TestAdminCreateUserViaRoutes(t *testing.T) {
+	app := newRouteTestApp(t)
+	app.createAdminTestUser(t, "admin", "password123")
+
+	// Login as admin
+	loginForm := url.Values{}
+	loginForm.Set("username", "admin")
+	loginForm.Set("password", "password123")
+
+	loginReq := app.newFormRequest(http.MethodPost, "/login", loginForm)
+	loginResp := httptest.NewRecorder()
+	app.router.ServeHTTP(loginResp, loginReq)
+
+	var sessionCookie *http.Cookie
+	for _, c := range loginResp.Result().Cookies() {
+		if c.Name == "session" {
+			sessionCookie = c
+			break
+		}
+	}
+
+	if sessionCookie == nil {
+		t.Fatal("No session cookie after login")
+	}
+
+	t.Run("create user via form", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("username", "newuser")
+		form.Set("email", "newuser@example.com")
+		form.Set("password", "securepassword123")
+
+		req := httptest.NewRequest(http.MethodPost, "/admin/users/create", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(sessionCookie)
+		req.RemoteAddr = uniqueTestIP()
+
+		w := httptest.NewRecorder()
+		app.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect (303), got %d: %s", w.Code, w.Body.String())
+		}
+
+		// Verify user was created
+		var user models.User
+		if err := app.db.Where("username = ?", "newuser").First(&user).Error; err != nil {
+			t.Error("User was not created in database")
+		}
+	})
+
+	t.Run("create user via JSON API", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{
+			"username": "jsonuser",
+			"email":    "jsonuser@example.com",
+			"password": "securepassword123",
+			"is_admin": false,
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/admin/users/create", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(sessionCookie)
+		req.RemoteAddr = uniqueTestIP()
+
+		w := httptest.NewRecorder()
+		app.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Errorf("Expected 201 Created, got %d: %s", w.Code, w.Body.String())
+		}
+
+		// Verify JSON response
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Errorf("Failed to parse response: %v", err)
+		}
+
+		if resp["username"] != "jsonuser" {
+			t.Errorf("Expected username 'jsonuser', got %v", resp["username"])
+		}
+	})
+}
+
+// TestAdminUserManagementViaRoutes tests user management operations through routes
+func TestAdminUserManagementViaRoutes(t *testing.T) {
+	app := newRouteTestApp(t)
+	admin := app.createAdminTestUser(t, "admin", "password123")
+	targetUser := app.createTestUser(t, "target", "password123")
+
+	// Login as admin
+	loginForm := url.Values{}
+	loginForm.Set("username", "admin")
+	loginForm.Set("password", "password123")
+
+	loginReq := app.newFormRequest(http.MethodPost, "/login", loginForm)
+	loginResp := httptest.NewRecorder()
+	app.router.ServeHTTP(loginResp, loginReq)
+
+	var sessionCookie *http.Cookie
+	for _, c := range loginResp.Result().Cookies() {
+		if c.Name == "session" {
+			sessionCookie = c
+			break
+		}
+	}
+
+	if sessionCookie == nil {
+		t.Fatal("No session cookie after login")
+	}
+
+	t.Run("toggle user admin status", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%d/toggle-admin", targetUser.ID), nil)
+		req.AddCookie(sessionCookie)
+		req.RemoteAddr = uniqueTestIP()
+
+		w := httptest.NewRecorder()
+		app.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect (303), got %d", w.Code)
+		}
+
+		// Verify user is now admin
+		var updated models.User
+		app.db.First(&updated, targetUser.ID)
+		if !updated.IsAdmin {
+			t.Error("User should now be admin")
+		}
+	})
+
+	t.Run("update user quota", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("quota", "1073741824") // 1GB
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%d/quota", targetUser.ID), strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(sessionCookie)
+		req.RemoteAddr = uniqueTestIP()
+
+		w := httptest.NewRecorder()
+		app.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect (303), got %d", w.Code)
+		}
+
+		// Verify quota was updated
+		var updated models.User
+		app.db.First(&updated, targetUser.ID)
+		if updated.StorageQuota != 1073741824 {
+			t.Errorf("Expected quota 1073741824, got %d", updated.StorageQuota)
+		}
+	})
+
+	t.Run("reset user password", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("new_password", "newsecurepassword123")
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%d/reset-password", targetUser.ID), strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(sessionCookie)
+		req.RemoteAddr = uniqueTestIP()
+
+		w := httptest.NewRecorder()
+		app.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect (303), got %d", w.Code)
+		}
+
+		// Verify password was updated
+		var updated models.User
+		app.db.First(&updated, targetUser.ID)
+		if !auth.VerifyPassword(updated.PasswordHash, "newsecurepassword123") {
+			t.Error("Password was not updated correctly")
+		}
+	})
+
+	t.Run("cannot toggle own admin status", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%d/toggle-admin", admin.ID), nil)
+		req.AddCookie(sessionCookie)
+		req.RemoteAddr = uniqueTestIP()
+
+		w := httptest.NewRecorder()
+		app.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected 400 Bad Request, got %d", w.Code)
+		}
+	})
+
+	t.Run("cannot delete self", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%d/delete", admin.ID), nil)
+		req.AddCookie(sessionCookie)
+		req.RemoteAddr = uniqueTestIP()
+
+		w := httptest.NewRecorder()
+		app.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected 400 Bad Request, got %d", w.Code)
+		}
+	})
+
+	t.Run("delete user", func(t *testing.T) {
+		// Create a new user to delete
+		userToDelete := app.createTestUser(t, "deleteme", "password123")
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%d/delete", userToDelete.ID), nil)
+		req.AddCookie(sessionCookie)
+		req.RemoteAddr = uniqueTestIP()
+
+		w := httptest.NewRecorder()
+		app.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect (303), got %d", w.Code)
+		}
+
+		// Verify user was deleted
+		var count int64
+		app.db.Model(&models.User{}).Where("id = ?", userToDelete.ID).Count(&count)
+		if count != 0 {
+			t.Error("User should have been deleted")
+		}
+	})
 }
