@@ -130,10 +130,12 @@ jobs:
           VERSION="${{ github.ref_name }}"
           # Remove 'v' prefix for processing
           VERSION_NUM="${VERSION#v}"
-          # Extract major version (e.g., v0)
-          MAJOR="v$(echo "$VERSION_NUM" | cut -d. -f1)"
-          # Extract minor version (e.g., v0.1)
-          MINOR="v$(echo "$VERSION_NUM" | cut -d. -f1,2)"
+          # Full version without v prefix (for Docker tags)
+          echo "full=$VERSION_NUM" >> $GITHUB_OUTPUT
+          # Extract major version (e.g., 0)
+          MAJOR="$(echo "$VERSION_NUM" | cut -d. -f1)"
+          # Extract minor version (e.g., 0.1)
+          MINOR="$(echo "$VERSION_NUM" | cut -d. -f1,2)"
           echo "major=$MAJOR" >> $GITHUB_OUTPUT
           echo "minor=$MINOR" >> $GITHUB_OUTPUT
 
@@ -155,11 +157,11 @@ jobs:
             
             Pull this release:
             ```bash
-            docker pull ghcr.io/agjmills/trove:${{ github.ref_name }}
+            docker pull ghcr.io/agjmills/trove:${{ steps.version.outputs.full }}
             ```
             
             Available tags:
-            - `ghcr.io/agjmills/trove:${{ github.ref_name }}` - Full version
+            - `ghcr.io/agjmills/trove:${{ steps.version.outputs.full }}` - Full version
             - `ghcr.io/agjmills/trove:${{ steps.version.outputs.minor }}` - Minor version
             - `ghcr.io/agjmills/trove:${{ steps.version.outputs.major }}` - Major version
             
