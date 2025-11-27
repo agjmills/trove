@@ -195,71 +195,32 @@ func TestNaturalSortFolders(t *testing.T) {
 	}
 }
 
-func TestCombinedPagination(t *testing.T) {
-	// Test the combined pagination logic (folders first, then files)
-	allFolderNames := []string{"folderA", "folderB", "folderC", "folderD", "folderE"}
+func TestFilesOnlyPagination(t *testing.T) {
+	// Test that pagination applies only to files (folders are always shown)
 	allFileNames := []string{"file1.txt", "file2.txt", "file3.txt", "file4.txt", "file5.txt"}
 
 	pageSize := 3
 
 	testCases := []struct {
-		page            int
-		expectedFolders []string
-		expectedFiles   []string
+		page          int
+		expectedFiles []string
 	}{
-		{1, []string{"folderA", "folderB", "folderC"}, []string{}},       // Page 1: 3 folders
-		{2, []string{"folderD", "folderE"}, []string{"file1.txt"}},       // Page 2: 2 folders + 1 file
-		{3, []string{}, []string{"file2.txt", "file3.txt", "file4.txt"}}, // Page 3: 3 files
-		{4, []string{}, []string{"file5.txt"}},                           // Page 4: 1 file
+		{1, []string{"file1.txt", "file2.txt", "file3.txt"}}, // Page 1: first 3 files
+		{2, []string{"file4.txt", "file5.txt"}},              // Page 2: remaining 2 files
+		{3, []string{}},                                      // Page 3: no files (past end)
 	}
 
 	for _, tc := range testCases {
 		offset := (tc.page - 1) * pageSize
-		totalFolders := len(allFolderNames)
 		totalFiles := len(allFileNames)
 
-		var folderNames []string
 		var fileNames []string
-
-		if offset < totalFolders {
-			// Page starts within folders
-			folderEnd := offset + pageSize
-			if folderEnd > totalFolders {
-				folderEnd = totalFolders
+		if offset < totalFiles {
+			end := offset + pageSize
+			if end > totalFiles {
+				end = totalFiles
 			}
-			folderNames = allFolderNames[offset:folderEnd]
-
-			// If we have room left on this page, add files
-			remainingSlots := pageSize - len(folderNames)
-			if remainingSlots > 0 && totalFiles > 0 {
-				fileEnd := remainingSlots
-				if fileEnd > totalFiles {
-					fileEnd = totalFiles
-				}
-				fileNames = allFileNames[0:fileEnd]
-			}
-		} else {
-			// Page starts within files (all folders already shown)
-			fileOffset := offset - totalFolders
-			if fileOffset < totalFiles {
-				fileEnd := fileOffset + pageSize
-				if fileEnd > totalFiles {
-					fileEnd = totalFiles
-				}
-				fileNames = allFileNames[fileOffset:fileEnd]
-			}
-			folderNames = []string{}
-		}
-
-		// Check folders
-		if len(folderNames) != len(tc.expectedFolders) {
-			t.Errorf("Page %d: expected %d folders, got %d", tc.page, len(tc.expectedFolders), len(folderNames))
-		} else {
-			for i, name := range folderNames {
-				if name != tc.expectedFolders[i] {
-					t.Errorf("Page %d folder %d: expected %s, got %s", tc.page, i, tc.expectedFolders[i], name)
-				}
-			}
+			fileNames = allFileNames[offset:end]
 		}
 
 		// Check files

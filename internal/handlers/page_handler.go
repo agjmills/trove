@@ -128,12 +128,13 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert to slice and sort naturally (case-insensitive)
-	allFolderNames := make([]string, 0, len(folderMap))
+	// All folders are shown (no pagination for folders)
+	folderNames := make([]string, 0, len(folderMap))
 	for name := range folderMap {
-		allFolderNames = append(allFolderNames, name)
+		folderNames = append(folderNames, name)
 	}
-	sort.Slice(allFolderNames, func(i, j int) bool {
-		return natsort.Compare(strings.ToLower(allFolderNames[i]), strings.ToLower(allFolderNames[j]))
+	sort.Slice(folderNames, func(i, j int) bool {
+		return natsort.Compare(strings.ToLower(folderNames[i]), strings.ToLower(folderNames[j]))
 	})
 
 	// Get all files in current folder for natural sorting
@@ -145,48 +146,19 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		return natsort.Compare(strings.ToLower(allFiles[i].OriginalFilename), strings.ToLower(allFiles[j].OriginalFilename))
 	})
 
-	// Combined pagination: folders first, then files
-	totalFolders := len(allFolderNames)
+	// Pagination applies only to files (folders are always shown)
 	totalFiles := len(allFiles)
-	totalItems := totalFolders + totalFiles
-
-	// Calculate which folders and files to show on this page
-	var folderNames []string
 	var files []models.File
-
-	if offset < totalFolders {
-		// Page starts within folders
-		folderEnd := offset + pageSize
-		if folderEnd > totalFolders {
-			folderEnd = totalFolders
+	if offset < totalFiles {
+		end := offset + pageSize
+		if end > totalFiles {
+			end = totalFiles
 		}
-		folderNames = allFolderNames[offset:folderEnd]
-
-		// If we have room left on this page, add files
-		remainingSlots := pageSize - len(folderNames)
-		if remainingSlots > 0 && totalFiles > 0 {
-			fileEnd := remainingSlots
-			if fileEnd > totalFiles {
-				fileEnd = totalFiles
-			}
-			files = allFiles[0:fileEnd]
-		}
-	} else {
-		// Page starts within files (all folders already shown)
-		fileOffset := offset - totalFolders
-		if fileOffset < totalFiles {
-			fileEnd := fileOffset + pageSize
-			if fileEnd > totalFiles {
-				fileEnd = totalFiles
-			}
-			files = allFiles[fileOffset:fileEnd]
-		}
-		// No folders on this page
-		folderNames = []string{}
+		files = allFiles[offset:end]
 	}
 
-	// Calculate pagination info
-	totalPages := (totalItems + pageSize - 1) / pageSize
+	// Calculate pagination info (based on files only)
+	totalPages := (totalFiles + pageSize - 1) / pageSize
 	if totalPages == 0 {
 		totalPages = 1
 	}
@@ -235,7 +207,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		"CSRFToken":     csrf.Token(r),
 		"Page":          page,
 		"TotalPages":    totalPages,
-		"TotalItems":    totalItems,
+		"TotalFiles":    totalFiles,
 		"FullWidth":     true,
 		"MaxUploadSize": h.cfg.MaxUploadSize,
 	})
