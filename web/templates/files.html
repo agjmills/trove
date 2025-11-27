@@ -268,6 +268,17 @@
 	// Track active upload state for unload warning
 	let isUploading = false;
 
+	// Helper function to restart auto-refresh if there are still pending/processing files
+	function restartAutoRefreshIfNeeded() {
+		// Check DOM for pending (.text-yellow-600) or processing (.text-blue-600) file indicators
+		const hasPendingFiles = document.querySelector('.text-yellow-600, .text-blue-600') !== null;
+		if (hasPendingFiles && !autoRefreshTimerId) {
+			autoRefreshTimerId = setTimeout(function() {
+				window.location.reload();
+			}, 3000);
+		}
+	}
+
 	// Warn user if they try to leave during an active upload
 	window.addEventListener('beforeunload', function(e) {
 		if (isUploading) {
@@ -434,6 +445,8 @@
 				alert(errorMsg);
 				progressContainer.classList.add('hidden');
 				uploadButton.classList.remove('hidden');
+				// Restart auto-refresh if there are still pending/processing files
+				restartAutoRefreshIfNeeded();
 			}
 		});
 
@@ -443,6 +456,8 @@
 			alert('Upload failed. Please try again.');
 			progressContainer.classList.add('hidden');
 			uploadButton.classList.remove('hidden');
+			// Restart auto-refresh if there are still pending/processing files
+			restartAutoRefreshIfNeeded();
 		});
 
 		// Note: /upload is exempted from CSRF middleware for streaming and is
