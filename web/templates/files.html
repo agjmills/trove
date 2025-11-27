@@ -53,14 +53,7 @@
 			</div>
 		</div>
 
-		<!-- Flash Messages (shown as toast) -->
-		{{if .Flash}}
-		<script>
-			document.addEventListener('DOMContentLoaded', function() {
-				showToast({{.Flash.Content}}, {{.Flash.Type}});
-			});
-		</script>
-		{{end}}
+		{{template "flash_messages" .}}
 
 		<!-- Breadcrumb Navigation and Actions -->
 		<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">

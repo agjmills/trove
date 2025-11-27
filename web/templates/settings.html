@@ -1,24 +1,8 @@
 {{define "content"}}
+{{template "flash_messages" .}}
 <div class="min-h-[calc(100vh-80px)] bg-white dark:bg-gray-800">
 	<main class="p-6 max-w-4xl mx-auto">
 		<h1 class="text-3xl font-bold mb-6 text-gray-900 dark:text-gray-100">Settings</h1>
-
-		<!-- Flash Messages (shown as toast) -->
-		{{if .Success}}
-		<script>
-			document.addEventListener('DOMContentLoaded', function() {
-				showToast({{.Success}}, 'success');
-			});
-		</script>
-		{{end}}
-
-		{{if .Error}}
-		<script>
-			document.addEventListener('DOMContentLoaded', function() {
-				showToast({{.Error}}, 'error');
-			});
-		</script>
-		{{end}}
 
 		<!-- Appearance -->
 		<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">

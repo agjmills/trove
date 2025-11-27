@@ -1,0 +1,23 @@
+{{define "flash_messages"}}
+{{if .Success}}
+<script>
+	document.addEventListener('DOMContentLoaded', function() {
+		showToast("{{js .Success}}", 'success');
+	});
+</script>
+{{end}}
+{{if .Error}}
+<script>
+	document.addEventListener('DOMContentLoaded', function() {
+		showToast("{{js .Error}}", 'error');
+	});
+</script>
+{{end}}
+{{if .Flash}}
+<script>
+	document.addEventListener('DOMContentLoaded', function() {
+		showToast("{{js .Flash.Content}}", "{{js .Flash.Type}}");
+	});
+</script>
+{{end}}
+{{end}}

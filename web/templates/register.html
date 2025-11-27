@@ -1,13 +1,7 @@
 {{define "content"}}
+{{template "flash_messages" .}}
 <div class="max-w-md mx-auto mt-8 bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
 	<h1 class="text-3xl font-bold mb-6 text-gray-900 dark:text-gray-100">Register</h1>
-	{{if .Error}}
-		<script>
-			document.addEventListener('DOMContentLoaded', function() {
-				showToast({{.Error}}, 'error');
-			});
-		</script>
-	{{end}}
 	<form method="POST" action="/register">
 		<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 		<div class="mb-4">

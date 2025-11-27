@@ -25,6 +25,14 @@ var templates *template.Template
 func LoadTemplates() error {
 	var err error
 	templates, err = template.New("").Funcs(templateutil.FuncMap()).ParseGlob(filepath.Join("web", "templates", "*.html"))
+	if err != nil {
+		return err
+	}
+	// Parse partials if they exist
+	partials, _ := filepath.Glob(filepath.Join("web", "templates", "partials", "*.html"))
+	if len(partials) > 0 {
+		templates, err = templates.ParseFiles(partials...)
+	}
 	return err
 }
 
