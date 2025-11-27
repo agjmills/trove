@@ -77,7 +77,15 @@ Self-hostable file storage in Go with server-side rendering, minimal JS, Docker 
 **Security**: Bcrypt passwords, CSRF protection, secure sessions, input validation
 
 ## Phase 2 (Optional)
-Sharing links, versioning, thumbnails, bulk ops, admin dashboard, REST API
+Sharing links, versioning, thumbnails, bulk ops, REST API
+
+### Admin Dashboard ✅
+- [x] Admin role system (first user becomes admin automatically)
+- [x] Admin dashboard with system stats (users, files, storage)
+- [x] User management (create, delete, toggle admin)
+- [x] Storage quota management per user
+- [x] Password reset for users
+- [x] Background file deletion when deleting users (especially for S3)
 
 ## Phase 3 (Enhancements) ✅
 
@@ -169,7 +177,10 @@ download_count, max_downloads, created_at
 `/files/:id/download`, `POST /files/:id/delete`, `POST /files/:id/rename`, 
 `POST /files/:id/move`, `/settings`, `POST /settings`, `/storage`
 
-**Admin** (Phase 2): `/admin/users`, `/admin/stats`, `POST /admin/users/:id/quota`
+**Admin**: `/admin` (dashboard), `/admin/users` (user management), 
+`POST /admin/users/create`, `POST /admin/users/:id/toggle-admin`,
+`POST /admin/users/:id/quota`, `POST /admin/users/:id/reset-password`,
+`POST /admin/users/:id/delete`
 
 ## Configuration (.env)
 
@@ -250,11 +261,16 @@ Tailwind CSS migration with dark mode, responsive design, system preference dete
 
 ## Current Status
 
-**Working**: Full authentication system with alexedwards/scs session management, file upload/download/delete with SHA-256 deduplication, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, Tailwind CSS with responsive dark mode, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints, production-ready Docker image (~18MB), pluggable storage backends (disk/S3/memory), comprehensive unit tests (88+ tests, 70-90% coverage), streaming uploads for multi-GB files, health checks and Prometheus metrics
+**Working**: Full authentication system with alexedwards/scs session management, file upload/download/delete with SHA-256 deduplication, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, Tailwind CSS with responsive dark mode, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints, production-ready Docker image (~18MB), pluggable storage backends (disk/S3/memory), comprehensive unit tests (88+ tests, 70-90% coverage), streaming uploads for multi-GB files, health checks and Prometheus metrics, admin dashboard with user management
 
 **Next**: Integration tests, template caching, performance optimization, file sharing links
 
 **Recent**:
+- ✅ Implemented admin dashboard with user management
+  - First registered user automatically becomes admin
+  - Dashboard shows total users, files, storage used
+  - User management: create, delete, toggle admin, reset password, update quota
+  - Background file deletion when removing users (handles large S3 file counts)
 - ✅ Implemented pluggable storage backend system (disk, S3, memory)
 - ✅ Full S3 support with AWS SDK v2 (MinIO, Cloudflare R2, Backblaze B2, rustfs compatible)
 - ✅ Migrated to Tailwind CSS with dark mode support
