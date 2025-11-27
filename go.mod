@@ -15,6 +15,7 @@ require (
 	github.com/gorilla/csrf v1.7.3
 	github.com/joho/godotenv v1.5.1
 	github.com/liamg/memoryfs v1.6.0
+	github.com/maruel/natural v1.2.1
 	github.com/prometheus/client_golang v1.23.2
 	golang.org/x/crypto v0.45.0
 	gorm.io/datatypes v1.2.7
@@ -45,7 +46,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/facette/natsort v0.0.0-20181210072756-2cd4dd1e2dcb // indirect
 	github.com/go-pkgz/expirable-cache/v3 v3.0.0 // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect

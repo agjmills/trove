@@ -10,8 +10,8 @@ import (
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/flash"
-	"github.com/facette/natsort"
 	"github.com/gorilla/csrf"
+	"github.com/maruel/natural"
 	"gorm.io/gorm"
 )
 
@@ -134,7 +134,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		folderNames = append(folderNames, name)
 	}
 	sort.Slice(folderNames, func(i, j int) bool {
-		return natsort.Compare(strings.ToLower(folderNames[i]), strings.ToLower(folderNames[j]))
+		return natural.Less(strings.ToLower(folderNames[i]), strings.ToLower(folderNames[j]))
 	})
 
 	// Get all files in current folder for natural sorting
@@ -143,7 +143,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 
 	// Sort files naturally (handles "file2" before "file10" correctly)
 	sort.Slice(allFiles, func(i, j int) bool {
-		return natsort.Compare(strings.ToLower(allFiles[i].OriginalFilename), strings.ToLower(allFiles[j].OriginalFilename))
+		return natural.Less(strings.ToLower(allFiles[i].OriginalFilename), strings.ToLower(allFiles[j].OriginalFilename))
 	})
 
 	// Pagination applies only to files (folders are always shown)

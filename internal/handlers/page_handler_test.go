@@ -11,8 +11,8 @@ import (
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
-	"github.com/facette/natsort"
 	"github.com/gorilla/csrf"
+	"github.com/maruel/natural"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -148,7 +148,7 @@ func TestNaturalSortOrder(t *testing.T) {
 
 	// Sort using the same logic as page_handler.go
 	sort.Slice(filenames, func(i, j int) bool {
-		return natsort.Compare(strings.ToLower(filenames[i]), strings.ToLower(filenames[j]))
+		return natural.Less(strings.ToLower(filenames[i]), strings.ToLower(filenames[j]))
 	})
 
 	expected := []string{
@@ -177,7 +177,7 @@ func TestNaturalSortFolders(t *testing.T) {
 
 	// Sort using the same logic as page_handler.go
 	sort.Slice(folders, func(i, j int) bool {
-		return natsort.Compare(strings.ToLower(folders[i]), strings.ToLower(folders[j]))
+		return natural.Less(strings.ToLower(folders[i]), strings.ToLower(folders[j]))
 	})
 
 	// Natural sort with case-insensitive: 1, 2, 3, 10 (numerically)
