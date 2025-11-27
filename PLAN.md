@@ -60,7 +60,11 @@ Self-hostable file storage in Go with server-side rendering, minimal JS, Docker 
   - CSRF: 70.8% coverage (18 tests)
   - Rate limiter: 39.6% coverage (14 tests)
   - Auth (password): 13.3% coverage (6 tests)
-- [ ] Integration tests for handlers
+- [x] Integration tests for handlers
+  - Auth flows: login, register, logout, password change, settings
+  - File operations: upload, download, delete, folders, quota enforcement
+  - Page rendering: files page, pagination, folder navigation
+  - Routes: health/metrics, public/protected routes, rate limiting, CSRF, session persistence
 - [x] Error handling (panic recovery, custom error pages)
 - [x] Input validation (CSRF, form validation, file size limits)
 - [x] Human-readable size configuration (10G, 500M, etc.)
@@ -238,7 +242,7 @@ Production Dockerfile (~18MB), security headers, rate limiting, pluggable storag
 Tailwind CSS migration with dark mode, responsive design, system preference detection
 
 ### 🔄 Phase 6: Documentation & Optimization (NEXT)
-**Priority**: Integration tests → template caching → performance optimization
+**Priority**: Template caching → performance optimization → file sharing links
 
 ## Security Status
 - [x] Bcrypt password hashing (configurable cost)
@@ -261,11 +265,12 @@ Tailwind CSS migration with dark mode, responsive design, system preference dete
 
 ## Current Status
 
-**Working**: Full authentication system with alexedwards/scs session management, file upload/download/delete with SHA-256 deduplication, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, Tailwind CSS with responsive dark mode, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints, production-ready Docker image (~18MB), pluggable storage backends (disk/S3/memory), comprehensive unit tests (88+ tests, 70-90% coverage), streaming uploads for multi-GB files, health checks and Prometheus metrics, admin dashboard with user management
+**Working**: Full authentication system with alexedwards/scs session management, file upload/download/delete with SHA-256 deduplication, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, Tailwind CSS with responsive dark mode, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints, production-ready Docker image (~18MB), pluggable storage backends (disk/S3/memory), comprehensive unit tests (88+ tests, 70-90% coverage), streaming uploads for multi-GB files, health checks and Prometheus metrics, admin dashboard with user management, integration tests for handlers and routes
 
-**Next**: Integration tests, template caching, performance optimization, file sharing links
+**Next**: Template caching, performance optimization, file sharing links
 
 **Recent**:
+- ✅ Added comprehensive integration tests for handlers and routes
 - ✅ Implemented admin dashboard with user management
   - First registered user automatically becomes admin
   - Dashboard shows total users, files, storage used
