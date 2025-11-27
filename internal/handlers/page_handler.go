@@ -86,10 +86,10 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Also check for implicit folders (folders that only exist because files are in them)
-	type FolderInfo struct {
+	type implicitFolderPath struct {
 		LogicalPath string
 	}
-	var implicitFolders []FolderInfo
+	var implicitFolders []implicitFolderPath
 	h.db.Model(&models.File{}).
 		Select("DISTINCT logical_path").
 		Where("user_id = ? AND logical_path LIKE ? AND logical_path != ?",
@@ -127,6 +127,12 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// FolderInfo holds folder name and sanitized ID for safe HTML rendering
+	type FolderInfo struct {
+		Name string
+		ID   string
+	}
+
 	// Convert to slice and sort naturally (case-insensitive)
 	// All folders are shown (no pagination for folders)
 	folderNames := make([]string, 0, len(folderMap))
@@ -136,6 +142,16 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(folderNames, func(i, j int) bool {
 		return natural.Less(strings.ToLower(folderNames[i]), strings.ToLower(folderNames[j]))
 	})
+
+	// Build folder info with sanitized IDs
+	folderInfos := make([]FolderInfo, 0, len(folderNames))
+	for i, name := range folderNames {
+		// Use index-based ID to guarantee uniqueness even if sanitized names collide
+		folderInfos = append(folderInfos, FolderInfo{
+			Name: name,
+			ID:   "folder-" + strconv.Itoa(i),
+		})
+	}
 
 	// Get all files in current folder for natural sorting
 	var allFiles []models.File
@@ -199,7 +215,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		"Title":         "Files",
 		"User":          user,
 		"Files":         files,
-		"Folders":       folderNames,
+		"Folders":       folderInfos,
 		"CurrentFolder": currentFolder,
 		"ParentFolder":  parentFolder,
 		"Breadcrumbs":   breadcrumbs,

@@ -52,6 +52,22 @@ func Div(a, b int64) int64 {
 	return a / b
 }
 
+// SanitizeID converts a string into a safe HTML element ID.
+// It replaces spaces and non-alphanumeric characters (except hyphen and underscore)
+// with underscores, and prefixes with "id-" to ensure the ID starts with a letter.
+func SanitizeID(s string) string {
+	var result []byte
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' {
+			result = append(result, c)
+		} else {
+			result = append(result, '_')
+		}
+	}
+	return "id-" + string(result)
+}
+
 // FuncMap returns a template.FuncMap with all the standard template helpers.
 func FuncMap() template.FuncMap {
 	return template.FuncMap{
@@ -60,5 +76,6 @@ func FuncMap() template.FuncMap {
 		"add":               Add,
 		"mul":               Mul,
 		"div":               Div,
+		"sanitizeID":        SanitizeID,
 	}
 }
