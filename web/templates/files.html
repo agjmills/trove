@@ -123,13 +123,13 @@
 		</div>
 
 		{{if or .Files .Folders}}
-			{{if .Folders}}
-			<!-- Folders Section -->
-			<div class="mb-6">
-				<h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Folders</h2>
-				<div class="flex flex-wrap gap-2">
-					{{range .Folders}}
-					<div class="flex items-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-all" style="width: 200px;">
+		{{if .Folders}}
+		<!-- Folders Section -->
+		<div class="mb-6">
+			<h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Folders</h2>
+			<div class="flex flex-wrap gap-2">
+				{{range .Folders}}
+				<div class="flex items-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-all w-full sm:w-[200px]">
 						<a href="/files?folder={{if eq $.CurrentFolder "/"}}/{{.Name}}{{else}}{{$.CurrentFolder}}/{{.Name}}{{end}}" 
 						   class="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 cursor-pointer"
 						   title="{{.Name}}">
@@ -180,7 +180,7 @@
 						<thead>
 							<tr class="bg-gray-50 dark:bg-gray-700">
 								<th class="text-left p-3 text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">Name</th>
-								<th class="text-left p-3 text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600">Size</th>
+								<th class="text-left p-3 text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600 max-sm:hidden">Size</th>
 								<th class="text-left p-3 text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600 max-md:hidden">Uploaded</th>
 								<th class="text-right p-3 text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600 w-16"></th>
 							</tr>
@@ -188,8 +188,8 @@
 						<tbody>
 						{{range .Files}}
 						<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 {{if ne .UploadStatus "completed"}}bg-yellow-50 dark:bg-yellow-900/10{{end}}">
-							<td class="p-3 border-b border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100">
-								<div class="flex items-center gap-2">
+							<td class="p-3 border-b border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 max-w-0">
+								<div class="flex items-center gap-2 min-w-0">
 									{{if eq .UploadStatus "pending"}}
 									<svg class="animate-spin" width="16" height="16" style="min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="#ca8a04" stroke-width="4"></circle>
@@ -213,7 +213,7 @@
 									<span class="truncate">{{.OriginalFilename}}</span>
 								</div>
 							</td>
-							<td class="p-3 border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400">{{formatBytes .FileSize}}</td>
+							<td class="p-3 border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 max-sm:hidden">{{formatBytes .FileSize}}</td>
 							<td class="p-3 border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 max-md:hidden">{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
 							<td class="p-3 border-b border-gray-200 dark:border-gray-700 text-right">
 								<div class="relative inline-block">
@@ -340,21 +340,45 @@
 		event.stopPropagation();
 		
 		const menu = document.getElementById(menuId);
+		const button = event.currentTarget;
 		
 		// Close any other open menu
 		if (currentOpenMenu && currentOpenMenu !== menu) {
 			currentOpenMenu.classList.add('hidden');
+			currentOpenMenu.style.position = '';
+			currentOpenMenu.style.top = '';
+			currentOpenMenu.style.left = '';
+			currentOpenMenu.style.right = '';
 		}
 		
 		// Toggle this menu
-		menu.classList.toggle('hidden');
-		currentOpenMenu = menu.classList.contains('hidden') ? null : menu;
+		if (menu.classList.contains('hidden')) {
+			// Position the menu using fixed positioning to escape overflow containers
+			const rect = button.getBoundingClientRect();
+			menu.style.position = 'fixed';
+			menu.style.top = (rect.bottom + 4) + 'px';
+			menu.style.right = (window.innerWidth - rect.right) + 'px';
+			menu.style.left = 'auto';
+			menu.classList.remove('hidden');
+			currentOpenMenu = menu;
+		} else {
+			menu.classList.add('hidden');
+			menu.style.position = '';
+			menu.style.top = '';
+			menu.style.left = '';
+			menu.style.right = '';
+			currentOpenMenu = null;
+		}
 	}
 
 	// Close menu when clicking outside
 	document.addEventListener('click', function(e) {
 		if (currentOpenMenu && !e.target.closest('[id^="folder-menu-"]') && !e.target.closest('[id^="file-menu-"]') && !e.target.closest('button[onclick^="toggleItemMenu"]')) {
 			currentOpenMenu.classList.add('hidden');
+			currentOpenMenu.style.position = '';
+			currentOpenMenu.style.top = '';
+			currentOpenMenu.style.left = '';
+			currentOpenMenu.style.right = '';
 			currentOpenMenu = null;
 		}
 	});
