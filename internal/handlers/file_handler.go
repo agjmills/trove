@@ -232,7 +232,8 @@ func (h *FileHandler) markUploadFailed(file models.File, errorMessage string) {
 // This function is idempotent and safe for concurrent calls: it uses a transaction to ensure
 // atomicity, and only operates on files with "pending" or "failed" upload status to prevent
 // double-subtracting quota if cleanup has already occurred.
-func (h *FileHandler) cleanupFailedUpload(file models.File) {
+// Returns an error if the cleanup fails.
+func (h *FileHandler) cleanupFailedUpload(file models.File) error {
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		// Only clean up if the file is still in a failed/pending state (idempotency guard)
 		result := tx.Where("id = ? AND upload_status IN (?)", file.ID, []string{"pending", "failed"}).
@@ -258,6 +259,8 @@ func (h *FileHandler) cleanupFailedUpload(file models.File) {
 	if err != nil {
 		log.Printf("Upload worker: failed to cleanup file %d: %v", file.ID, err)
 	}
+
+	return err
 }
 
 // sanitizeFolderPath cleans and validates a folder path
@@ -952,10 +955,18 @@ func (h *FileHandler) DismissFailedUpload(w http.ResponseWriter, r *http.Request
 	}
 
 	// Use the cleanup function to properly restore quota
-	h.cleanupFailedUpload(file)
+	if err := h.cleanupFailedUpload(file); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Failed to dismiss upload: " + err.Error(),
+		})
+		return
+	}
 
 	// Return success
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, `{"success": true}`)
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
