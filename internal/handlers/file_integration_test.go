@@ -213,6 +213,9 @@ func TestUploadIntegration(t *testing.T) {
 			t.Errorf("Expected status 303, got %d: %s", w.Code, w.Body.String())
 		}
 
+		// Wait for background upload to complete before checking database
+		app.fileHandler.WaitForPendingUploads()
+
 		// Check file was created in database
 		var file models.File
 		if err := app.db.Where("user_id = ? AND original_filename = ?", user.ID, "test.txt").First(&file).Error; err != nil {

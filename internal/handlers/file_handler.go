@@ -39,6 +39,7 @@ type FileHandler struct {
 	storage     storage.StorageBackend
 	uploadQueue chan uploadJob
 	wg          sync.WaitGroup
+	pendingJobs sync.WaitGroup // tracks jobs currently being processed
 }
 
 func NewFileHandler(db *gorm.DB, cfg *config.Config, storage storage.StorageBackend) *FileHandler {
@@ -65,12 +66,19 @@ func (h *FileHandler) Shutdown() {
 	h.wg.Wait()
 }
 
+// WaitForPendingUploads waits for all currently queued uploads to complete.
+// This is useful in tests to ensure background processing finishes before assertions.
+func (h *FileHandler) WaitForPendingUploads() {
+	h.pendingJobs.Wait()
+}
+
 // uploadWorker processes background uploads
 func (h *FileHandler) uploadWorker() {
 	defer h.wg.Done()
 
 	for job := range h.uploadQueue {
 		h.processUpload(job)
+		h.pendingJobs.Done()
 	}
 }
 
@@ -407,10 +415,12 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// Queue background upload if not a duplicate
 	if !isDuplicate {
+		h.pendingJobs.Add(1)
 		select {
 		case h.uploadQueue <- uploadJob{fileID: fileRecord.ID, tempPath: tempPathForDB}:
 			log.Printf("Upload: queued file %d for background upload", fileRecord.ID)
 		default:
+			h.pendingJobs.Done() // Undo the Add since job won't be processed
 			log.Printf("Warning: upload queue full, file %d will retry", fileRecord.ID)
 			// Queue is full - mark as failed so it can be retried
 			h.db.Model(&fileRecord).Update("upload_status", "failed")
