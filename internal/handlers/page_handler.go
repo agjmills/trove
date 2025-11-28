@@ -211,23 +211,9 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	// Get flash message if any
 	flashMsg := flash.Get(w, r)
 
-	// Check for failed uploads and notify user, then clean up transactionally
-	var failedCount int64
-	h.db.Model(&models.File{}).Where("user_id = ? AND upload_status = ?", user.ID, "failed").Count(&failedCount)
-	if failedCount > 0 {
-		if flashMsg == nil {
-			if failedCount == 1 {
-				flashMsg = &flash.Message{Type: "error", Content: "A file failed to upload. Please try again."}
-			} else {
-				flashMsg = &flash.Message{Type: "error", Content: "Some files failed to upload. Please try again."}
-			}
-		}
-		// Clean up failed uploads using shared helper (transactional and idempotent)
-		if _, err := CleanupFailedUploads(h.db, user.ID); err != nil {
-			// Log but don't fail the page render
-			// The cleanup will be retried on the next page load
-		}
-	}
+	// Note: Failed uploads are now preserved for user visibility.
+	// Users can dismiss them via the UI, which calls DismissFailedUpload.
+	// We no longer auto-clean failed uploads on page load.
 
 	render(w, "files.html", map[string]any{
 		"Title":         "Files",

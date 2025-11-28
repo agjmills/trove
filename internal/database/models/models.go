@@ -45,6 +45,7 @@ type File struct {
 	MimeType         string                                `gorm:"size:100" json:"mime_type"`
 	Hash             string                                `gorm:"index;size:64" json:"hash"`
 	UploadStatus     string                                `gorm:"size:20;default:'completed';index" json:"upload_status"` // Upload status: pending, uploading, completed, failed
+	ErrorMessage     string                                `gorm:"size:500" json:"error_message,omitempty"`                // Error message for failed uploads
 	TempPath         string                                `gorm:"size:1024" json:"-"`                                     // Temporary local path (used during async upload, not shown to user)
 	Metadata         datatypes.JSONType[map[string]string] `json:"metadata"`                                               // Arbitrary key-value metadata
 	Tags             datatypes.JSONType[[]string]          `json:"tags"`                                                   // Simple string tags for filtering

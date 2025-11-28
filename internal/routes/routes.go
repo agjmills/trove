@@ -235,6 +235,14 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Get("/download/{id}", fileHandler.Download)
 		r.Post("/delete/{id}", fileHandler.Delete)
 		r.Post("/folders/delete/{name}", fileHandler.DeleteFolder)
+		r.Post("/files/{id}/dismiss", fileHandler.DismissFailedUpload)
+	})
+
+	// SSE endpoint for file upload status - no CSRF needed (GET request, read-only)
+	r.Group(func(r chi.Router) {
+		r.Use(sessionManager.LoadAndSave)
+		r.Use(auth.RequireAuth(db, sessionManager))
+		r.Get("/api/files/status", fileHandler.StatusStream)
 	})
 
 	// Change password endpoint - rate limited like login/register

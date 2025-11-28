@@ -186,33 +186,44 @@
 								<th class="text-right p-3 text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600 w-16"></th>
 							</tr>
 						</thead>
-						<tbody>
+						<tbody id="files-table-body">
 						{{range .Files}}
-						<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 {{if ne .UploadStatus "completed"}}bg-yellow-50 dark:bg-yellow-900/10{{end}}">
+						<tr data-file-id="{{.ID}}" data-upload-status="{{.UploadStatus}}" class="file-row hover:bg-gray-50 dark:hover:bg-gray-700/50 {{if eq .UploadStatus "failed"}}bg-red-50 dark:bg-red-900/10{{else if ne .UploadStatus "completed"}}bg-yellow-50 dark:bg-yellow-900/10{{end}}">
 							<td class="p-3 border-b border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 max-w-0">
 								<div class="flex items-center gap-2 min-w-0">
+									<span class="status-indicator">
 									{{if eq .UploadStatus "pending"}}
 									<svg class="animate-spin flex-shrink-0" width="16" height="16" style="min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="#ca8a04" stroke-width="4"></circle>
 										<path class="opacity-75" fill="#ca8a04" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 									</svg>
-									<span class="text-yellow-600 dark:text-yellow-400 text-xs font-medium flex-shrink-0">Preparing...</span>
 									{{else if eq .UploadStatus "uploading"}}
 									<svg class="animate-spin flex-shrink-0" width="16" height="16" style="min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="#2563eb" stroke-width="4"></circle>
 										<path class="opacity-75" fill="#2563eb" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 									</svg>
-									<span class="text-blue-600 dark:text-blue-400 text-xs font-medium flex-shrink-0">Processing...</span>
 									{{else if eq .UploadStatus "failed"}}
 									<svg class="flex-shrink-0" width="16" height="16" style="min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
 										<circle cx="12" cy="12" r="10"></circle>
 										<line x1="15" y1="9" x2="9" y2="15"></line>
 										<line x1="9" y1="9" x2="15" y2="15"></line>
 									</svg>
-									<span class="text-red-600 dark:text-red-400 text-xs font-medium flex-shrink-0">Failed</span>
 									{{end}}
+									</span>
+									<span class="status-label">
+									{{if eq .UploadStatus "pending"}}
+									<span class="text-yellow-600 dark:text-yellow-400 text-xs font-medium flex-shrink-0">Preparing...</span>
+									{{else if eq .UploadStatus "uploading"}}
+									<span class="text-blue-600 dark:text-blue-400 text-xs font-medium flex-shrink-0">Processing...</span>
+									{{else if eq .UploadStatus "failed"}}
+									<span class="text-red-600 dark:text-red-400 text-xs font-medium flex-shrink-0" title="{{.ErrorMessage}}">Failed</span>
+									{{end}}
+									</span>
 									<span class="truncate" title="{{.OriginalFilename}}">{{.OriginalFilename}}</span>
 								</div>
+								{{if eq .UploadStatus "failed"}}
+								<div class="error-message mt-1 text-xs text-red-600 dark:text-red-400">{{.ErrorMessage}}</div>
+								{{end}}
 							</td>
 							<td class="p-3 border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 max-sm:hidden">{{formatBytes .FileSize}}</td>
 							<td class="p-3 border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 max-md:hidden">{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
@@ -239,6 +250,14 @@
 											</svg>
 											Download
 										</a>
+										{{else if eq .UploadStatus "failed"}}
+										<button type="button" onclick="dismissFailedUpload({{.ID}})" class="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left">
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+												<line x1="18" y1="6" x2="6" y2="18"></line>
+												<line x1="6" y1="6" x2="18" y2="18"></line>
+											</svg>
+											Dismiss
+										</button>
 										{{else}}
 										<span class="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">
 											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -295,21 +314,210 @@
 </div>
 
 <script>
-	// Auto-refresh timer ID (used to cancel refresh when starting a new upload)
-	let autoRefreshTimerId = null;
+	// SSE connection for real-time status updates
+	let eventSource = null;
+	let sseReconnectTimeout = null;
 
 	// Track active upload state for unload warning
 	let isUploading = false;
 
-	// Helper function to restart auto-refresh if there are still pending/processing files
-	function restartAutoRefreshIfNeeded() {
-		// Check DOM for pending (.text-yellow-600) or processing (.text-blue-600) file indicators
-		const hasPendingFiles = document.querySelector('.text-yellow-600, .text-blue-600') !== null;
-		if (hasPendingFiles && !autoRefreshTimerId) {
-			autoRefreshTimerId = setTimeout(function() {
-				window.location.reload();
-			}, 3000);
+	// Initialize SSE connection for file status updates
+	function initSSE() {
+		// Check if there are any files that need status updates
+		const pendingFiles = document.querySelectorAll('[data-upload-status="pending"], [data-upload-status="uploading"]');
+		if (pendingFiles.length === 0 && !isUploading) {
+			return; // No need to connect if no pending files
 		}
+
+		if (eventSource) {
+			return; // Already connected
+		}
+
+		eventSource = new EventSource('/api/files/status');
+
+		eventSource.addEventListener('connected', function(e) {
+			console.log('SSE connected');
+			// Clear any reconnect timeout
+			if (sseReconnectTimeout) {
+				clearTimeout(sseReconnectTimeout);
+				sseReconnectTimeout = null;
+			}
+		});
+
+		eventSource.addEventListener('status', function(e) {
+			const data = JSON.parse(e.data);
+			updateFileStatus(data);
+		});
+
+		eventSource.addEventListener('error', function(e) {
+			console.log('SSE connection error, will reconnect...');
+			eventSource.close();
+			eventSource = null;
+			// Reconnect after 3 seconds
+			sseReconnectTimeout = setTimeout(initSSE, 3000);
+		});
+	}
+
+	// Update file row based on status event
+	function updateFileStatus(data) {
+		const row = document.querySelector(`tr[data-file-id="${data.id}"]`);
+		if (!row) {
+			// File not on current page, might need to reload for completed files
+			if (data.upload_status === 'completed') {
+				window.location.reload();
+			}
+			return;
+		}
+
+		const currentStatus = row.dataset.uploadStatus;
+		if (currentStatus === data.upload_status) {
+			return; // No change
+		}
+
+		// Update the row's data attribute
+		row.dataset.uploadStatus = data.upload_status;
+
+		// Update row styling
+		row.classList.remove('bg-yellow-50', 'dark:bg-yellow-900/10', 'bg-red-50', 'dark:bg-red-900/10');
+		if (data.upload_status === 'failed') {
+			row.classList.add('bg-red-50', 'dark:bg-red-900/10');
+		} else if (data.upload_status === 'pending' || data.upload_status === 'uploading') {
+			row.classList.add('bg-yellow-50', 'dark:bg-yellow-900/10');
+		}
+
+		// Update status indicator
+		const statusIndicator = row.querySelector('.status-indicator');
+		const statusLabel = row.querySelector('.status-label');
+
+		if (data.upload_status === 'completed') {
+			statusIndicator.innerHTML = '';
+			statusLabel.innerHTML = '';
+			// Update the menu to show download link
+			updateMenuForCompleted(row, data.id);
+		} else if (data.upload_status === 'failed') {
+			statusIndicator.innerHTML = `
+				<svg class="flex-shrink-0" width="16" height="16" style="min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+					<circle cx="12" cy="12" r="10"></circle>
+					<line x1="15" y1="9" x2="9" y2="15"></line>
+					<line x1="9" y1="9" x2="15" y2="15"></line>
+				</svg>
+			`;
+			statusLabel.innerHTML = `<span class="text-red-600 dark:text-red-400 text-xs font-medium flex-shrink-0" title="${escapeHtml(data.error_message || '')}">Failed</span>`;
+			
+			// Add error message div if not exists
+			const nameCell = row.querySelector('td:first-child');
+			let errorDiv = nameCell.querySelector('.error-message');
+			if (!errorDiv && data.error_message) {
+				errorDiv = document.createElement('div');
+				errorDiv.className = 'error-message mt-1 text-xs text-red-600 dark:text-red-400';
+				errorDiv.textContent = data.error_message;
+				nameCell.appendChild(errorDiv);
+			} else if (errorDiv && data.error_message) {
+				errorDiv.textContent = data.error_message;
+			}
+
+			// Update menu for failed status
+			updateMenuForFailed(row, data.id);
+		} else if (data.upload_status === 'uploading') {
+			statusIndicator.innerHTML = `
+				<svg class="animate-spin flex-shrink-0" width="16" height="16" style="min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="#2563eb" stroke-width="4"></circle>
+					<path class="opacity-75" fill="#2563eb" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+				</svg>
+			`;
+			statusLabel.innerHTML = '<span class="text-blue-600 dark:text-blue-400 text-xs font-medium flex-shrink-0">Processing...</span>';
+		}
+
+		// Close SSE if no more pending files
+		checkSSENeeded();
+	}
+
+	function updateMenuForCompleted(row, fileId) {
+		const menu = document.getElementById(`file-menu-${fileId}`);
+		if (!menu) return;
+
+		// Find the first child that's not the delete form and replace it
+		const downloadPlaceholder = menu.querySelector('span, a');
+		if (downloadPlaceholder) {
+			const downloadLink = document.createElement('a');
+			downloadLink.href = `/download/${fileId}`;
+			downloadLink.className = 'w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors';
+			downloadLink.innerHTML = `
+				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+					<polyline points="7 10 12 15 17 10"></polyline>
+					<line x1="12" y1="15" x2="12" y2="3"></line>
+				</svg>
+				Download
+			`;
+			downloadPlaceholder.replaceWith(downloadLink);
+		}
+	}
+
+	function updateMenuForFailed(row, fileId) {
+		const menu = document.getElementById(`file-menu-${fileId}`);
+		if (!menu) return;
+
+		// Find the first child that's not the delete form and replace it
+		const placeholder = menu.querySelector('span:not(button span), a');
+		if (placeholder) {
+			const dismissBtn = document.createElement('button');
+			dismissBtn.type = 'button';
+			dismissBtn.onclick = function() { dismissFailedUpload(fileId); };
+			dismissBtn.className = 'w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left';
+			dismissBtn.innerHTML = `
+				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<line x1="18" y1="6" x2="6" y2="18"></line>
+					<line x1="6" y1="6" x2="18" y2="18"></line>
+				</svg>
+				Dismiss
+			`;
+			placeholder.replaceWith(dismissBtn);
+		}
+	}
+
+	function escapeHtml(text) {
+		const div = document.createElement('div');
+		div.textContent = text;
+		return div.innerHTML;
+	}
+
+	function checkSSENeeded() {
+		const pendingFiles = document.querySelectorAll('[data-upload-status="pending"], [data-upload-status="uploading"]');
+		if (pendingFiles.length === 0 && !isUploading && eventSource) {
+			eventSource.close();
+			eventSource = null;
+		}
+	}
+
+	// Dismiss a failed upload
+	function dismissFailedUpload(fileId) {
+		fetch(`/files/${fileId}/dismiss`, {
+			method: 'POST',
+			headers: {
+				'X-CSRF-Token': document.getElementById('csrf-token').value
+			}
+		})
+		.then(response => {
+			if (response.ok) {
+				// Remove the row from the table
+				const row = document.querySelector(`tr[data-file-id="${fileId}"]`);
+				if (row) {
+					row.remove();
+				}
+				// Close any open menu
+				if (currentOpenMenu) {
+					currentOpenMenu.classList.add('hidden');
+					currentOpenMenu = null;
+				}
+			} else {
+				alert('Failed to dismiss upload. Please try again.');
+			}
+		})
+		.catch(err => {
+			console.error('Error dismissing upload:', err);
+			alert('Failed to dismiss upload. Please try again.');
+		});
 	}
 
 	// Warn user if they try to leave during an active upload
@@ -435,11 +643,8 @@
 
 	// Function to upload file with progress tracking
 	function uploadFile(file) {
-		// Cancel any pending auto-refresh to prevent interrupting this upload
-		if (autoRefreshTimerId) {
-			clearTimeout(autoRefreshTimerId);
-			autoRefreshTimerId = null;
-		}
+		// Start SSE connection for status updates
+		initSSE();
 
 		// Best-effort client-side validation based on page load data.
 		// Note: Quota may be stale if uploads occur in other tabs/windows.
@@ -532,6 +737,7 @@
 			isUploading = false;
 			if (xhr.status === 200 || xhr.status === 302 || xhr.status === 303) {
 				// Success - reload page to show updated file list
+				// SSE will handle status updates for background processing
 				window.location.reload();
 			} else {
 				// Error - try to parse server error message
@@ -546,8 +752,7 @@
 				alert(errorMsg);
 				progressContainer.classList.add('hidden');
 				uploadButton.classList.remove('hidden');
-				// Restart auto-refresh if there are still pending/processing files
-				restartAutoRefreshIfNeeded();
+				checkSSENeeded();
 			}
 		});
 
@@ -557,8 +762,7 @@
 			alert('Upload failed. Please try again.');
 			progressContainer.classList.add('hidden');
 			uploadButton.classList.remove('hidden');
-			// Restart auto-refresh if there are still pending/processing files
-			restartAutoRefreshIfNeeded();
+			checkSSENeeded();
 		});
 
 		// Note: /upload is exempted from CSRF middleware for streaming and is
@@ -619,7 +823,7 @@
 		}
 	});
 
-	// Auto-refresh if there are pending/uploading files
+	// Initialize SSE if there are pending/uploading files on page load
 	{{if .Files}}
 	(function() {
 		let hasPendingFiles = false;
@@ -630,13 +834,17 @@
 		{{end}}
 		
 		if (hasPendingFiles) {
-			// Refresh every 3 seconds if there are files being uploaded
-			autoRefreshTimerId = setTimeout(function() {
-				window.location.reload();
-			}, 3000);
+			initSSE();
 		}
 	})();
 	{{end}}
+
+	// Clean up SSE on page unload
+	window.addEventListener('beforeunload', function() {
+		if (eventSource) {
+			eventSource.close();
+		}
+	});
 </script>
 
 {{end}}

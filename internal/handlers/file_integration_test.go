@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
@@ -805,5 +806,365 @@ func TestFilenameDeduplication(t *testing.T) {
 	// Second file should have "(1)" suffix
 	if files[1].Filename != "document (1).txt" {
 		t.Errorf("Second file should be 'document (1).txt', got '%s'", files[1].Filename)
+	}
+}
+
+// TestDismissFailedUpload tests the dismiss failed upload functionality
+func TestDismissFailedUpload(t *testing.T) {
+	app := newFileTestApp(t)
+
+	user := app.createTestUser(t, "dismissuser")
+
+	t.Run("successfully dismiss failed upload", func(t *testing.T) {
+		// Create a failed file directly in the database
+		failedFile := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "failed-path",
+			LogicalPath:      "/",
+			Filename:         "failed.txt",
+			OriginalFilename: "failed.txt",
+			FileSize:         500,
+			UploadStatus:     "failed",
+			ErrorMessage:     "Upload failed: test error",
+		}
+		app.db.Create(failedFile)
+
+		// Update user's storage used
+		app.db.Model(user).UpdateColumn("storage_used", 500)
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/files/%d/dismiss", failedFile.ID), nil, user)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", failedFile.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.DismissFailedUpload(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		// Verify file was deleted from database
+		var deletedFile models.File
+		if err := app.db.First(&deletedFile, failedFile.ID).Error; err == nil {
+			t.Error("Failed file should have been deleted from database")
+		}
+
+		// Verify user's quota was restored
+		var updatedUser models.User
+		app.db.First(&updatedUser, user.ID)
+		if updatedUser.StorageUsed != 0 {
+			t.Errorf("Expected storage used to be 0 after dismiss, got %d", updatedUser.StorageUsed)
+		}
+	})
+
+	t.Run("cannot dismiss completed upload", func(t *testing.T) {
+		completedFile := app.createTestFile(t, user, "completed.txt", "Completed content")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/files/%d/dismiss", completedFile.ID), nil, user)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", completedFile.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.DismissFailedUpload(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400 for non-failed file, got %d", w.Code)
+		}
+
+		// Verify file still exists
+		var existingFile models.File
+		if err := app.db.First(&existingFile, completedFile.ID).Error; err != nil {
+			t.Error("Completed file should not have been deleted")
+		}
+	})
+
+	t.Run("cannot dismiss pending upload", func(t *testing.T) {
+		pendingFile := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "pending-path",
+			LogicalPath:      "/",
+			Filename:         "pending.txt",
+			OriginalFilename: "pending.txt",
+			FileSize:         100,
+			UploadStatus:     "pending",
+		}
+		app.db.Create(pendingFile)
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/files/%d/dismiss", pendingFile.ID), nil, user)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", pendingFile.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.DismissFailedUpload(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400 for pending file, got %d", w.Code)
+		}
+	})
+
+	t.Run("cannot dismiss other user's failed upload", func(t *testing.T) {
+		otherUser := app.createTestUser(t, "otheruser2")
+
+		// Create a failed file for the original user
+		failedFile := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "other-failed-path",
+			LogicalPath:      "/",
+			Filename:         "otherfailed.txt",
+			OriginalFilename: "otherfailed.txt",
+			FileSize:         100,
+			UploadStatus:     "failed",
+			ErrorMessage:     "Test error",
+		}
+		app.db.Create(failedFile)
+
+		// Try to dismiss as different user
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/files/%d/dismiss", failedFile.ID), nil, otherUser)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", failedFile.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.DismissFailedUpload(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404 for other user's file, got %d", w.Code)
+		}
+
+		// Verify file still exists
+		var existingFile models.File
+		if err := app.db.First(&existingFile, failedFile.ID).Error; err != nil {
+			t.Error("File should not have been deleted by other user")
+		}
+	})
+
+	t.Run("dismiss non-existent file returns 404", func(t *testing.T) {
+		req := app.authenticatedRequest(t, http.MethodPost, "/files/99999/dismiss", nil, user)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "99999")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.DismissFailedUpload(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404 for non-existent file, got %d", w.Code)
+		}
+	})
+
+	t.Run("dismiss without authentication fails", func(t *testing.T) {
+		failedFile := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "unauth-failed-path",
+			LogicalPath:      "/",
+			Filename:         "unauthfailed.txt",
+			OriginalFilename: "unauthfailed.txt",
+			FileSize:         100,
+			UploadStatus:     "failed",
+		}
+		app.db.Create(failedFile)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/files/%d/dismiss", failedFile.ID), nil)
+		req = csrf.UnsafeSkipCheck(req)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", failedFile.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.DismissFailedUpload(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401, got %d", w.Code)
+		}
+	})
+}
+
+// TestStatusStreamBasic tests the SSE endpoint basic functionality
+func TestStatusStreamBasic(t *testing.T) {
+	app := newFileTestApp(t)
+
+	user := app.createTestUser(t, "sseuser")
+
+	t.Run("requires authentication", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/files/status", nil)
+		req = csrf.UnsafeSkipCheck(req)
+
+		w := httptest.NewRecorder()
+		app.fileHandler.StatusStream(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401, got %d", w.Code)
+		}
+	})
+
+	t.Run("returns correct content type", func(t *testing.T) {
+		// Create a context with cancel so we can stop the SSE stream
+		ctx, cancel := context.WithCancel(context.Background())
+
+		req := httptest.NewRequest(http.MethodGet, "/api/files/status", nil)
+		req = req.WithContext(ctx)
+		ctxWithUser := context.WithValue(req.Context(), auth.UserContextKey, user)
+		req = req.WithContext(ctxWithUser)
+		req = csrf.UnsafeSkipCheck(req)
+
+		w := httptest.NewRecorder()
+
+		// Run SSE handler in goroutine since it blocks
+		done := make(chan struct{})
+		go func() {
+			app.fileHandler.StatusStream(w, req)
+			close(done)
+		}()
+
+		// Give it a moment to start and set headers
+		time.Sleep(50 * time.Millisecond)
+
+		// Cancel the context to stop the stream
+		cancel()
+
+		// Wait for handler to finish
+		<-done
+
+		contentType := w.Header().Get("Content-Type")
+		if contentType != "text/event-stream" {
+			t.Errorf("Expected Content-Type 'text/event-stream', got '%s'", contentType)
+		}
+
+		cacheControl := w.Header().Get("Cache-Control")
+		if cacheControl != "no-cache" {
+			t.Errorf("Expected Cache-Control 'no-cache', got '%s'", cacheControl)
+		}
+
+		// Check that connection event was sent
+		body := w.Body.String()
+		if !strings.Contains(body, "event: connected") {
+			t.Errorf("Expected 'event: connected' in response, got: %s", body)
+		}
+	})
+}
+
+// TestMarkUploadFailedPreservesError tests that failed uploads preserve error messages
+func TestMarkUploadFailedPreservesError(t *testing.T) {
+	app := newFileTestApp(t)
+
+	user := app.createTestUser(t, "faileduser")
+
+	// Create a pending file that we'll mark as failed
+	pendingFile := &models.File{
+		UserID:           user.ID,
+		StoragePath:      "will-fail-path",
+		LogicalPath:      "/",
+		Filename:         "willfail.txt",
+		OriginalFilename: "willfail.txt",
+		FileSize:         100,
+		UploadStatus:     "pending",
+	}
+	app.db.Create(pendingFile)
+
+	// Update the file to failed status with error message (simulating what markUploadFailed does)
+	errorMessage := "Storage backend error: disk full"
+	app.db.Model(pendingFile).Updates(map[string]interface{}{
+		"upload_status": "failed",
+		"error_message": errorMessage,
+	})
+
+	// Verify the error message was saved
+	var failedFile models.File
+	if err := app.db.First(&failedFile, pendingFile.ID).Error; err != nil {
+		t.Fatalf("Failed to retrieve file: %v", err)
+	}
+
+	if failedFile.UploadStatus != "failed" {
+		t.Errorf("Expected upload_status 'failed', got '%s'", failedFile.UploadStatus)
+	}
+
+	if failedFile.ErrorMessage != errorMessage {
+		t.Errorf("Expected error_message '%s', got '%s'", errorMessage, failedFile.ErrorMessage)
+	}
+}
+
+// TestFailedUploadVisibleInFileList tests that failed uploads appear in the file list
+func TestFailedUploadVisibleInFileList(t *testing.T) {
+	app := newFileTestApp(t)
+
+	user := app.createTestUser(t, "visibleuser")
+
+	// Create files with different statuses
+	completedFile := &models.File{
+		UserID:           user.ID,
+		StoragePath:      "completed-path",
+		LogicalPath:      "/",
+		Filename:         "completed.txt",
+		OriginalFilename: "completed.txt",
+		FileSize:         100,
+		UploadStatus:     "completed",
+	}
+	app.db.Create(completedFile)
+
+	failedFile := &models.File{
+		UserID:           user.ID,
+		StoragePath:      "failed-path",
+		LogicalPath:      "/",
+		Filename:         "failed.txt",
+		OriginalFilename: "failed.txt",
+		FileSize:         200,
+		UploadStatus:     "failed",
+		ErrorMessage:     "Connection lost during upload",
+	}
+	app.db.Create(failedFile)
+
+	pendingFile := &models.File{
+		UserID:           user.ID,
+		StoragePath:      "pending-path",
+		LogicalPath:      "/",
+		Filename:         "pending.txt",
+		OriginalFilename: "pending.txt",
+		FileSize:         300,
+		UploadStatus:     "pending",
+	}
+	app.db.Create(pendingFile)
+
+	// Query all files for the user (simulating what page handler does)
+	var files []models.File
+	if err := app.db.Where("user_id = ? AND logical_path = ?", user.ID, "/").
+		Order("filename").Find(&files).Error; err != nil {
+		t.Fatalf("Failed to query files: %v", err)
+	}
+
+	// Should have all 3 files
+	if len(files) != 3 {
+		t.Errorf("Expected 3 files, got %d", len(files))
+	}
+
+	// Check that we have each status represented
+	statusCounts := make(map[string]int)
+	for _, f := range files {
+		statusCounts[f.UploadStatus]++
+	}
+
+	if statusCounts["completed"] != 1 {
+		t.Errorf("Expected 1 completed file, got %d", statusCounts["completed"])
+	}
+	if statusCounts["failed"] != 1 {
+		t.Errorf("Expected 1 failed file, got %d", statusCounts["failed"])
+	}
+	if statusCounts["pending"] != 1 {
+		t.Errorf("Expected 1 pending file, got %d", statusCounts["pending"])
+	}
+
+	// Verify the failed file has its error message
+	for _, f := range files {
+		if f.UploadStatus == "failed" && f.ErrorMessage == "" {
+			t.Error("Failed file should have an error message")
+		}
 	}
 }

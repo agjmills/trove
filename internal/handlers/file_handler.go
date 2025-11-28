@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
@@ -121,7 +123,7 @@ func (h *FileHandler) processUpload(job uploadJob) {
 	tempFile, err := os.Open(job.tempPath)
 	if err != nil {
 		log.Printf("Upload worker: failed to open temp file: %v", err)
-		h.cleanupFailedUpload(file)
+		h.markUploadFailed(file, "Failed to process uploaded file")
 		os.Remove(job.tempPath)
 		return
 	}
@@ -136,7 +138,7 @@ func (h *FileHandler) processUpload(job uploadJob) {
 
 	if err != nil {
 		log.Printf("Upload worker: failed to upload file %d: %v", job.fileID, err)
-		h.cleanupFailedUpload(file)
+		h.markUploadFailed(file, "Storage upload failed: "+err.Error())
 		os.Remove(job.tempPath)
 		return
 	}
@@ -205,6 +207,25 @@ func CleanupFailedUploads(db *gorm.DB, userID uint) (int64, error) {
 	})
 
 	return totalCleaned, err
+}
+
+// markUploadFailed marks a file as failed with an error message.
+// This preserves the record so users can see what failed and optionally retry.
+func (h *FileHandler) markUploadFailed(file models.File, errorMessage string) {
+	// Truncate error message if too long
+	if len(errorMessage) > 500 {
+		errorMessage = errorMessage[:497] + "..."
+	}
+
+	if err := h.db.Model(&file).Updates(map[string]interface{}{
+		"upload_status": "failed",
+		"error_message": errorMessage,
+		"temp_path":     "",
+	}).Error; err != nil {
+		log.Printf("Upload worker: failed to mark file %d as failed: %v", file.ID, err)
+	} else {
+		log.Printf("Upload worker: marked file %d as failed: %s", file.ID, errorMessage)
+	}
 }
 
 // cleanupFailedUpload removes a failed upload's database record and restores the user's storage quota.
@@ -500,9 +521,9 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Upload: queued file %d for background upload", fileRecord.ID)
 		default:
 			h.pendingJobs.Done() // Undo the Add since job won't be processed
-			log.Printf("Warning: upload queue full, cleaning up file %d", fileRecord.ID)
-			// Queue is full - clean up immediately (restore quota and delete record)
-			h.cleanupFailedUpload(fileRecord)
+			log.Printf("Warning: upload queue full, marking file %d as failed", fileRecord.ID)
+			// Queue is full - mark as failed instead of deleting
+			h.markUploadFailed(fileRecord, "Upload queue is full. Please try again later.")
 			// Clean up temp file since no worker will process it
 			os.Remove(tempPathForDB)
 		}
@@ -794,4 +815,139 @@ func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 	flash.Success(w, "Folder deleted successfully.")
 	// Redirect back to parent folder
 	http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+}
+
+// FileStatusEvent represents a file status update for SSE
+type FileStatusEvent struct {
+	ID           uint   `json:"id"`
+	UploadStatus string `json:"upload_status"`
+	ErrorMessage string `json:"error_message,omitempty"`
+	Filename     string `json:"filename"`
+}
+
+// StatusStream provides Server-Sent Events for file upload status updates.
+// Clients connect to this endpoint to receive real-time updates when files
+// transition between pending, uploading, completed, and failed states.
+func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
+
+	// Get flusher for streaming
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Send initial connection event
+	fmt.Fprintf(w, "event: connected\ndata: {}\n\n")
+	flusher.Flush()
+
+	// Track last known state to detect changes
+	lastState := make(map[uint]string)
+
+	// Poll interval
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	// Context for cleanup
+	ctx := r.Context()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// Query for files that are not completed (pending, uploading, failed)
+			var files []models.File
+			if err := h.db.Where("user_id = ? AND upload_status IN (?)", user.ID, []string{"pending", "uploading", "failed"}).
+				Find(&files).Error; err != nil {
+				log.Printf("SSE: failed to query files: %v", err)
+				continue
+			}
+
+			// Also check for recently completed files (completed in last 5 seconds)
+			var recentlyCompleted []models.File
+			fiveSecondsAgo := time.Now().Add(-5 * time.Second)
+			if err := h.db.Where("user_id = ? AND upload_status = ? AND updated_at > ?", user.ID, "completed", fiveSecondsAgo).
+				Find(&recentlyCompleted).Error; err != nil {
+				log.Printf("SSE: failed to query recently completed files: %v", err)
+			}
+			files = append(files, recentlyCompleted...)
+
+			// Build current state and detect changes
+			currentState := make(map[uint]string)
+			for _, file := range files {
+				currentState[file.ID] = file.UploadStatus
+
+				// Check if state changed or is new
+				if oldStatus, exists := lastState[file.ID]; !exists || oldStatus != file.UploadStatus {
+					event := FileStatusEvent{
+						ID:           file.ID,
+						UploadStatus: file.UploadStatus,
+						ErrorMessage: file.ErrorMessage,
+						Filename:     file.OriginalFilename,
+					}
+
+					data, err := json.Marshal(event)
+					if err != nil {
+						log.Printf("SSE: failed to marshal event: %v", err)
+						continue
+					}
+
+					fmt.Fprintf(w, "event: status\ndata: %s\n\n", data)
+					flusher.Flush()
+				}
+			}
+
+			// Update last known state
+			lastState = currentState
+		}
+	}
+}
+
+// DismissFailedUpload removes a failed upload and restores the user's quota.
+// This allows users to acknowledge and dismiss failed uploads from the UI.
+func (h *FileHandler) DismissFailedUpload(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	fileID := chi.URLParam(r, "id")
+	if fileID == "" {
+		http.Error(w, "File ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Find the file
+	var file models.File
+	if err := h.db.Where("id = ? AND user_id = ?", fileID, user.ID).First(&file).Error; err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	// Only allow dismissing failed uploads
+	if file.UploadStatus != "failed" {
+		http.Error(w, "Can only dismiss failed uploads", http.StatusBadRequest)
+		return
+	}
+
+	// Use the cleanup function to properly restore quota
+	h.cleanupFailedUpload(file)
+
+	// Return success
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `{"success": true}`)
 }
