@@ -19,15 +19,22 @@ import (
 func init() {
 	// Ensure templates are loaded for integration tests
 	// Find the project root by looking for go.mod
-	dir, _ := os.Getwd()
+	dir, err := os.Getwd()
+	if err != nil {
+		panic("failed to get working directory: " + err.Error())
+	}
 	for dir != "/" {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			os.Chdir(dir)
+			if err := os.Chdir(dir); err != nil {
+				panic("failed to change directory: " + err.Error())
+			}
 			break
 		}
 		dir = filepath.Dir(dir)
 	}
-	LoadTemplates()
+	if err := LoadTemplates(); err != nil {
+		panic("failed to load templates: " + err.Error())
+	}
 }
 
 // pageTestApp encapsulates all dependencies for page handler integration tests
@@ -369,7 +376,9 @@ func TestShowFilesImplicitFolders(t *testing.T) {
 		MimeType:         "text/plain",
 		UploadStatus:     "completed",
 	}
-	app.db.Create(file)
+	if err := app.db.Create(file).Error; err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
 
 	t.Run("implicit folder appears in listing", func(t *testing.T) {
 		req := app.authenticatedRequest(t, http.MethodGet, "/files", user)
@@ -430,7 +439,7 @@ func TestShowFilesPathSanitization(t *testing.T) {
 			// All these should result in 404 (folder not found) after sanitization
 			// The key is they shouldn't cause a panic or security issue
 			if w.Code != tc.expectStatus {
-				t.Logf("Path %q resulted in status %d (expected %d)", tc.folder, w.Code, tc.expectStatus)
+				t.Errorf("Path %q resulted in status %d (expected %d)", tc.folder, w.Code, tc.expectStatus)
 			}
 		})
 	}
