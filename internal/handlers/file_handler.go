@@ -214,7 +214,11 @@ func CleanupFailedUploads(db *gorm.DB, userID uint) (int64, error) {
 func (h *FileHandler) markUploadFailed(file models.File, errorMessage string) {
 	// Truncate error message if too long
 	if len(errorMessage) > 500 {
-		errorMessage = errorMessage[:497] + "..."
+		// Truncate at rune boundary to avoid breaking UTF-8
+		runes := []rune(errorMessage)
+		if len(runes) > 497 {
+			errorMessage = string(runes[:497]) + "..."
+		}
 	}
 
 	if err := h.db.Model(&file).Updates(map[string]interface{}{
