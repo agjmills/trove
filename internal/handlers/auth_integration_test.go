@@ -145,7 +145,9 @@ func TestRegisterIntegration_FullFlow(t *testing.T) {
 			expectedStatus: http.StatusCreated,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
 				var resp map[string]interface{}
-				json.Unmarshal(w.Body.Bytes(), &resp)
+				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("failed to unmarshal response body: %v; body: %s", err, w.Body.String())
+				}
 				if resp["username"] != "jsonuser" {
 					t.Errorf("Expected username 'jsonuser', got %v", resp["username"])
 				}
@@ -285,7 +287,9 @@ func TestLoginIntegration_FullFlow(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
 				var resp map[string]interface{}
-				json.Unmarshal(w.Body.Bytes(), &resp)
+				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("failed to unmarshal response body: %v; body: %s", err, w.Body.String())
+				}
 				if resp["username"] != "loginuser" {
 					t.Errorf("Expected username 'loginuser', got %v", resp["username"])
 				}
@@ -500,7 +504,9 @@ func TestLogoutIntegration(t *testing.T) {
 		}
 
 		var resp map[string]string
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to unmarshal response body: %v; body: %s", err, w.Body.String())
+		}
 		if resp["message"] != "Logged out" {
 			t.Errorf("Expected 'Logged out' message, got %v", resp["message"])
 		}
