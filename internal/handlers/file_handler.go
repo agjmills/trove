@@ -160,6 +160,53 @@ func (h *FileHandler) processUpload(job uploadJob) {
 	os.Remove(job.tempPath)
 }
 
+// CleanupFailedUploads removes failed/pending upload records for a user and restores their storage quota.
+// This function is transactional and idempotent: it computes the total size of files to be deleted
+// within the transaction, updates storage_used once with that total, then deletes the file rows.
+// This prevents race conditions from concurrent cleanup attempts and double-decrementing quota.
+//
+// Parameters:
+//   - db: the GORM database handle
+//   - userID: the user whose failed uploads should be cleaned up
+//
+// Returns the number of files cleaned up and any error encountered.
+func CleanupFailedUploads(db *gorm.DB, userID uint) (int64, error) {
+	var totalCleaned int64
+
+	err := db.Transaction(func(tx *gorm.DB) error {
+		// Calculate total size of files to be deleted (within transaction for consistency)
+		var totalSize int64
+		if err := tx.Model(&models.File{}).
+			Select("COALESCE(SUM(file_size), 0)").
+			Where("user_id = ? AND upload_status IN (?)", userID, []string{"pending", "failed"}).
+			Scan(&totalSize).Error; err != nil {
+			return err
+		}
+
+		// Delete all failed/pending files for this user
+		result := tx.Where("user_id = ? AND upload_status IN (?)", userID, []string{"pending", "failed"}).
+			Delete(&models.File{})
+		if result.Error != nil {
+			return result.Error
+		}
+
+		totalCleaned = result.RowsAffected
+
+		// Only restore quota if we actually deleted records and had size to restore
+		if totalCleaned > 0 && totalSize > 0 {
+			if err := tx.Model(&models.User{}).Where("id = ?", userID).
+				UpdateColumn("storage_used", gorm.Expr("CASE WHEN storage_used >= ? THEN storage_used - ? ELSE 0 END", totalSize, totalSize)).Error; err != nil {
+				return err
+			}
+			log.Printf("Cleanup: removed %d failed uploads, restored %d bytes to user %d", totalCleaned, totalSize, userID)
+		}
+
+		return nil
+	})
+
+	return totalCleaned, err
+}
+
 // cleanupFailedUpload removes a failed upload's database record and restores the user's storage quota.
 // This function is idempotent and safe for concurrent calls: it uses a transaction to ensure
 // atomicity, and only operates on files with "pending" or "failed" upload status to prevent
