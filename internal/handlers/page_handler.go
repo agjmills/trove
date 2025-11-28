@@ -211,6 +211,29 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	// Get flash message if any
 	flashMsg := flash.Get(w, r)
 
+	// Check for failed uploads and notify user
+	var failedCount int64
+	h.db.Model(&models.File{}).Where("user_id = ? AND upload_status = ?", user.ID, "failed").Count(&failedCount)
+	if failedCount > 0 {
+		if flashMsg == nil {
+			if failedCount == 1 {
+				flashMsg = &flash.Message{Type: "error", Content: "A file failed to upload. Please try again."}
+			} else {
+				flashMsg = &flash.Message{Type: "error", Content: "Some files failed to upload. Please try again."}
+			}
+		}
+		// Clean up failed uploads (delete records and restore quota)
+		var failedFiles []models.File
+		h.db.Where("user_id = ? AND upload_status = ?", user.ID, "failed").Find(&failedFiles)
+		for _, file := range failedFiles {
+			// Restore storage quota
+			h.db.Model(&models.User{}).Where("id = ?", user.ID).
+				UpdateColumn("storage_used", gorm.Expr("CASE WHEN storage_used >= ? THEN storage_used - ? ELSE 0 END", file.FileSize, file.FileSize))
+			// Delete the file record
+			h.db.Delete(&file)
+		}
+	}
+
 	render(w, "files.html", map[string]any{
 		"Title":         "Files",
 		"User":          user,

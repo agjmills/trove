@@ -121,7 +121,7 @@ func (h *FileHandler) processUpload(job uploadJob) {
 	tempFile, err := os.Open(job.tempPath)
 	if err != nil {
 		log.Printf("Upload worker: failed to open temp file: %v", err)
-		h.db.Model(&file).Update("upload_status", "failed")
+		h.cleanupFailedUpload(file)
 		os.Remove(job.tempPath)
 		return
 	}
@@ -136,7 +136,7 @@ func (h *FileHandler) processUpload(job uploadJob) {
 
 	if err != nil {
 		log.Printf("Upload worker: failed to upload file %d: %v", job.fileID, err)
-		h.db.Model(&file).Update("upload_status", "failed")
+		h.cleanupFailedUpload(file)
 		os.Remove(job.tempPath)
 		return
 	}
@@ -158,6 +158,22 @@ func (h *FileHandler) processUpload(job uploadJob) {
 
 	// Clean up temp file
 	os.Remove(job.tempPath)
+}
+
+// cleanupFailedUpload removes a failed upload's database record and restores the user's storage quota.
+func (h *FileHandler) cleanupFailedUpload(file models.File) {
+	// Restore user's storage quota
+	if err := h.db.Model(&models.User{}).Where("id = ?", file.UserID).
+		UpdateColumn("storage_used", gorm.Expr("CASE WHEN storage_used >= ? THEN storage_used - ? ELSE 0 END", file.FileSize, file.FileSize)).Error; err != nil {
+		log.Printf("Upload worker: failed to restore storage quota for user %d: %v", file.UserID, err)
+	}
+
+	// Delete the file record from the database
+	if err := h.db.Delete(&file).Error; err != nil {
+		log.Printf("Upload worker: failed to delete failed file record %d: %v", file.ID, err)
+	} else {
+		log.Printf("Upload worker: cleaned up failed upload %d, restored %d bytes to user %d", file.ID, file.FileSize, file.UserID)
+	}
 }
 
 // sanitizeFolderPath cleans and validates a folder path

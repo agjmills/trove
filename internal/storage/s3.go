@@ -258,6 +258,8 @@ func isS3NotFoundError(err error) bool {
 
 // hashingReader wraps an io.Reader and computes a hash as data is read.
 // This allows streaming uploads to S3 without buffering entire files in memory.
+// It also implements io.Seeker if the underlying reader supports it, which is
+// required for S3 upload retries.
 type hashingReader struct {
 	reader    io.Reader
 	hasher    io.Writer
@@ -272,4 +274,27 @@ func (hr *hashingReader) Read(p []byte) (n int, err error) {
 		hr.hasher.Write(p[:n])
 	}
 	return n, err
+}
+
+// Seek implements io.Seeker by delegating to the underlying reader if it supports seeking.
+// This is required for S3 upload retries - the SDK needs to rewind the stream on failure.
+func (hr *hashingReader) Seek(offset int64, whence int) (int64, error) {
+	seeker, ok := hr.reader.(io.Seeker)
+	if !ok {
+		return 0, fmt.Errorf("underlying reader does not support seeking")
+	}
+
+	pos, err := seeker.Seek(offset, whence)
+	if err != nil {
+		return pos, err
+	}
+
+	// If seeking back to the start, reset the hash and bytes counter
+	// since we'll be re-reading the content
+	if offset == 0 && whence == io.SeekStart {
+		hr.hasher = sha256.New()
+		hr.bytesRead = 0
+	}
+
+	return pos, nil
 }
