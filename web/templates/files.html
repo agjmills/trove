@@ -358,8 +358,20 @@
 			const rect = button.getBoundingClientRect();
 			menu.style.position = 'fixed';
 			menu.style.top = (rect.bottom + 4) + 'px';
-			menu.style.right = (window.innerWidth - rect.right) + 'px';
-			menu.style.left = 'auto';
+			
+			// Calculate right offset and check for overflow on small screens
+			const rightOffset = window.innerWidth - rect.right;
+			const menuWidth = 160; // Approximate menu width (w-40 = 10rem = 160px)
+			
+			// If menu would overflow left edge, switch to left alignment
+			if (rect.right - menuWidth < 0) {
+				menu.style.left = '4px';
+				menu.style.right = 'auto';
+			} else {
+				menu.style.right = rightOffset + 'px';
+				menu.style.left = 'auto';
+			}
+			
 			menu.classList.remove('hidden');
 			currentOpenMenu = menu;
 		} else {
