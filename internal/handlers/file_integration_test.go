@@ -1052,6 +1052,176 @@ func TestStatusStreamBasic(t *testing.T) {
 	})
 }
 
+// TestStatusStreamSendsStatusEvents tests that the SSE endpoint sends events when file status changes
+func TestStatusStreamSendsStatusEvents(t *testing.T) {
+	app := newFileTestApp(t)
+
+	user := app.createTestUser(t, "sseeventuser")
+
+	t.Run("sends status event for pending file", func(t *testing.T) {
+		// Create a pending file before starting the SSE stream
+		pendingFile := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "sse-test-path",
+			LogicalPath:      "/",
+			Filename:         "sse-test.txt",
+			OriginalFilename: "sse-test.txt",
+			FileSize:         100,
+			UploadStatus:     "pending",
+		}
+		app.db.Create(pendingFile)
+
+		// Create a context with cancel so we can stop the SSE stream
+		ctx, cancel := context.WithCancel(context.Background())
+
+		req := httptest.NewRequest(http.MethodGet, "/api/files/status", nil)
+		req = req.WithContext(ctx)
+		ctxWithUser := context.WithValue(req.Context(), auth.UserContextKey, user)
+		req = req.WithContext(ctxWithUser)
+		req = csrf.UnsafeSkipCheck(req)
+
+		w := httptest.NewRecorder()
+
+		// Run SSE handler in goroutine since it blocks
+		done := make(chan struct{})
+		go func() {
+			app.fileHandler.StatusStream(w, req)
+			close(done)
+		}()
+
+		// Wait for at least one poll cycle (1 second + buffer)
+		time.Sleep(1200 * time.Millisecond)
+
+		// Cancel the context to stop the stream
+		cancel()
+
+		// Wait for handler to finish
+		<-done
+
+		body := w.Body.String()
+
+		// Should have received status event for the pending file
+		if !strings.Contains(body, "event: status") {
+			t.Errorf("Expected 'event: status' in response for pending file, got: %s", body)
+		}
+
+		if !strings.Contains(body, "pending") {
+			t.Errorf("Expected 'pending' status in response, got: %s", body)
+		}
+
+		if !strings.Contains(body, "sse-test.txt") {
+			t.Errorf("Expected filename 'sse-test.txt' in response, got: %s", body)
+		}
+
+		// Cleanup
+		app.db.Unscoped().Delete(pendingFile)
+	})
+
+	t.Run("sends status event when file status changes", func(t *testing.T) {
+		// Create a file that starts as pending
+		changingFile := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "sse-change-path",
+			LogicalPath:      "/",
+			Filename:         "sse-change.txt",
+			OriginalFilename: "sse-change.txt",
+			FileSize:         100,
+			UploadStatus:     "pending",
+		}
+		app.db.Create(changingFile)
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		req := httptest.NewRequest(http.MethodGet, "/api/files/status", nil)
+		req = req.WithContext(ctx)
+		ctxWithUser := context.WithValue(req.Context(), auth.UserContextKey, user)
+		req = req.WithContext(ctxWithUser)
+		req = csrf.UnsafeSkipCheck(req)
+
+		w := httptest.NewRecorder()
+
+		done := make(chan struct{})
+		go func() {
+			app.fileHandler.StatusStream(w, req)
+			close(done)
+		}()
+
+		// Wait for first poll
+		time.Sleep(1200 * time.Millisecond)
+
+		// Change the file status to uploading
+		app.db.Model(changingFile).Update("upload_status", "uploading")
+
+		// Wait for another poll cycle to detect the change
+		time.Sleep(1200 * time.Millisecond)
+
+		cancel()
+		<-done
+
+		body := w.Body.String()
+
+		// Should have received events for both pending and uploading states
+		if !strings.Contains(body, "pending") {
+			t.Errorf("Expected 'pending' status in response, got: %s", body)
+		}
+
+		if !strings.Contains(body, "uploading") {
+			t.Errorf("Expected 'uploading' status in response after change, got: %s", body)
+		}
+
+		// Cleanup
+		app.db.Unscoped().Delete(changingFile)
+	})
+
+	t.Run("includes error message for failed uploads", func(t *testing.T) {
+		failedFile := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "sse-failed-path",
+			LogicalPath:      "/",
+			Filename:         "sse-failed.txt",
+			OriginalFilename: "sse-failed.txt",
+			FileSize:         100,
+			UploadStatus:     "failed",
+			ErrorMessage:     "Test error message",
+		}
+		app.db.Create(failedFile)
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		req := httptest.NewRequest(http.MethodGet, "/api/files/status", nil)
+		req = req.WithContext(ctx)
+		ctxWithUser := context.WithValue(req.Context(), auth.UserContextKey, user)
+		req = req.WithContext(ctxWithUser)
+		req = csrf.UnsafeSkipCheck(req)
+
+		w := httptest.NewRecorder()
+
+		done := make(chan struct{})
+		go func() {
+			app.fileHandler.StatusStream(w, req)
+			close(done)
+		}()
+
+		time.Sleep(1200 * time.Millisecond)
+
+		cancel()
+		<-done
+
+		body := w.Body.String()
+
+		if !strings.Contains(body, "failed") {
+			t.Errorf("Expected 'failed' status in response, got: %s", body)
+		}
+
+		if !strings.Contains(body, "Test error message") {
+			t.Errorf("Expected error message in response, got: %s", body)
+		}
+
+		// Cleanup
+		app.db.Unscoped().Delete(failedFile)
+	})
+}
+
 // TestMarkUploadFailedPreservesError tests that failed uploads preserve error messages
 func TestMarkUploadFailedPreservesError(t *testing.T) {
 	app := newFileTestApp(t)

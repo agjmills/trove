@@ -862,8 +862,13 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 	// Track last known state to detect changes
 	lastState := make(map[uint]string)
 
-	// Poll interval
-	ticker := time.NewTicker(1 * time.Second)
+	// Adaptive polling: start with 1s, back off to 5s if no activity detected
+	pollInterval := 1 * time.Second
+	maxPollInterval := 5 * time.Second
+	idleCount := 0
+	idleThreshold := 5 // Back off after 5 consecutive idle polls
+
+	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
 	// Context for cleanup
@@ -893,11 +898,13 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 
 			// Build current state and detect changes
 			currentState := make(map[uint]string)
+			hasChanges := false
 			for _, file := range files {
 				currentState[file.ID] = file.UploadStatus
 
 				// Check if state changed or is new
 				if oldStatus, exists := lastState[file.ID]; !exists || oldStatus != file.UploadStatus {
+					hasChanges = true
 					event := FileStatusEvent{
 						ID:           file.ID,
 						UploadStatus: file.UploadStatus,
@@ -926,6 +933,22 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 
 			// Update last known state
 			lastState = currentState
+
+			// Adaptive polling: back off when idle, speed up when active
+			if len(currentState) == 0 && !hasChanges {
+				idleCount++
+				if idleCount > idleThreshold && pollInterval != maxPollInterval {
+					pollInterval = maxPollInterval
+					ticker.Reset(pollInterval)
+				}
+			} else {
+				// Activity detected: reset to fast polling
+				if pollInterval != 1*time.Second {
+					pollInterval = 1 * time.Second
+					ticker.Reset(pollInterval)
+				}
+				idleCount = 0
+			}
 		}
 	}
 }
