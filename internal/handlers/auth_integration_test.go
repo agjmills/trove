@@ -115,9 +115,19 @@ func (app *testApp) authenticatedRequest(t *testing.T, method, path string, body
 		req = httptest.NewRequest(method, path, nil)
 	}
 
-	// Set up session with user ID
-	ctx := context.WithValue(req.Context(), auth.UserContextKey, user)
-	req = req.WithContext(ctx)
+	// Create a session token and commit the session with user_id
+	commitReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	commitW := httptest.NewRecorder()
+	app.sessionManager.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.sessionManager.Put(r.Context(), "user_id", int(user.ID))
+		_, _, _ = app.sessionManager.Commit(r.Context())
+	})).ServeHTTP(commitW, commitReq)
+
+	// Get the session cookie from the response and add it to the actual request
+	for _, cookie := range commitW.Result().Cookies() {
+		req.AddCookie(cookie)
+	}
+
 	req = csrf.UnsafeSkipCheck(req)
 
 	return req
@@ -466,7 +476,7 @@ func TestChangePasswordIntegration(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 
 			w := httptest.NewRecorder()
-			app.authHandler.ChangePassword(w, req)
+			app.router.ServeHTTP(w, req)
 
 			if w.Code != tc.expectedStatus {
 				t.Errorf("Expected status %d, got %d: %s", tc.expectedStatus, w.Code, w.Body.String())
