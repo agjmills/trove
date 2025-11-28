@@ -520,8 +520,14 @@
 		});
 	}
 
-	// Warn user if they try to leave during an active upload
+	// Handle page unload: warn about active uploads and clean up SSE connection
 	window.addEventListener('beforeunload', function(e) {
+		// Clean up SSE connection
+		if (eventSource) {
+			eventSource.close();
+		}
+
+		// Warn user if they try to leave during an active upload
 		if (isUploading) {
 			e.preventDefault();
 			// Modern browsers ignore custom messages, but we need to return something
@@ -839,12 +845,6 @@
 	})();
 	{{end}}
 
-	// Clean up SSE on page unload
-	window.addEventListener('beforeunload', function() {
-		if (eventSource) {
-			eventSource.close();
-		}
-	});
 </script>
 
 {{end}}
