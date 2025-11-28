@@ -35,8 +35,8 @@ type fileTestApp struct {
 func newFileTestApp(t *testing.T) *fileTestApp {
 	t.Helper()
 
-	// Use a unique database file per test to avoid concurrent access issues
-	// with background workers from other tests
+	// Use shared cache in-memory database so background workers can access the same data.
+	// Each test gets a fresh database since newFileTestApp creates a new connection.
 	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("Failed to open test database: %v", err)
@@ -78,11 +78,6 @@ func newFileTestApp(t *testing.T) *fileTestApp {
 	})
 
 	return app
-}
-
-// cleanup closes the file handler's background workers
-func (app *fileTestApp) cleanup() {
-	app.fileHandler.Shutdown()
 }
 
 // createTestUserForFiles creates a test user for file operations
@@ -659,7 +654,9 @@ func TestDeleteFolderIntegration(t *testing.T) {
 			FileSize:         10,
 			UploadStatus:     "completed",
 		}
-		app.db.Create(file)
+		if err := app.db.Create(file).Error; err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
 
 		form := url.Values{}
 		form.Set("current_folder", "/")
