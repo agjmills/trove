@@ -495,7 +495,8 @@
 			
 			if (confirm(message)) {
 				const formId = isMobile ? 'delete-form-mobile-' + userId : 'delete-form-' + userId;
-				document.getElementById(formId).submit();
+				const form = document.getElementById(formId);
+				if (form) form.submit();
 			}
 		}
 	});
