@@ -846,7 +846,10 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
+	w.Header().Set("X-Accel-Buffering", "no")          // Disable nginx buffering
+	w.Header().Set("Access-Control-Allow-Origin", "*") // Allow SSE from any origin
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.WriteHeader(http.StatusOK) // Explicitly write the status to ensure headers are sent
 
 	// Get flusher for streaming
 	flusher, ok := w.(http.Flusher)
@@ -854,6 +857,9 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
 		return
 	}
+
+	// Flush headers immediately so client knows connection is established
+	flusher.Flush()
 
 	// Send initial connection event
 	fmt.Fprintf(w, "event: connected\ndata: {}\n\n")
@@ -905,10 +911,17 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 				// Check if state changed or is new
 				if oldStatus, exists := lastState[file.ID]; !exists || oldStatus != file.UploadStatus {
 					hasChanges = true
+					// For failed uploads, use a generic error message to avoid exposing
+					// internal details (e.g., S3 connection errors) to the user.
+					// Detailed errors are logged server-side.
+					errorMsg := file.ErrorMessage
+					if file.UploadStatus == "failed" && errorMsg != "" {
+						errorMsg = "Upload failed. Check server logs for details."
+					}
 					event := FileStatusEvent{
 						ID:           file.ID,
 						UploadStatus: file.UploadStatus,
-						ErrorMessage: file.ErrorMessage,
+						ErrorMessage: errorMsg,
 						Filename:     file.OriginalFilename,
 					}
 
@@ -923,10 +936,33 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			// Clean up entries from lastState that are no longer being tracked
-			// This prevents the map from growing indefinitely during long-lived connections
-			for id := range lastState {
+			// Check for files that were previously tracked but are no longer in our query results.
+			// This happens when a file transitions to "completed" after the 5-second window.
+			// We need to fetch these files individually to send the completion event.
+			for id, oldStatus := range lastState {
 				if _, exists := currentState[id]; !exists {
+					// File was previously tracked but not in current results
+					// Check if it completed (not deleted)
+					if oldStatus == "pending" || oldStatus == "uploading" {
+						var file models.File
+						if err := h.db.Where("id = ? AND user_id = ?", id, user.ID).First(&file).Error; err == nil {
+							// File exists, send its current status
+							if file.UploadStatus == "completed" {
+								hasChanges = true
+								event := FileStatusEvent{
+									ID:           file.ID,
+									UploadStatus: file.UploadStatus,
+									ErrorMessage: "",
+									Filename:     file.OriginalFilename,
+								}
+								data, err := json.Marshal(event)
+								if err == nil {
+									fmt.Fprintf(w, "event: status\ndata: %s\n\n", data)
+									flusher.Flush()
+								}
+							}
+						}
+					}
 					delete(lastState, id)
 				}
 			}

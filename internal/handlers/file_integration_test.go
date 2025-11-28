@@ -1173,7 +1173,7 @@ func TestStatusStreamSendsStatusEvents(t *testing.T) {
 		app.db.Unscoped().Delete(changingFile)
 	})
 
-	t.Run("includes error message for failed uploads", func(t *testing.T) {
+	t.Run("includes generic error message for failed uploads", func(t *testing.T) {
 		failedFile := &models.File{
 			UserID:           user.ID,
 			StoragePath:      "sse-failed-path",
@@ -1182,7 +1182,7 @@ func TestStatusStreamSendsStatusEvents(t *testing.T) {
 			OriginalFilename: "sse-failed.txt",
 			FileSize:         100,
 			UploadStatus:     "failed",
-			ErrorMessage:     "Test error message",
+			ErrorMessage:     "Storage upload failed: connection refused", // Detailed error stored in DB
 		}
 		app.db.Create(failedFile)
 
@@ -1213,8 +1213,14 @@ func TestStatusStreamSendsStatusEvents(t *testing.T) {
 			t.Errorf("Expected 'failed' status in response, got: %s", body)
 		}
 
-		if !strings.Contains(body, "Test error message") {
-			t.Errorf("Expected error message in response, got: %s", body)
+		// Should contain generic error message, not the detailed one
+		if !strings.Contains(body, "Check server logs for details") {
+			t.Errorf("Expected generic error message in response, got: %s", body)
+		}
+
+		// Should NOT contain the detailed error message
+		if strings.Contains(body, "connection refused") {
+			t.Errorf("Should not expose detailed error message to client, got: %s", body)
 		}
 
 		// Cleanup

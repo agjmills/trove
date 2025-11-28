@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/agjmills/trove/internal/auth"
@@ -474,7 +475,19 @@ func TestShowFilesWithUploadStatus(t *testing.T) {
 	}
 	app.db.Create(pendingFile)
 
-	t.Run("shows all files regardless of status", func(t *testing.T) {
+	failedFile := &models.File{
+		UserID:           user.ID,
+		StoragePath:      "failed-path",
+		LogicalPath:      "/",
+		Filename:         "failed.txt",
+		OriginalFilename: "failed.txt",
+		FileSize:         100,
+		UploadStatus:     "failed",
+		ErrorMessage:     "Storage error",
+	}
+	app.db.Create(failedFile)
+
+	t.Run("shows completed and pending files but not failed", func(t *testing.T) {
 		req := app.authenticatedRequest(t, http.MethodGet, "/files", user)
 
 		w := httptest.NewRecorder()
@@ -484,11 +497,37 @@ func TestShowFilesWithUploadStatus(t *testing.T) {
 			t.Errorf("Expected status 200, got %d", w.Code)
 		}
 
-		// Both files should be in database for this user
+		body := w.Body.String()
+
+		// Completed and pending files should be shown in the file table
+		if !strings.Contains(body, "completed.txt") {
+			t.Errorf("Expected completed.txt to be visible")
+		}
+		if !strings.Contains(body, "pending.txt") {
+			t.Errorf("Expected pending.txt to be visible")
+		}
+
+		// Failed files should NOT be shown in the file table (data-file-id rows)
+		// but may appear in the toast notification JavaScript
+		if strings.Contains(body, `data-file-id="`) && strings.Contains(body, "failed.txt") {
+			// Check if failed.txt appears inside a table row (file listing)
+			// It should only appear in the toast notification script, not in the table
+			if strings.Contains(body, `data-upload-status="failed"`) {
+				t.Errorf("Failed files should not be shown as rows in the file list")
+			}
+		}
+
+		// Database should still have all 3 files
 		var count int64
 		app.db.Model(&models.File{}).Where("user_id = ?", user.ID).Count(&count)
-		if count != 2 {
-			t.Errorf("Expected 2 files, got %d", count)
+		if count != 3 {
+			t.Errorf("Expected 3 files in database, got %d", count)
+		}
+
+		// Failed uploads should be passed to template for toast notification
+		// The JavaScript should show toast for failed.txt
+		if !strings.Contains(body, "showErrorToast") || !strings.Contains(body, "failed.txt") {
+			t.Errorf("Expected failed uploads to be passed to template for toast notification")
 		}
 	})
 }
