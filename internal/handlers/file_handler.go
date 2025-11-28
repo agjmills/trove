@@ -909,6 +909,14 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
+			// Clean up entries from lastState that are no longer being tracked
+			// This prevents the map from growing indefinitely during long-lived connections
+			for id := range lastState {
+				if _, exists := currentState[id]; !exists {
+					delete(lastState, id)
+				}
+			}
+
 			// Update last known state
 			lastState = currentState
 		}
