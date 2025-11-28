@@ -564,7 +564,9 @@ func TestCSRFProtection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open test database: %v", err)
 	}
-	db.AutoMigrate(&models.User{}, &models.File{}, &models.Folder{})
+	if err := db.AutoMigrate(&models.User{}, &models.File{}, &models.Folder{}); err != nil {
+		t.Fatalf("Failed to migrate database: %v", err)
+	}
 
 	cfg := &config.Config{
 		EnableRegistration: true,
@@ -593,7 +595,9 @@ func TestCSRFProtection(t *testing.T) {
 		PasswordHash: hashedPassword,
 		StorageQuota: cfg.DefaultUserQuota,
 	}
-	db.Create(user)
+	if err := db.Create(user).Error; err != nil {
+		t.Fatalf("Failed to create user: %v", err)
+	}
 
 	// Login to get session with CSRF token
 	loginForm := url.Values{}
@@ -671,7 +675,7 @@ func TestUserIsolation(t *testing.T) {
 	app := newRouteTestApp(t)
 
 	user1 := app.createTestUser(t, "user1", "password1")
-	user2 := app.createTestUser(t, "user2", "password2")
+	_ = app.createTestUser(t, "user2", "password2") // user2 needed for login test
 
 	// Create a file for user1
 	ctx := context.Background()
@@ -724,10 +728,6 @@ func TestUserIsolation(t *testing.T) {
 			t.Error("User2 should not be able to download user1's file")
 		}
 	})
-
-	// Verify user references for the test
-	_ = user1
-	_ = user2
 }
 
 // createAdminTestUser creates an admin user in the database
