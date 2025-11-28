@@ -121,7 +121,7 @@ func (h *FileHandler) processUpload(job uploadJob) {
 	tempFile, err := os.Open(job.tempPath)
 	if err != nil {
 		log.Printf("Upload worker: failed to open temp file: %v", err)
-		h.db.Model(&file).Update("upload_status", "failed")
+		h.cleanupFailedUpload(file)
 		os.Remove(job.tempPath)
 		return
 	}
@@ -136,7 +136,7 @@ func (h *FileHandler) processUpload(job uploadJob) {
 
 	if err != nil {
 		log.Printf("Upload worker: failed to upload file %d: %v", job.fileID, err)
-		h.db.Model(&file).Update("upload_status", "failed")
+		h.cleanupFailedUpload(file)
 		os.Remove(job.tempPath)
 		return
 	}
@@ -158,6 +158,85 @@ func (h *FileHandler) processUpload(job uploadJob) {
 
 	// Clean up temp file
 	os.Remove(job.tempPath)
+}
+
+// CleanupFailedUploads removes failed/pending upload records for a user and restores their storage quota.
+// This function is transactional and idempotent: it computes the total size of files to be deleted
+// within the transaction, updates storage_used once with that total, then deletes the file rows.
+// This prevents race conditions from concurrent cleanup attempts and double-decrementing quota.
+//
+// Parameters:
+//   - db: the GORM database handle
+//   - userID: the user whose failed uploads should be cleaned up
+//
+// Returns the number of files cleaned up and any error encountered.
+func CleanupFailedUploads(db *gorm.DB, userID uint) (int64, error) {
+	var totalCleaned int64
+
+	err := db.Transaction(func(tx *gorm.DB) error {
+		// Calculate total size of files to be deleted (within transaction for consistency)
+		var totalSize int64
+		if err := tx.Model(&models.File{}).
+			Select("COALESCE(SUM(file_size), 0)").
+			Where("user_id = ? AND upload_status IN (?)", userID, []string{"pending", "failed"}).
+			Scan(&totalSize).Error; err != nil {
+			return err
+		}
+
+		// Delete all failed/pending files for this user
+		result := tx.Where("user_id = ? AND upload_status IN (?)", userID, []string{"pending", "failed"}).
+			Delete(&models.File{})
+		if result.Error != nil {
+			return result.Error
+		}
+
+		totalCleaned = result.RowsAffected
+
+		// Only restore quota if we actually deleted records and had size to restore
+		if totalCleaned > 0 && totalSize > 0 {
+			if err := tx.Model(&models.User{}).Where("id = ?", userID).
+				UpdateColumn("storage_used", gorm.Expr("CASE WHEN storage_used >= ? THEN storage_used - ? ELSE 0 END", totalSize, totalSize)).Error; err != nil {
+				return err
+			}
+			log.Printf("Cleanup: removed %d failed uploads, restored %d bytes to user %d", totalCleaned, totalSize, userID)
+		}
+
+		return nil
+	})
+
+	return totalCleaned, err
+}
+
+// cleanupFailedUpload removes a failed upload's database record and restores the user's storage quota.
+// This function is idempotent and safe for concurrent calls: it uses a transaction to ensure
+// atomicity, and only operates on files with "pending" or "failed" upload status to prevent
+// double-subtracting quota if cleanup has already occurred.
+func (h *FileHandler) cleanupFailedUpload(file models.File) {
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		// Only clean up if the file is still in a failed/pending state (idempotency guard)
+		result := tx.Where("id = ? AND upload_status IN (?)", file.ID, []string{"pending", "failed"}).
+			Delete(&models.File{})
+		if result.Error != nil {
+			return result.Error
+		}
+
+		// Only restore quota if we actually deleted a record
+		if result.RowsAffected > 0 {
+			if err := tx.Model(&models.User{}).Where("id = ?", file.UserID).
+				UpdateColumn("storage_used", gorm.Expr("CASE WHEN storage_used >= ? THEN storage_used - ? ELSE 0 END", file.FileSize, file.FileSize)).Error; err != nil {
+				return err
+			}
+			log.Printf("Upload worker: cleaned up failed upload %d, restored %d bytes to user %d", file.ID, file.FileSize, file.UserID)
+		} else {
+			log.Printf("Upload worker: file %d already cleaned up, skipping", file.ID)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("Upload worker: failed to cleanup file %d: %v", file.ID, err)
+	}
 }
 
 // sanitizeFolderPath cleans and validates a folder path
@@ -421,9 +500,9 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Upload: queued file %d for background upload", fileRecord.ID)
 		default:
 			h.pendingJobs.Done() // Undo the Add since job won't be processed
-			log.Printf("Warning: upload queue full, file %d will retry", fileRecord.ID)
-			// Queue is full - mark as failed so it can be retried
-			h.db.Model(&fileRecord).Update("upload_status", "failed")
+			log.Printf("Warning: upload queue full, cleaning up file %d", fileRecord.ID)
+			// Queue is full - clean up immediately (restore quota and delete record)
+			h.cleanupFailedUpload(fileRecord)
 			// Clean up temp file since no worker will process it
 			os.Remove(tempPathForDB)
 		}

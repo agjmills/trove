@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"path/filepath"
 	"strings"
@@ -91,10 +92,9 @@ func (s *S3Backend) Save(ctx context.Context, r io.Reader, opts SaveOptions) (Sa
 	}
 
 	// Create a hashing reader that computes SHA256 while streaming to S3
-	hasher := sha256.New()
 	hashingReader := &hashingReader{
 		reader: r,
-		hasher: hasher,
+		hasher: newSHA256Hasher(),
 	}
 
 	// Upload to S3 using streaming reader
@@ -124,9 +124,12 @@ func (s *S3Backend) Save(ctx context.Context, r io.Reader, opts SaveOptions) (Sa
 	// Verify upload with ETag if available
 	_ = output.ETag // ETag confirms successful upload
 
+	// Use the hashingReader's current hasher to get the final hash.
+	// This is important because Seek resets the hasher on retries,
+	// so we need to use the potentially reset hasher, not a stale local copy.
 	return SaveResult{
 		Path: key,
-		Hash: hex.EncodeToString(hasher.Sum(nil)),
+		Hash: hex.EncodeToString(hashingReader.Hasher().Sum(nil)),
 		Size: size,
 	}, nil
 }
@@ -258,10 +261,34 @@ func isS3NotFoundError(err error) bool {
 
 // hashingReader wraps an io.Reader and computes a hash as data is read.
 // This allows streaming uploads to S3 without buffering entire files in memory.
+// It also implements io.Seeker if the underlying reader supports it, which is
+// required for S3 upload retries.
 type hashingReader struct {
 	reader    io.Reader
-	hasher    io.Writer
+	hasher    *sha256Hasher
 	bytesRead int64
+}
+
+// sha256Hasher wraps a hash.Hash and provides access to the current hasher.
+// This is needed because Seek resets the hasher on retries, and Save needs
+// to use the current (potentially reset) hasher to compute the final sum.
+type sha256Hasher struct {
+	hash.Hash
+}
+
+func newSHA256Hasher() *sha256Hasher {
+	return &sha256Hasher{Hash: sha256.New()}
+}
+
+func (h *sha256Hasher) Reset() {
+	h.Hash = sha256.New()
+}
+
+// Hasher returns the current hasher used by the hashingReader.
+// This should be used to compute the final hash sum after reading completes,
+// as the hasher may have been reset due to seek operations (e.g., S3 retries).
+func (hr *hashingReader) Hasher() *sha256Hasher {
+	return hr.hasher
 }
 
 func (hr *hashingReader) Read(p []byte) (n int, err error) {
@@ -272,4 +299,27 @@ func (hr *hashingReader) Read(p []byte) (n int, err error) {
 		hr.hasher.Write(p[:n])
 	}
 	return n, err
+}
+
+// Seek implements io.Seeker by delegating to the underlying reader if it supports seeking.
+// This is required for S3 upload retries - the SDK needs to rewind the stream on failure.
+func (hr *hashingReader) Seek(offset int64, whence int) (int64, error) {
+	seeker, ok := hr.reader.(io.Seeker)
+	if !ok {
+		return 0, fmt.Errorf("underlying reader does not support seeking")
+	}
+
+	pos, err := seeker.Seek(offset, whence)
+	if err != nil {
+		return pos, err
+	}
+
+	// If seeking back to the start, reset the hash and bytes counter
+	// since we'll be re-reading the content
+	if offset == 0 && whence == io.SeekStart {
+		hr.hasher.Reset()
+		hr.bytesRead = 0
+	}
+
+	return pos, nil
 }

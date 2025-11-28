@@ -14,7 +14,7 @@ import (
 // TestHashingReader tests the hashingReader wrapper used by S3Backend.
 func TestHashingReader(t *testing.T) {
 	testContent := []byte("Hello, streaming world!")
-	hasher := sha256.New()
+	hasher := newSHA256Hasher()
 
 	hr := &hashingReader{
 		reader: bytes.NewReader(testContent),
@@ -37,8 +37,8 @@ func TestHashingReader(t *testing.T) {
 		t.Errorf("Expected bytesRead %d, got %d", len(testContent), hr.bytesRead)
 	}
 
-	// Verify hash computed correctly
-	expectedHash := hex.EncodeToString(hasher.Sum(nil))
+	// Verify hash computed correctly using the Hasher() accessor
+	expectedHash := hex.EncodeToString(hr.Hasher().Sum(nil))
 	directHasher := sha256.New()
 	directHasher.Write(testContent)
 	directHash := hex.EncodeToString(directHasher.Sum(nil))
@@ -55,7 +55,7 @@ func TestHashingReader_MultipleReads(t *testing.T) {
 		testContent[i] = byte(i % 256)
 	}
 
-	hasher := sha256.New()
+	hasher := newSHA256Hasher()
 	hr := &hashingReader{
 		reader: bytes.NewReader(testContent),
 		hasher: hasher,
@@ -87,14 +87,90 @@ func TestHashingReader_MultipleReads(t *testing.T) {
 		t.Errorf("Expected bytesRead %d, got %d", len(testContent), hr.bytesRead)
 	}
 
-	// Verify hash
-	expectedHash := hex.EncodeToString(hasher.Sum(nil))
+	// Verify hash using the Hasher() accessor
+	expectedHash := hex.EncodeToString(hr.Hasher().Sum(nil))
 	directHasher := sha256.New()
 	directHasher.Write(testContent)
 	directHash := hex.EncodeToString(directHasher.Sum(nil))
 
 	if expectedHash != directHash {
 		t.Errorf("Hash mismatch. Expected %s, got %s", directHash, expectedHash)
+	}
+}
+
+// TestHashingReader_SeekResetsHash tests that seeking back to start resets the hasher
+// and that the Hasher() accessor returns the correct hash after re-reading.
+// This simulates what happens during S3 upload retries.
+func TestHashingReader_SeekResetsHash(t *testing.T) {
+	testContent := []byte("Hello, streaming world with seek!")
+	hasher := newSHA256Hasher()
+
+	hr := &hashingReader{
+		reader: bytes.NewReader(testContent),
+		hasher: hasher,
+	}
+
+	// Read all content (simulating first upload attempt)
+	result1, err := io.ReadAll(hr)
+	if err != nil {
+		t.Fatalf("Failed to read from hashingReader: %v", err)
+	}
+
+	if !bytes.Equal(result1, testContent) {
+		t.Errorf("First read content mismatch")
+	}
+
+	// Verify bytesRead after first read
+	if hr.bytesRead != int64(len(testContent)) {
+		t.Errorf("Expected bytesRead %d after first read, got %d", len(testContent), hr.bytesRead)
+	}
+
+	// Get hash after first read
+	hash1 := hex.EncodeToString(hr.Hasher().Sum(nil))
+
+	// Simulate retry: Seek back to start (like S3 SDK does on failure)
+	pos, err := hr.Seek(0, io.SeekStart)
+	if err != nil {
+		t.Fatalf("Failed to seek: %v", err)
+	}
+	if pos != 0 {
+		t.Errorf("Expected seek position 0, got %d", pos)
+	}
+
+	// Verify bytesRead was reset
+	if hr.bytesRead != 0 {
+		t.Errorf("Expected bytesRead 0 after seek, got %d", hr.bytesRead)
+	}
+
+	// Read all content again (simulating retry upload)
+	result2, err := io.ReadAll(hr)
+	if err != nil {
+		t.Fatalf("Failed to read from hashingReader after seek: %v", err)
+	}
+
+	if !bytes.Equal(result2, testContent) {
+		t.Errorf("Second read content mismatch")
+	}
+
+	// Verify bytesRead after second read
+	if hr.bytesRead != int64(len(testContent)) {
+		t.Errorf("Expected bytesRead %d after second read, got %d", len(testContent), hr.bytesRead)
+	}
+
+	// Get hash after second read - this should be correct
+	hash2 := hex.EncodeToString(hr.Hasher().Sum(nil))
+
+	// Compute expected hash directly
+	directHasher := sha256.New()
+	directHasher.Write(testContent)
+	expectedHash := hex.EncodeToString(directHasher.Sum(nil))
+
+	// Both hashes should match the expected hash
+	if hash1 != expectedHash {
+		t.Errorf("First hash mismatch. Expected %s, got %s", expectedHash, hash1)
+	}
+	if hash2 != expectedHash {
+		t.Errorf("Second hash (after seek) mismatch. Expected %s, got %s", expectedHash, hash2)
 	}
 }
 

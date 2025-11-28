@@ -18,6 +18,9 @@ services:
     environment:
       - DB_HOST=postgres
       - ENV=development
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,6 +41,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     networks:
       - trove-network
 
