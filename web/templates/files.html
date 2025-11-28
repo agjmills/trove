@@ -336,7 +336,6 @@
 		eventSource = new EventSource('/api/files/status');
 
 		eventSource.addEventListener('connected', function(e) {
-			console.log('SSE connected');
 			// Clear any reconnect timeout
 			if (sseReconnectTimeout) {
 				clearTimeout(sseReconnectTimeout);
@@ -350,7 +349,6 @@
 		});
 
 		eventSource.addEventListener('error', function(e) {
-			console.log('SSE connection error, will reconnect...');
 			eventSource.close();
 			eventSource = null;
 			// Reconnect after 3 seconds
