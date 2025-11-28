@@ -229,11 +229,15 @@ func TestAdminDashboard_ShowsStats(t *testing.T) {
 	// Create some users and files for stats
 	user1 := app.createRegularUser(t, "user1", "user1@example.com", "password123")
 	user1.StorageUsed = 1024 * 1024 // 1MB
-	app.db.Save(user1)
+	if err := app.db.Save(user1).Error; err != nil {
+		t.Fatalf("Failed to update user1: %v", err)
+	}
 
 	user2 := app.createRegularUser(t, "user2", "user2@example.com", "password123")
 	user2.StorageUsed = 2 * 1024 * 1024 // 2MB
-	app.db.Save(user2)
+	if err := app.db.Save(user2).Error; err != nil {
+		t.Fatalf("Failed to update user2: %v", err)
+	}
 
 	// Create some files
 	files := []models.File{
@@ -242,7 +246,9 @@ func TestAdminDashboard_ShowsStats(t *testing.T) {
 		{UserID: user2.ID, Filename: "file3.txt", OriginalFilename: "file3.txt", StoragePath: "path3"},
 	}
 	for _, f := range files {
-		app.db.Create(&f)
+		if err := app.db.Create(&f).Error; err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
 	}
 
 	req := app.authenticatedAdminRequest(t, http.MethodGet, "/admin", nil, admin)
@@ -535,11 +541,7 @@ func TestAdminUpdateQuota(t *testing.T) {
 			form := url.Values{}
 			form.Set("quota", tc.quota)
 
-			req := app.authenticatedAdminRequest(t, http.MethodPost, fmt.Sprintf("/admin/users/%d/quota", user.ID), []byte(form.Encode()), admin)
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-			// Use a fresh body reader since we need form values
-			req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%d/quota", user.ID), strings.NewReader(form.Encode()))
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%d/quota", user.ID), strings.NewReader(form.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			ctx := context.WithValue(req.Context(), auth.UserContextKey, admin)
 			rctx := chi.NewRouteContext()
