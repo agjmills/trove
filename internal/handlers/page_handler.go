@@ -40,7 +40,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		// Also check if any files exist in this folder path (implicit folders)
 		var fileCount int64
 		if folderCount == 0 {
-			h.db.Model(&models.File{}).Where("user_id = ? AND folder_path = ?", user.ID, currentFolder).Count(&fileCount)
+			h.db.Model(&models.File{}).Where("user_id = ? AND logical_path = ?", user.ID, currentFolder).Count(&fileCount)
 		}
 
 		// If folder doesn't exist in either table, return 404

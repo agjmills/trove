@@ -952,7 +952,7 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 							}
 						}
 						if !isSafe {
-							errorMsg = "Upload failed. Please contact support."
+							errorMsg = "Upload failed. Check server logs for details."
 						}
 					}
 					event := FileStatusEvent{
