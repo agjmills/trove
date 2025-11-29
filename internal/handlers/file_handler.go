@@ -931,12 +931,29 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 				// Check if state changed or is new
 				if oldStatus, exists := lastState[file.ID]; !exists || oldStatus != file.UploadStatus {
 					hasChanges = true
-					// For failed uploads, use a generic error message to avoid exposing
+					// For failed uploads, sanitize error messages to avoid exposing
 					// internal details (e.g., S3 connection errors) to the user.
-					// Detailed errors are logged server-side.
+					// Only whitelisted safe messages are shown; others are replaced
+					// with a generic message. Detailed errors are logged server-side.
 					errorMsg := file.ErrorMessage
 					if file.UploadStatus == "failed" && errorMsg != "" {
-						errorMsg = "Upload failed. Check server logs for details."
+						safeMessages := []string{
+							"Upload queue is full. Please try again later.",
+							"Storage quota exceeded",
+							"File too large",
+							"Invalid file type",
+							"File name too long",
+						}
+						isSafe := false
+						for _, safe := range safeMessages {
+							if strings.HasPrefix(errorMsg, safe) {
+								isSafe = true
+								break
+							}
+						}
+						if !isSafe {
+							errorMsg = "Upload failed. Please contact support."
+						}
 					}
 					event := FileStatusEvent{
 						ID:           file.ID,
