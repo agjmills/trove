@@ -356,7 +356,10 @@
 		if (!row) {
 			// File not on current page, might need to reload for completed files
 			if (data.upload_status === 'completed') {
-				window.location.reload();
+				// Only reload if not currently uploading to avoid disruption
+				if (!isUploading) {
+					window.location.reload();
+				}
 			}
 			return;
 		}
