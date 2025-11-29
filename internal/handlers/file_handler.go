@@ -138,7 +138,7 @@ func (h *FileHandler) processUpload(job uploadJob) {
 
 	if err != nil {
 		log.Printf("Upload worker: failed to upload file %d: %v", job.fileID, err)
-		h.markUploadFailed(file, "Storage upload failed: "+err.Error())
+		h.markUploadFailed(file, "Storage upload failed")
 		os.Remove(job.tempPath)
 		return
 	}
