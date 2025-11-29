@@ -68,6 +68,17 @@ func (h *FileHandler) Shutdown() {
 	h.wg.Wait()
 }
 
+// isAllowedOrigin checks if the given origin is in the configured CORS allowlist.
+// Returns false if the allowlist is empty or the origin is not found.
+func (h *FileHandler) isAllowedOrigin(origin string) bool {
+	for _, allowed := range h.cfg.CORSAllowedOrigins {
+		if origin == allowed {
+			return true
+		}
+	}
+	return false
+}
+
 // WaitForPendingUploads waits for all currently queued uploads to complete.
 // This is useful in tests to ensure background processing finishes before assertions.
 func (h *FileHandler) WaitForPendingUploads() {
@@ -846,9 +857,18 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")          // Disable nginx buffering
-	w.Header().Set("Access-Control-Allow-Origin", "*") // Allow SSE from any origin
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
+
+	// Set CORS headers only for validated origins from allowlist.
+	// If allowlist is empty, no CORS headers are sent (same-origin only).
+	if origin := r.Header.Get("Origin"); origin != "" {
+		if h.isAllowedOrigin(origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
+		// For untrusted origins, no CORS headers are set - browser will block the request
+	}
+
 	w.WriteHeader(http.StatusOK) // Explicitly write the status to ensure headers are sent
 
 	// Get flusher for streaming
