@@ -186,31 +186,31 @@
 								<th class="text-right p-3 text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600 w-16"></th>
 							</tr>
 						</thead>
-						<tbody>
+						<tbody id="files-table-body">
 						{{range .Files}}
-						<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 {{if ne .UploadStatus "completed"}}bg-yellow-50 dark:bg-yellow-900/10{{end}}">
+						<tr data-file-id="{{.ID}}" data-upload-status="{{.UploadStatus}}" class="file-row hover:bg-gray-50 dark:hover:bg-gray-700/50 {{if ne .UploadStatus "completed"}}bg-yellow-50 dark:bg-yellow-900/10{{end}}">
 							<td class="p-3 border-b border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 max-w-0">
 								<div class="flex items-center gap-2 min-w-0">
+									<span class="status-indicator">
 									{{if eq .UploadStatus "pending"}}
 									<svg class="animate-spin flex-shrink-0" width="16" height="16" style="min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="#ca8a04" stroke-width="4"></circle>
 										<path class="opacity-75" fill="#ca8a04" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 									</svg>
-									<span class="text-yellow-600 dark:text-yellow-400 text-xs font-medium flex-shrink-0">Preparing...</span>
 									{{else if eq .UploadStatus "uploading"}}
 									<svg class="animate-spin flex-shrink-0" width="16" height="16" style="min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="#2563eb" stroke-width="4"></circle>
 										<path class="opacity-75" fill="#2563eb" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 									</svg>
-									<span class="text-blue-600 dark:text-blue-400 text-xs font-medium flex-shrink-0">Processing...</span>
-									{{else if eq .UploadStatus "failed"}}
-									<svg class="flex-shrink-0" width="16" height="16" style="min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
-										<circle cx="12" cy="12" r="10"></circle>
-										<line x1="15" y1="9" x2="9" y2="15"></line>
-										<line x1="9" y1="9" x2="15" y2="15"></line>
-									</svg>
-									<span class="text-red-600 dark:text-red-400 text-xs font-medium flex-shrink-0">Failed</span>
 									{{end}}
+									</span>
+									<span class="status-label">
+									{{if eq .UploadStatus "pending"}}
+									<span class="text-yellow-600 dark:text-yellow-400 text-xs font-medium flex-shrink-0">Preparing...</span>
+									{{else if eq .UploadStatus "uploading"}}
+									<span class="text-blue-600 dark:text-blue-400 text-xs font-medium flex-shrink-0">Processing...</span>
+									{{end}}
+									</span>
 									<span class="truncate" title="{{.OriginalFilename}}">{{.OriginalFilename}}</span>
 								</div>
 							</td>
@@ -295,25 +295,258 @@
 </div>
 
 <script>
-	// Auto-refresh timer ID (used to cancel refresh when starting a new upload)
-	let autoRefreshTimerId = null;
+	// SSE connection for real-time status updates
+	let eventSource = null;
+	let sseReconnectTimeout = null;
 
 	// Track active upload state for unload warning
 	let isUploading = false;
 
-	// Helper function to restart auto-refresh if there are still pending/processing files
-	function restartAutoRefreshIfNeeded() {
-		// Check DOM for pending (.text-yellow-600) or processing (.text-blue-600) file indicators
-		const hasPendingFiles = document.querySelector('.text-yellow-600, .text-blue-600') !== null;
-		if (hasPendingFiles && !autoRefreshTimerId) {
-			autoRefreshTimerId = setTimeout(function() {
-				window.location.reload();
-			}, 3000);
+	// Initialize SSE connection for file status updates
+	function initSSE() {
+		// Check if there are any files that need status updates
+		const pendingFiles = document.querySelectorAll('[data-upload-status="pending"], [data-upload-status="uploading"]');
+		if (pendingFiles.length === 0 && !isUploading) {
+			return; // No need to connect if no pending files
+		}
+
+		if (eventSource) {
+			return; // Already connected
+		}
+
+		eventSource = new EventSource('/api/files/status', { withCredentials: true });
+
+		eventSource.addEventListener('connected', function(e) {
+			// Clear any reconnect timeout
+			if (sseReconnectTimeout) {
+				clearTimeout(sseReconnectTimeout);
+				sseReconnectTimeout = null;
+			}
+		});
+
+		eventSource.addEventListener('status', function(e) {
+			const data = JSON.parse(e.data);
+			updateFileStatus(data);
+		});
+
+		eventSource.addEventListener('error', function(e) {
+			eventSource.close();
+			eventSource = null;
+			// Reconnect after 3 seconds
+			sseReconnectTimeout = setTimeout(initSSE, 3000);
+		});
+	}
+
+	// Update file row based on status event
+	function updateFileStatus(data) {
+		const row = document.querySelector(`tr[data-file-id="${data.id}"]`);
+		
+		// Handle failed uploads - show toast and auto-dismiss
+		if (data.upload_status === 'failed') {
+			showErrorToast(`Upload failed: ${data.filename}`, data.error_message || 'Check server logs for details.');
+			// Auto-dismiss the failed upload to clean up
+			dismissFailedUpload(data.id, true); // silent dismiss
+			if (row) {
+				row.remove();
+			}
+			checkSSENeeded();
+			return;
+		}
+
+		if (!row) {
+			// File not on current page, might need to reload for completed files
+			if (data.upload_status === 'completed') {
+				// Only reload if not currently uploading to avoid disruption
+				if (!isUploading) {
+					window.location.reload();
+				}
+			}
+			return;
+		}
+
+		const currentStatus = row.dataset.uploadStatus;
+		if (currentStatus === data.upload_status) {
+			return; // No change
+		}
+
+		// Update the row's data attribute
+		row.dataset.uploadStatus = data.upload_status;
+
+		// Update row styling
+		row.classList.remove('bg-yellow-50', 'dark:bg-yellow-900/10');
+		if (data.upload_status === 'pending' || data.upload_status === 'uploading') {
+			row.classList.add('bg-yellow-50', 'dark:bg-yellow-900/10');
+		}
+
+		// Update status indicator
+		const statusIndicator = row.querySelector('.status-indicator');
+		const statusLabel = row.querySelector('.status-label');
+
+		if (data.upload_status === 'completed') {
+			statusIndicator.innerHTML = '';
+			statusLabel.innerHTML = '';
+			// Update the menu to show download link
+			updateMenuForCompleted(row, data.id);
+		} else if (data.upload_status === 'uploading') {
+			statusIndicator.innerHTML = `
+				<svg class="animate-spin flex-shrink-0" width="16" height="16" style="min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="#2563eb" stroke-width="4"></circle>
+					<path class="opacity-75" fill="#2563eb" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+				</svg>
+			`;
+			statusLabel.innerHTML = '<span class="text-blue-600 dark:text-blue-400 text-xs font-medium flex-shrink-0">Processing...</span>';
+		}
+
+		// Close SSE if no more pending files
+		checkSSENeeded();
+	}
+
+	// Show error toast notification
+	function showErrorToast(title, message) {
+		// Create toast container if it doesn't exist
+		let toastContainer = document.getElementById('toast-container');
+		if (!toastContainer) {
+			toastContainer = document.createElement('div');
+			toastContainer.id = 'toast-container';
+			// Use inline styles to ensure positioning works regardless of Tailwind
+			// pointer-events: auto ensures the container captures mouse events
+			toastContainer.style.cssText = 'position: fixed; top: 1rem; right: 1rem; z-index: 99999; display: flex; flex-direction: column; gap: 0.5rem; pointer-events: auto;';
+			document.body.appendChild(toastContainer);
+		}
+
+		// Create toast element
+		const toast = document.createElement('div');
+		// pointer-events: auto ensures the toast captures mouse events
+		toast.style.cssText = 'background-color: #dc2626; color: white; padding: 0.75rem 1rem; border-radius: 0.5rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); max-width: 24rem; display: flex; align-items: flex-start; gap: 0.75rem; position: relative; z-index: 99999; pointer-events: auto;';
+		
+		// Build toast content
+		const icon = document.createElement('div');
+		icon.style.cssText = 'flex-shrink: 0; margin-top: 0.125rem; pointer-events: auto;';
+		icon.innerHTML = `<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<circle cx="12" cy="12" r="10"></circle>
+			<line x1="15" y1="9" x2="9" y2="15"></line>
+			<line x1="9" y1="9" x2="15" y2="15"></line>
+		</svg>`;
+		
+		const content = document.createElement('div');
+		content.style.cssText = 'flex: 1; min-width: 0; pointer-events: auto;';
+		
+		const titleEl = document.createElement('div');
+		titleEl.style.cssText = 'font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+		titleEl.textContent = title;
+		
+		const messageEl = document.createElement('div');
+		messageEl.style.cssText = 'font-size: 0.875rem; color: #fecaca; margin-top: 0.125rem;';
+		messageEl.textContent = message;
+		
+		content.appendChild(titleEl);
+		content.appendChild(messageEl);
+		
+		const closeBtn = document.createElement('button');
+		closeBtn.type = 'button';
+		closeBtn.style.cssText = 'flex-shrink: 0; color: #fecaca; background: none; border: none; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; pointer-events: auto;';
+		closeBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="pointer-events: none;">
+			<line x1="18" y1="6" x2="6" y2="18"></line>
+			<line x1="6" y1="6" x2="18" y2="18"></line>
+		</svg>`;
+		closeBtn.addEventListener('click', function(e) {
+			e.preventDefault();
+			e.stopPropagation();
+			toast.remove();
+		});
+		
+		toast.appendChild(icon);
+		toast.appendChild(content);
+		toast.appendChild(closeBtn);
+
+		toastContainer.appendChild(toast);
+
+		// Auto-remove after 8 seconds
+		setTimeout(() => {
+			toast.style.opacity = '0';
+			toast.style.transform = 'translateX(100%)';
+			toast.style.transition = 'opacity 0.3s, transform 0.3s';
+			setTimeout(() => toast.remove(), 300);
+		}, 8000);
+	}
+
+	function updateMenuForCompleted(row, fileId) {
+		const menu = document.getElementById(`file-menu-${fileId}`);
+		if (!menu) return;
+
+		// Find the first child that's not the delete form and replace it
+		const downloadPlaceholder = menu.querySelector('span, a');
+		if (downloadPlaceholder) {
+			const downloadLink = document.createElement('a');
+			downloadLink.href = `/download/${fileId}`;
+			downloadLink.className = 'w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors';
+			downloadLink.innerHTML = `
+				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+					<polyline points="7 10 12 15 17 10"></polyline>
+					<line x1="12" y1="15" x2="12" y2="3"></line>
+				</svg>
+				Download
+			`;
+			downloadPlaceholder.replaceWith(downloadLink);
 		}
 	}
 
-	// Warn user if they try to leave during an active upload
+	function escapeHtml(text) {
+		const div = document.createElement('div');
+		div.textContent = text;
+		return div.innerHTML;
+	}
+
+	function checkSSENeeded() {
+		const pendingFiles = document.querySelectorAll('[data-upload-status="pending"], [data-upload-status="uploading"]');
+		if (pendingFiles.length === 0 && !isUploading && eventSource) {
+			eventSource.close();
+			eventSource = null;
+		}
+	}
+
+	// Dismiss a failed upload
+	// If silent is true, don't show error alerts (used for auto-dismiss after toast)
+	function dismissFailedUpload(fileId, silent) {
+		fetch(`/files/${fileId}/dismiss`, {
+			method: 'POST',
+			headers: {
+				'X-CSRF-Token': document.getElementById('csrf-token').value
+			}
+		})
+		.then(response => {
+			if (response.ok) {
+				// Remove the row from the table
+				const row = document.querySelector(`tr[data-file-id="${fileId}"]`);
+				if (row) {
+					row.remove();
+				}
+				// Close any open menu
+				if (currentOpenMenu) {
+					currentOpenMenu.classList.add('hidden');
+					currentOpenMenu = null;
+				}
+			} else if (!silent) {
+				alert('Failed to dismiss upload. Please try again.');
+			}
+		})
+		.catch(err => {
+			console.error('Error dismissing upload:', err);
+			if (!silent) {
+				alert('Failed to dismiss upload. Please try again.');
+			}
+		});
+	}
+
+	// Handle page unload: warn about active uploads and clean up SSE connection
 	window.addEventListener('beforeunload', function(e) {
+		// Clean up SSE connection
+		if (eventSource) {
+			eventSource.close();
+		}
+
+		// Warn user if they try to leave during an active upload
 		if (isUploading) {
 			e.preventDefault();
 			// Modern browsers ignore custom messages, but we need to return something
@@ -435,11 +668,8 @@
 
 	// Function to upload file with progress tracking
 	function uploadFile(file) {
-		// Cancel any pending auto-refresh to prevent interrupting this upload
-		if (autoRefreshTimerId) {
-			clearTimeout(autoRefreshTimerId);
-			autoRefreshTimerId = null;
-		}
+		// Start SSE connection for status updates
+		initSSE();
 
 		// Best-effort client-side validation based on page load data.
 		// Note: Quota may be stale if uploads occur in other tabs/windows.
@@ -532,6 +762,7 @@
 			isUploading = false;
 			if (xhr.status === 200 || xhr.status === 302 || xhr.status === 303) {
 				// Success - reload page to show updated file list
+				// SSE will handle status updates for background processing
 				window.location.reload();
 			} else {
 				// Error - try to parse server error message
@@ -546,8 +777,7 @@
 				alert(errorMsg);
 				progressContainer.classList.add('hidden');
 				uploadButton.classList.remove('hidden');
-				// Restart auto-refresh if there are still pending/processing files
-				restartAutoRefreshIfNeeded();
+				checkSSENeeded();
 			}
 		});
 
@@ -557,8 +787,7 @@
 			alert('Upload failed. Please try again.');
 			progressContainer.classList.add('hidden');
 			uploadButton.classList.remove('hidden');
-			// Restart auto-refresh if there are still pending/processing files
-			restartAutoRefreshIfNeeded();
+			checkSSENeeded();
 		});
 
 		// Note: /upload is exempted from CSRF middleware for streaming and is
@@ -619,7 +848,7 @@
 		}
 	});
 
-	// Auto-refresh if there are pending/uploading files
+	// Initialize SSE if there are pending/uploading files on page load
 	{{if .Files}}
 	(function() {
 		let hasPendingFiles = false;
@@ -630,13 +859,21 @@
 		{{end}}
 		
 		if (hasPendingFiles) {
-			// Refresh every 3 seconds if there are files being uploaded
-			autoRefreshTimerId = setTimeout(function() {
-				window.location.reload();
-			}, 3000);
+			initSSE();
 		}
 	})();
 	{{end}}
+
+	// Show toast notifications for any failed uploads and auto-dismiss them
+	{{if .FailedUploads}}
+	(function() {
+		{{range .FailedUploads}}
+		showErrorToast('Upload failed: {{.OriginalFilename}}', 'Check server logs for details.');
+		dismissFailedUpload({{.ID}}, true);
+		{{end}}
+	})();
+	{{end}}
+
 </script>
 
 {{end}}

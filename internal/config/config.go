@@ -45,6 +45,11 @@ type Config struct {
 	// from which X-Forwarded-Proto headers will be trusted for CSRF origin validation.
 	// If empty, X-Forwarded-Proto is never trusted and r.TLS is used to detect HTTPS.
 	TrustedProxyCIDRs []string
+
+	// CORSAllowedOrigins is a list of allowed origins for CORS requests (e.g., SSE endpoints).
+	// If empty, no CORS headers are sent (same-origin only).
+	// Origins should include scheme (e.g., "https://example.com").
+	CORSAllowedOrigins []string
 }
 
 func Load() (*Config, error) {
@@ -75,6 +80,7 @@ func Load() (*Config, error) {
 		EnableRegistration:      getEnvBool("ENABLE_REGISTRATION", true),
 		EnableFileDeduplication: getEnvBool("ENABLE_FILE_DEDUPLICATION", true),
 		TrustedProxyCIDRs:       getEnvStringSlice("TRUSTED_PROXY_CIDRS", nil),
+		CORSAllowedOrigins:      getEnvStringSlice("CORS_ALLOWED_ORIGINS", nil),
 	}
 
 	if cfg.SessionSecret == "change_me_in_production" && cfg.Env == "production" {

@@ -40,7 +40,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		// Also check if any files exist in this folder path (implicit folders)
 		var fileCount int64
 		if folderCount == 0 {
-			h.db.Model(&models.File{}).Where("user_id = ? AND folder_path = ?", user.ID, currentFolder).Count(&fileCount)
+			h.db.Model(&models.File{}).Where("user_id = ? AND logical_path = ?", user.ID, currentFolder).Count(&fileCount)
 		}
 
 		// If folder doesn't exist in either table, return 404
@@ -154,8 +154,9 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get all files in current folder for natural sorting
+	// Exclude failed uploads - they are shown as toast notifications instead
 	var allFiles []models.File
-	h.db.Where("user_id = ? AND logical_path = ?", user.ID, currentFolder).Find(&allFiles)
+	h.db.Where("user_id = ? AND logical_path = ? AND upload_status != ?", user.ID, currentFolder, "failed").Find(&allFiles)
 
 	// Sort files naturally (handles "file2" before "file10" correctly)
 	sort.Slice(allFiles, func(i, j int) bool {
@@ -211,23 +212,10 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	// Get flash message if any
 	flashMsg := flash.Get(w, r)
 
-	// Check for failed uploads and notify user, then clean up transactionally
-	var failedCount int64
-	h.db.Model(&models.File{}).Where("user_id = ? AND upload_status = ?", user.ID, "failed").Count(&failedCount)
-	if failedCount > 0 {
-		if flashMsg == nil {
-			if failedCount == 1 {
-				flashMsg = &flash.Message{Type: "error", Content: "A file failed to upload. Please try again."}
-			} else {
-				flashMsg = &flash.Message{Type: "error", Content: "Some files failed to upload. Please try again."}
-			}
-		}
-		// Clean up failed uploads using shared helper (transactional and idempotent)
-		if _, err := CleanupFailedUploads(h.db, user.ID); err != nil {
-			// Log but don't fail the page render
-			// The cleanup will be retried on the next page load
-		}
-	}
+	// Get any failed uploads for this user to show as toast notifications
+	// These will be auto-dismissed after being shown to the user
+	var failedUploads []models.File
+	h.db.Where("user_id = ? AND upload_status = ?", user.ID, "failed").Find(&failedUploads)
 
 	render(w, "files.html", map[string]any{
 		"Title":         "Files",
@@ -244,5 +232,6 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		"TotalFiles":    totalFiles,
 		"FullWidth":     true,
 		"MaxUploadSize": h.cfg.MaxUploadSize,
+		"FailedUploads": failedUploads,
 	})
 }
