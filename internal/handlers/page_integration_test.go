@@ -507,14 +507,9 @@ func TestShowFilesWithUploadStatus(t *testing.T) {
 			t.Errorf("Expected pending.txt to be visible")
 		}
 
-		// Failed files should NOT be shown in the file table (data-file-id rows)
-		// but may appear in the toast notification JavaScript
-		if strings.Contains(body, `data-file-id="`) && strings.Contains(body, "failed.txt") {
-			// Check if failed.txt appears inside a table row (file listing)
-			// It should only appear in the toast notification script, not in the table
-			if strings.Contains(body, `data-upload-status="failed"`) {
-				t.Errorf("Failed files should not be shown as rows in the file list")
-			}
+		// Failed files should NOT be shown in the file table as rows with data-upload-status="failed"
+		if strings.Contains(body, `data-upload-status="failed"`) {
+			t.Errorf("Failed files should not be shown as rows in the file list (found data-upload-status=\"failed\")")
 		}
 
 		// Database should still have all 3 files
