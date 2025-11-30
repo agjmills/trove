@@ -1168,6 +1168,14 @@ func (h *FileHandler) RenameFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify the source folder exists before attempting rename
+	var sourceFolder models.Folder
+	if err := h.db.Where("user_id = ? AND folder_path = ?", user.ID, oldPath).First(&sourceFolder).Error; err != nil {
+		flash.Error(w, "Folder not found")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
 	// Perform rename within a transaction
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		// Update the folder record itself
