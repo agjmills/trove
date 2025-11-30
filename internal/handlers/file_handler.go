@@ -728,15 +728,11 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store original path for redirect
-	originalPath := file.LogicalPath
-
-	// Soft delete instead of permanent delete
+	// Soft delete - keep file at original location, just mark as trashed
 	now := time.Now()
 	if err := h.db.Model(&file).Updates(map[string]interface{}{
 		"trashed_at":            now,
 		"original_logical_path": file.LogicalPath,
-		"logical_path":          "/.deleted", // Move to virtual deleted folder
 	}).Error; err != nil {
 		http.Error(w, "Failed to delete file", http.StatusInternalServerError)
 		return
@@ -745,7 +741,7 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	flash.Success(w, "File deleted.")
 
 	// Redirect back to the folder the file was in
-	http.Redirect(w, r, folderRedirectURL(originalPath), http.StatusSeeOther)
+	http.Redirect(w, r, folderRedirectURL(file.LogicalPath), http.StatusSeeOther)
 }
 
 func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
