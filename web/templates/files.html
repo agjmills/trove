@@ -722,7 +722,8 @@
 
 	function populateFolderList(selectElement) {
 		// Get all available folders from the page data
-		const currentFolder = '{{.CurrentFolder}}';
+		// Using jsStr template function to prevent XSS from special characters in folder names
+		const currentFolder = {{jsStr .CurrentFolder}};
 		const allFolders = [];
 		
 		// Always include root
@@ -730,14 +731,18 @@
 		
 		// Add folders from the current view
 		{{range .Folders}}
-		allFolders.push('{{if eq $.CurrentFolder "/"}}/{{.Name}}{{else}}{{$.CurrentFolder}}/{{.Name}}{{end}}');
+		{{if eq $.CurrentFolder "/"}}
+		allFolders.push({{printf "/%s" .Name | jsStr}});
+		{{else}}
+		allFolders.push({{printf "%s/%s" $.CurrentFolder .Name | jsStr}});
+		{{end}}
 		{{end}}
 		
 		// Add parent folders from breadcrumbs
 		{{range .Breadcrumbs}}
 		{{if ne .Path "/"}}
-		if (!allFolders.includes('{{.Path}}')) {
-			allFolders.push('{{.Path}}');
+		if (!allFolders.includes({{jsStr .Path}})) {
+			allFolders.push({{jsStr .Path}});
 		}
 		{{end}}
 		{{end}}

@@ -89,3 +89,61 @@ func TestSanitizeIDUniqueness(t *testing.T) {
 		seen[result] = input
 	}
 }
+
+func TestJsStr(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "simple string",
+			input:    "hello",
+			expected: `"hello"`,
+		},
+		{
+			name:     "string with quotes",
+			input:    `say "hello"`,
+			expected: `"say \"hello\""`,
+		},
+		{
+			name:     "string with backslash",
+			input:    `path\to\file`,
+			expected: `"path\\to\\file"`,
+		},
+		{
+			name:     "string with newline",
+			input:    "line1\nline2",
+			expected: `"line1\nline2"`,
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: `""`,
+		},
+		{
+			name:     "folder path",
+			input:    "/documents/my folder",
+			expected: `"/documents/my folder"`,
+		},
+		{
+			name:     "XSS attempt",
+			input:    `</script><script>alert(1)</script>`,
+			expected: `"\u003c/script\u003e\u003cscript\u003ealert(1)\u003c/script\u003e"`,
+		},
+		{
+			name:     "unicode characters",
+			input:    "文档",
+			expected: `"文档"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := string(JsStr(tt.input))
+			if result != tt.expected {
+				t.Errorf("JsStr(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
