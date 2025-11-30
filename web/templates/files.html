@@ -210,6 +210,7 @@
 								</svg>
 								Rename
 							</button>
+							<div class="my-1 border-t border-gray-200 dark:border-gray-600"></div>
 							<form method="POST" action="/folders/delete/{{.Name}}" onsubmit="return confirm('Are you sure you want to delete this folder and all its contents?');">
 								<input type="hidden" name="current_folder" value="{{$.CurrentFolder}}">
 								<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
@@ -321,6 +322,7 @@
 											Download
 										</span>
 										{{end}}
+										<div class="my-1 border-t border-gray-200 dark:border-gray-600"></div>
 										<form method="POST" action="/delete/{{.ID}}" onsubmit="return confirm('Are you sure you want to delete this file?');">
 											<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
 											<button type="submit" class="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left">
