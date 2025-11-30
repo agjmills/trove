@@ -1349,8 +1349,11 @@ func (h *FileHandler) MoveFolder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Prevent moving a folder into itself or any of its subfolders
-	// For example, moving /a to /a/b would create a circular reference
-	if strings.HasPrefix(newPath, sourcePath+"/") || newPath == sourcePath {
+	// This checks two conditions:
+	// 1. newPath starts with sourcePath+"/": prevents moving /a to /a/b (result would be /a/b/a which is inside /a)
+	// 2. destinationFolder starts with sourcePath+"/": prevents moving /a to /a/b even if names differ
+	// 3. destinationFolder == sourcePath: prevents moving folder to itself as destination
+	if strings.HasPrefix(newPath, sourcePath+"/") || strings.HasPrefix(destinationFolder, sourcePath+"/") || destinationFolder == sourcePath {
 		flash.Error(w, "Cannot move a folder into itself or its subfolders")
 		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return

@@ -2375,6 +2375,32 @@ func TestMoveFolderIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("cannot move folder to itself as destination", func(t *testing.T) {
+		app.createTestFolder(t, user, "/selfasdest")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "selfasdest")
+		form.Set("destination_folder", "/selfasdest")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify folder was NOT moved
+		var folder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/selfasdest").First(&folder).Error; err != nil {
+			t.Error("Folder should still exist at original path")
+		}
+	})
+
 	t.Run("move to non-existent folder fails", func(t *testing.T) {
 		app.createTestFolder(t, user, "/orphanfolder")
 
