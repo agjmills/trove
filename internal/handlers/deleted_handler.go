@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/flash"
+	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/csrf"
@@ -75,7 +75,7 @@ func (h *DeletedHandler) cleanupWorker() {
 	for {
 		select {
 		case <-h.stopChan:
-			log.Println("Deleted items cleanup worker stopping...")
+			logger.Info("Deleted items cleanup worker stopping")
 			return
 		case <-ticker.C:
 			h.runCleanup()
@@ -86,12 +86,12 @@ func (h *DeletedHandler) cleanupWorker() {
 // runCleanup permanently deletes expired deleted items
 func (h *DeletedHandler) runCleanup() {
 	ctx := context.Background()
-	log.Println("Running deleted items cleanup...")
+	logger.Debug("Running deleted items cleanup")
 
 	// Get all users with their deleted retention settings
 	var users []models.User
 	if err := h.db.Find(&users).Error; err != nil {
-		log.Printf("Deleted items cleanup: failed to fetch users: %v", err)
+		logger.Error("Deleted items cleanup: failed to fetch users", "error", err)
 		return
 	}
 
@@ -118,14 +118,14 @@ func (h *DeletedHandler) runCleanup() {
 		var expiredFiles []models.File
 		if err := h.db.Where("user_id = ? AND trashed_at IS NOT NULL AND trashed_at < ?", user.ID, cutoffTime).
 			Find(&expiredFiles).Error; err != nil {
-			log.Printf("Deleted items cleanup: failed to find expired files for user %d: %v", user.ID, err)
+			logger.Error("Deleted items cleanup: failed to find expired files", "user_id", user.ID, "error", err)
 			continue
 		}
 
 		// Permanently delete expired files
 		for _, file := range expiredFiles {
 			if err := h.permanentlyDeleteFile(ctx, &file); err != nil {
-				log.Printf("Deleted items cleanup: failed to delete file %d: %v", file.ID, err)
+				logger.Error("Deleted items cleanup: failed to delete file", "file_id", file.ID, "error", err)
 				continue
 			}
 			totalFiles++
@@ -136,14 +136,14 @@ func (h *DeletedHandler) runCleanup() {
 		var expiredFolders []models.Folder
 		if err := h.db.Where("user_id = ? AND trashed_at IS NOT NULL AND trashed_at < ?", user.ID, cutoffTime).
 			Find(&expiredFolders).Error; err != nil {
-			log.Printf("Deleted items cleanup: failed to find expired folders for user %d: %v", user.ID, err)
+			logger.Error("Deleted items cleanup: failed to find expired folders", "user_id", user.ID, "error", err)
 			continue
 		}
 
 		// Permanently delete expired folders
 		for _, folder := range expiredFolders {
 			if err := h.db.Delete(&folder).Error; err != nil {
-				log.Printf("Deleted items cleanup: failed to delete folder %d: %v", folder.ID, err)
+				logger.Error("Deleted items cleanup: failed to delete folder", "folder_id", folder.ID, "error", err)
 				continue
 			}
 			totalFolders++
@@ -151,7 +151,7 @@ func (h *DeletedHandler) runCleanup() {
 	}
 
 	if totalFiles > 0 || totalFolders > 0 {
-		log.Printf("Deleted items cleanup complete: deleted %d files (%d bytes), %d folders", totalFiles, totalBytes, totalFolders)
+		logger.Info("Deleted items cleanup complete", "files", totalFiles, "bytes", totalBytes, "folders", totalFolders)
 	}
 }
 
@@ -173,13 +173,13 @@ func (h *DeletedHandler) permanentlyDeleteFile(ctx context.Context, file *models
 	// Only delete from storage if no other references exist
 	if refCount == 0 {
 		if err := h.storage.Delete(ctx, storagePath); err != nil {
-			log.Printf("Warning: failed to delete file from storage: %v", err)
+			logger.Warn("Failed to delete file from storage", "path", storagePath, "error", err)
 		}
 
 		// Update user storage quota
 		if err := h.db.Model(&models.User{}).Where("id = ?", userID).
 			UpdateColumn("storage_used", gorm.Expr("CASE WHEN storage_used >= ? THEN storage_used - ? ELSE 0 END", fileSize, fileSize)).Error; err != nil {
-			log.Printf("Warning: failed to update user storage: %v", err)
+			logger.Warn("Failed to update user storage", "user_id", userID, "error", err)
 		}
 	}
 
@@ -569,7 +569,7 @@ func (h *DeletedHandler) PermanentlyDeleteFolder(w http.ResponseWriter, r *http.
 
 	for _, file := range files {
 		if err := h.permanentlyDeleteFile(ctx, &file); err != nil {
-			log.Printf("Failed to delete file %d: %v", file.ID, err)
+			logger.Error("Failed to delete file", "file_id", file.ID, "error", err)
 		}
 	}
 
@@ -607,7 +607,7 @@ func (h *DeletedHandler) EmptyDeleted(w http.ResponseWriter, r *http.Request) {
 	deletedCount := 0
 	for _, file := range files {
 		if err := h.permanentlyDeleteFile(ctx, &file); err != nil {
-			log.Printf("Failed to delete file %d: %v", file.ID, err)
+			logger.Error("Failed to delete file", "file_id", file.ID, "error", err)
 			continue
 		}
 		deletedCount++
@@ -637,7 +637,7 @@ func (h *DeletedHandler) AdminEmptyAllDeleted(w http.ResponseWriter, r *http.Req
 	deletedCount := 0
 	for _, file := range files {
 		if err := h.permanentlyDeleteFile(ctx, &file); err != nil {
-			log.Printf("Failed to delete file %d: %v", file.ID, err)
+			logger.Error("Failed to delete file", "file_id", file.ID, "error", err)
 			continue
 		}
 		deletedCount++
