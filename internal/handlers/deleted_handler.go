@@ -578,7 +578,13 @@ func (h *DeletedHandler) PermanentlyDeleteFolder(w http.ResponseWriter, r *http.
 	// Delete the folder itself
 	h.db.Unscoped().Delete(&folder)
 
-	flash.Success(w, fmt.Sprintf("Folder \"%s\" permanently deleted", extractFolderName(folder.OriginalFolderPath)))
+	// Use original path if available, otherwise fall back to a generic message
+	folderName := extractFolderName(folder.OriginalFolderPath)
+	if folderName == "" || folderName == "/" {
+		flash.Success(w, "Folder permanently deleted")
+	} else {
+		flash.Success(w, fmt.Sprintf("Folder \"%s\" permanently deleted", folderName))
+	}
 	http.Redirect(w, r, "/deleted", http.StatusSeeOther)
 }
 
