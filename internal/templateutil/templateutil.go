@@ -3,6 +3,7 @@
 package templateutil
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 )
@@ -82,6 +83,18 @@ func SanitizeID(s string) string {
 	return "id-" + string(result)
 }
 
+// JsStr encodes a string as a JSON string for safe use in JavaScript contexts.
+// This properly escapes special characters like quotes, backslashes, and newlines.
+// The result is already quoted, so it can be used directly as a JavaScript string literal.
+func JsStr(s string) template.JS {
+	b, err := json.Marshal(s)
+	if err != nil {
+		// Fallback to empty string on error
+		return template.JS(`""`)
+	}
+	return template.JS(b)
+}
+
 // FuncMap returns a template.FuncMap with all the standard template helpers.
 func FuncMap() template.FuncMap {
 	return template.FuncMap{
@@ -93,5 +106,6 @@ func FuncMap() template.FuncMap {
 		"divFloat":          DivFloat,
 		"mulFloat":          MulFloat,
 		"sanitizeID":        SanitizeID,
+		"jsStr":             JsStr,
 	}
 }

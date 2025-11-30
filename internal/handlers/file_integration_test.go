@@ -63,6 +63,7 @@ func newFileTestApp(t *testing.T) *fileTestApp {
 	router.Get("/download/{id}", fileHandler.Download)
 	router.Post("/delete/{id}", fileHandler.Delete)
 	router.Post("/rename/{id}", fileHandler.RenameFile)
+	router.Post("/move/{id}", fileHandler.MoveFile)
 	router.Post("/folders/create", fileHandler.CreateFolder)
 	router.Post("/folders/rename", fileHandler.RenameFolder)
 	router.Post("/folders/delete/{name}", fileHandler.DeleteFolder)
@@ -1897,4 +1898,297 @@ func TestRenameFileNameTooLong(t *testing.T) {
 	if unchangedFile.Filename != "short.txt" {
 		t.Errorf("File should not have been renamed, got '%s'", unchangedFile.Filename)
 	}
+}
+
+// TestMoveFileIntegration tests file moving functionality
+func TestMoveFileIntegration(t *testing.T) {
+	app := newFileTestApp(t)
+
+	user := app.createTestUser(t, "movefileuser")
+
+	t.Run("successful file move to folder", func(t *testing.T) {
+		file := app.createTestFile(t, user, "tomove.txt", "Content to move")
+		app.createTestFolder(t, user, "/destination")
+
+		form := url.Values{}
+		form.Set("destination_folder", "/destination")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/move/%d", file.ID), strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFile(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d: %s", w.Code, w.Body.String())
+		}
+
+		// Verify file was moved
+		var movedFile models.File
+		if err := app.db.First(&movedFile, file.ID).Error; err != nil {
+			t.Fatalf("Failed to find file: %v", err)
+		}
+
+		if movedFile.LogicalPath != "/destination" {
+			t.Errorf("Expected logical path '/destination', got '%s'", movedFile.LogicalPath)
+		}
+
+		// Filename should be unchanged
+		if movedFile.Filename != "tomove.txt" {
+			t.Errorf("Expected filename 'tomove.txt', got '%s'", movedFile.Filename)
+		}
+	})
+
+	t.Run("move file to root folder", func(t *testing.T) {
+		// Create file in a subfolder
+		app.createTestFolder(t, user, "/subfolder")
+		file := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "move-to-root-path",
+			LogicalPath:      "/subfolder",
+			Filename:         "movetoroot.txt",
+			OriginalFilename: "movetoroot.txt",
+			FileSize:         100,
+			UploadStatus:     "completed",
+		}
+		app.db.Create(file)
+
+		form := url.Values{}
+		form.Set("destination_folder", "/")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/move/%d", file.ID), strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFile(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify file was moved to root
+		var movedFile models.File
+		app.db.First(&movedFile, file.ID)
+		if movedFile.LogicalPath != "/" {
+			t.Errorf("Expected logical path '/', got '%s'", movedFile.LogicalPath)
+		}
+	})
+
+	t.Run("move to same folder succeeds with message", func(t *testing.T) {
+		file := app.createTestFile(t, user, "sameplace.txt", "Content")
+
+		form := url.Values{}
+		form.Set("destination_folder", "/") // File is already in root
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/move/%d", file.ID), strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFile(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+	})
+
+	t.Run("move to non-existent folder fails", func(t *testing.T) {
+		file := app.createTestFile(t, user, "orphan.txt", "Content")
+
+		form := url.Values{}
+		form.Set("destination_folder", "/nonexistent")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/move/%d", file.ID), strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFile(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify file was NOT moved
+		var unchangedFile models.File
+		app.db.First(&unchangedFile, file.ID)
+		if unchangedFile.LogicalPath != "/" {
+			t.Errorf("File should not have been moved, got '%s'", unchangedFile.LogicalPath)
+		}
+	})
+
+	t.Run("move collision prevented", func(t *testing.T) {
+		file1 := app.createTestFile(t, user, "collision.txt", "Content 1")
+		app.createTestFolder(t, user, "/target")
+
+		// Create a file with the same name in target folder
+		file2 := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "collision-target-path",
+			LogicalPath:      "/target",
+			Filename:         "collision.txt",
+			OriginalFilename: "collision.txt",
+			FileSize:         100,
+			UploadStatus:     "completed",
+		}
+		app.db.Create(file2)
+
+		// Try to move file1 to /target
+		form := url.Values{}
+		form.Set("destination_folder", "/target")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/move/%d", file1.ID), strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file1.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFile(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify file1 was NOT moved
+		var unchangedFile models.File
+		app.db.First(&unchangedFile, file1.ID)
+		if unchangedFile.LogicalPath != "/" {
+			t.Errorf("File should not have been moved, got '%s'", unchangedFile.LogicalPath)
+		}
+	})
+
+	t.Run("move non-existent file fails", func(t *testing.T) {
+		app.createTestFolder(t, user, "/exists")
+
+		form := url.Values{}
+		form.Set("destination_folder", "/exists")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/move/99999", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "99999")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFile(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+	})
+
+	t.Run("move other user's file fails", func(t *testing.T) {
+		file := app.createTestFile(t, user, "protected.txt", "Content")
+		otherUser := app.createTestUser(t, "moveattacker")
+		app.createTestFolder(t, otherUser, "/otherfolder")
+
+		form := url.Values{}
+		form.Set("destination_folder", "/otherfolder")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/move/%d", file.ID), strings.NewReader(form.Encode()), otherUser)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFile(w, req)
+
+		// Should redirect with error (file not found for this user)
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify file was NOT moved
+		var unchangedFile models.File
+		app.db.First(&unchangedFile, file.ID)
+		if unchangedFile.LogicalPath != "/" {
+			t.Errorf("File should not have been moved, got '%s'", unchangedFile.LogicalPath)
+		}
+	})
+
+	t.Run("move without authentication fails", func(t *testing.T) {
+		file := app.createTestFile(t, user, "authfile.txt", "Content")
+		app.createTestFolder(t, user, "/authdest")
+
+		form := url.Values{}
+		form.Set("destination_folder", "/authdest")
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/move/%d", file.ID), strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = csrf.UnsafeSkipCheck(req)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFile(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401, got %d", w.Code)
+		}
+	})
+
+	t.Run("move to implicit folder succeeds", func(t *testing.T) {
+		// Create a file that creates an implicit folder (no explicit Folder record)
+		implicitFile := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "implicit-folder-file",
+			LogicalPath:      "/implicitfolder",
+			Filename:         "implicit.txt",
+			OriginalFilename: "implicit.txt",
+			FileSize:         100,
+			UploadStatus:     "completed",
+		}
+		app.db.Create(implicitFile)
+
+		// Create a file to move
+		fileToMove := app.createTestFile(t, user, "movable.txt", "Move me")
+
+		form := url.Values{}
+		form.Set("destination_folder", "/implicitfolder")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/move/%d", fileToMove.ID), strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", fileToMove.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFile(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify file was moved
+		var movedFile models.File
+		app.db.First(&movedFile, fileToMove.ID)
+		if movedFile.LogicalPath != "/implicitfolder" {
+			t.Errorf("Expected logical path '/implicitfolder', got '%s'", movedFile.LogicalPath)
+		}
+	})
 }

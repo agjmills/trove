@@ -1099,6 +1099,83 @@ func (h *FileHandler) RenameFile(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, folderRedirectURL(file.LogicalPath), http.StatusSeeOther)
 }
 
+// MoveFile moves a file to a different folder.
+func (h *FileHandler) MoveFile(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	fileID := chi.URLParam(r, "id")
+	if fileID == "" {
+		http.Error(w, "File ID is required", http.StatusBadRequest)
+		return
+	}
+
+	destinationFolder := sanitizeFolderPath(r.FormValue("destination_folder"))
+
+	// Find the file
+	var file models.File
+	if err := h.db.Where("id = ? AND user_id = ?", fileID, user.ID).First(&file).Error; err != nil {
+		flash.Error(w, "File not found")
+		http.Redirect(w, r, "/files", http.StatusSeeOther)
+		return
+	}
+
+	// Store the original folder for potential redirect
+	originalFolder := file.LogicalPath
+
+	// Check if the destination is the same as the current location
+	if file.LogicalPath == destinationFolder {
+		flash.Success(w, "File is already in this folder")
+		http.Redirect(w, r, folderRedirectURL(destinationFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Validate destination folder exists (root folder "/" is always valid)
+	if destinationFolder != "/" {
+		// Check if folder exists in folders table
+		var folderCount int64
+		h.db.Model(&models.Folder{}).Where("user_id = ? AND folder_path = ?", user.ID, destinationFolder).Count(&folderCount)
+
+		// Also check if any files exist in this folder path (implicit folders)
+		var fileCount int64
+		if folderCount == 0 {
+			h.db.Model(&models.File{}).Where("user_id = ? AND logical_path = ?", user.ID, destinationFolder).Count(&fileCount)
+		}
+
+		// If folder doesn't exist in either table, return error
+		if folderCount == 0 && fileCount == 0 {
+			flash.Error(w, "Destination folder does not exist")
+			http.Redirect(w, r, folderRedirectURL(originalFolder), http.StatusSeeOther)
+			return
+		}
+	}
+
+	// Check for name collision in the destination folder
+	var count int64
+	h.db.Model(&models.File{}).
+		Where("user_id = ? AND logical_path = ? AND filename = ? AND id != ?", user.ID, destinationFolder, file.Filename, file.ID).
+		Count(&count)
+
+	if count > 0 {
+		flash.Error(w, "A file with the same name already exists in the destination folder")
+		http.Redirect(w, r, folderRedirectURL(originalFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Update the file's logical path
+	if err := h.db.Model(&file).Update("logical_path", destinationFolder).Error; err != nil {
+		flash.Error(w, "Failed to move file")
+		http.Redirect(w, r, folderRedirectURL(originalFolder), http.StatusSeeOther)
+		return
+	}
+
+	flash.Success(w, fmt.Sprintf("File moved to %s", destinationFolder))
+	http.Redirect(w, r, folderRedirectURL(destinationFolder), http.StatusSeeOther)
+}
+
 // RenameFolder renames a folder, preventing name collisions within the same parent folder.
 // This also updates the logical_path of all files and subfolders within the folder.
 func (h *FileHandler) RenameFolder(w http.ResponseWriter, r *http.Request) {
