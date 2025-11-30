@@ -79,7 +79,7 @@ func main() {
 	r.Use(internalMiddleware.SecurityHeaders)
 
 	versionInfo := fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date)
-	fileHandler := routes.Setup(r, db, cfg, storageService, sessionManager, versionInfo)
+	fileHandler, deletedHandler := routes.Setup(r, db, cfg, storageService, sessionManager, versionInfo)
 
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	logger.Info("starting trove server",
@@ -110,6 +110,9 @@ func main() {
 
 		// Stop accepting new uploads
 		fileHandler.Shutdown()
+
+		// Stop trash cleanup worker
+		deletedHandler.Shutdown()
 
 		// Shutdown HTTP server
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

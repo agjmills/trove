@@ -549,9 +549,9 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// Success message
 	if isDuplicate {
-		flash.Success(w, fmt.Sprintf("File '%s' uploaded (deduplicated)", displayFilename))
+		flash.Success(w, fmt.Sprintf("File \"%s\" uploaded (deduplicated)", displayFilename))
 	} else if displayFilename != originalFilename {
-		flash.Success(w, fmt.Sprintf("File uploaded as '%s'", displayFilename))
+		flash.Success(w, fmt.Sprintf("File uploaded as \"%s\"", displayFilename))
 	} else {
 		flash.Success(w, "File uploaded successfully.")
 	}
@@ -721,48 +721,31 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch file from database
+	// Fetch file from database (only non-deleted files)
 	var file models.File
-	if err := h.db.Where("id = ? AND user_id = ?", fileID, user.ID).First(&file).Error; err != nil {
+	if err := h.db.Where("id = ? AND user_id = ? AND trashed_at IS NULL", fileID, user.ID).First(&file).Error; err != nil {
 		http.Error(w, "File not found", http.StatusNotFound)
 		return
 	}
 
-	// Store the size and storage path before deletion
-	fileSize := file.FileSize
-	storagePath := file.StoragePath
+	// Store original path for redirect
+	originalPath := file.LogicalPath
 
-	// Delete from database
-	if err := h.db.Delete(&file).Error; err != nil {
-		http.Error(w, "Failed to delete file from database", http.StatusInternalServerError)
+	// Soft delete instead of permanent delete
+	now := time.Now()
+	if err := h.db.Model(&file).Updates(map[string]interface{}{
+		"trashed_at":            now,
+		"original_logical_path": file.LogicalPath,
+		"logical_path":          "/.deleted", // Move to virtual deleted folder
+	}).Error; err != nil {
+		http.Error(w, "Failed to delete file", http.StatusInternalServerError)
 		return
 	}
 
-	ctx := r.Context()
-
-	// Check if any other File records reference this physical file (deduplication check)
-	var refCount int64
-	h.db.Model(&models.File{}).Where("user_id = ? AND storage_path = ?", user.ID, storagePath).Count(&refCount)
-
-	// Only delete from storage if no other references exist
-	shouldDeleteFromStorage := refCount == 0
-	if shouldDeleteFromStorage {
-		if err := h.storage.Delete(ctx, storagePath); err != nil {
-			// Log the error but don't fail the request since DB record is already gone
-			fmt.Printf("Warning: failed to delete file from storage: %v\n", err)
-		}
-
-		// Update user storage quota (only if physical file was deleted)
-		if err := h.db.Model(&models.User{}).Where("id = ?", user.ID).
-			UpdateColumn("storage_used", gorm.Expr("storage_used - ?", fileSize)).Error; err != nil {
-			fmt.Printf("Warning: failed to update user storage: %v\n", err)
-		}
-	}
-
-	flash.Success(w, "File deleted successfully.")
+	flash.Success(w, "File deleted.")
 
 	// Redirect back to the folder the file was in
-	http.Redirect(w, r, folderRedirectURL(file.LogicalPath), http.StatusSeeOther)
+	http.Redirect(w, r, folderRedirectURL(originalPath), http.StatusSeeOther)
 }
 
 func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
@@ -789,48 +772,68 @@ func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 		fullFolderPath = currentFolder + "/" + folderName
 	}
 
-	// Check if folder has any files
-	var fileCount int64
-	h.db.Model(&models.File{}).
-		Where("user_id = ? AND logical_path = ?", user.ID, fullFolderPath).
-		Count(&fileCount)
-
-	if fileCount > 0 {
-		flash.Error(w, "Cannot delete folder: it contains files.")
-		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
-		return
-	}
-
-	// Check if folder has any subfolders
-	var subfolderCount int64
-	escapedFullFolderPath := escapeSQLLike(fullFolderPath)
-	h.db.Model(&models.Folder{}).
-		Where("user_id = ? AND folder_path LIKE ? ESCAPE '\\' AND folder_path != ?", user.ID, escapedFullFolderPath+"/%", fullFolderPath).
-		Count(&subfolderCount)
-
-	if subfolderCount > 0 {
-		flash.Error(w, "Cannot delete folder: it contains subfolders.")
-		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
-		return
-	}
-
-	// Check if folder exists
+	// Check if folder exists (only non-deleted folders)
 	var existingFolder models.Folder
-	if err := h.db.Where("user_id = ? AND folder_path = ?", user.ID, fullFolderPath).First(&existingFolder).Error; err != nil {
+	if err := h.db.Where("user_id = ? AND folder_path = ? AND trashed_at IS NULL", user.ID, fullFolderPath).First(&existingFolder).Error; err != nil {
 		flash.Error(w, "Folder not found.")
 		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
 	}
 
-	// Delete the folder record
-	if err := h.db.Where("user_id = ? AND folder_path = ?", user.ID, fullFolderPath).
-		Delete(&models.Folder{}).Error; err != nil {
+	// Soft delete folder and all its contents
+	now := time.Now()
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		// Soft delete the folder itself
+		if err := tx.Model(&existingFolder).Updates(map[string]interface{}{
+			"trashed_at":           now,
+			"original_folder_path": fullFolderPath,
+		}).Error; err != nil {
+			return err
+		}
+
+		// Soft delete all files in this folder
+		if err := tx.Model(&models.File{}).
+			Where("user_id = ? AND logical_path = ? AND trashed_at IS NULL", user.ID, fullFolderPath).
+			Updates(map[string]interface{}{
+				"trashed_at":            now,
+				"original_logical_path": gorm.Expr("logical_path"),
+			}).Error; err != nil {
+			return err
+		}
+
+		// Soft delete all subfolders
+		escapedFullFolderPath := escapeSQLLike(fullFolderPath)
+		if err := tx.Model(&models.Folder{}).
+			Where("user_id = ? AND folder_path LIKE ? ESCAPE '\\' AND folder_path != ? AND trashed_at IS NULL",
+				user.ID, escapedFullFolderPath+"/%", fullFolderPath).
+			Updates(map[string]interface{}{
+				"trashed_at":           now,
+				"original_folder_path": gorm.Expr("folder_path"),
+			}).Error; err != nil {
+			return err
+		}
+
+		// Soft delete all files in subfolders
+		if err := tx.Model(&models.File{}).
+			Where("user_id = ? AND logical_path LIKE ? ESCAPE '\\' AND trashed_at IS NULL",
+				user.ID, escapedFullFolderPath+"/%").
+			Updates(map[string]interface{}{
+				"trashed_at":            now,
+				"original_logical_path": gorm.Expr("logical_path"),
+			}).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
 		flash.Error(w, "Failed to delete folder. Please try again.")
 		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
 	}
 
-	flash.Success(w, "Folder deleted successfully.")
+	flash.Success(w, "Folder deleted.")
 	// Redirect back to parent folder
 	http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 }
