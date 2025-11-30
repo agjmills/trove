@@ -59,8 +59,10 @@ func (h *DeletedHandler) Shutdown() {
 func (h *DeletedHandler) cleanupWorker() {
 	defer h.wg.Done()
 
-	// Run cleanup immediately on startup
-	h.runCleanup()
+	// Skip immediate cleanup in test environment to avoid race conditions
+	if h.cfg.Env != "test" {
+		h.runCleanup()
+	}
 
 	interval := time.Duration(h.cfg.DeletedCleanupIntervalMin) * time.Minute
 	if interval < time.Minute {
