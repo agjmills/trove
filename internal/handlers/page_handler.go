@@ -222,12 +222,13 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	var failedUploads []models.File
 	h.db.Where("user_id = ? AND upload_status = ? AND trashed_at IS NULL", user.ID, "failed").Find(&failedUploads)
 
-	// Count deleted items for nav badge
+	// Count deleted items for nav badge (single query for both files and folders)
 	var deletedCount int64
-	h.db.Model(&models.File{}).Where("user_id = ? AND trashed_at IS NOT NULL", user.ID).Count(&deletedCount)
-	var deletedFolderCount int64
-	h.db.Model(&models.Folder{}).Where("user_id = ? AND trashed_at IS NOT NULL", user.ID).Count(&deletedFolderCount)
-	deletedCount += deletedFolderCount
+	h.db.Raw(`
+		SELECT 
+			(SELECT COUNT(*) FROM files WHERE user_id = ? AND trashed_at IS NOT NULL AND deleted_at IS NULL) +
+			(SELECT COUNT(*) FROM folders WHERE user_id = ? AND trashed_at IS NOT NULL AND deleted_at IS NULL) AS total
+	`, user.ID, user.ID).Scan(&deletedCount)
 
 	render(w, "files.html", map[string]any{
 		"Title":         "Files",
