@@ -1026,6 +1026,200 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// RenameFile renames a file, preventing name collisions within the same folder.
+func (h *FileHandler) RenameFile(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	fileID := chi.URLParam(r, "id")
+	if fileID == "" {
+		http.Error(w, "File ID is required", http.StatusBadRequest)
+		return
+	}
+
+	newName := strings.TrimSpace(r.FormValue("new_name"))
+	if newName == "" {
+		flash.Error(w, "New name is required")
+		http.Redirect(w, r, "/files", http.StatusSeeOther)
+		return
+	}
+
+	// Validate filename length (most filesystems limit to 255 bytes)
+	if len(newName) > 255 {
+		flash.Error(w, "File name is too long (max 255 characters)")
+		http.Redirect(w, r, "/files", http.StatusSeeOther)
+		return
+	}
+
+	// Validate filename (no slashes, no ..)
+	if strings.Contains(newName, "/") || strings.Contains(newName, "..") || strings.Contains(newName, "\\") {
+		flash.Error(w, "Invalid file name")
+		http.Redirect(w, r, "/files", http.StatusSeeOther)
+		return
+	}
+
+	// Find the file
+	var file models.File
+	if err := h.db.Where("id = ? AND user_id = ?", fileID, user.ID).First(&file).Error; err != nil {
+		flash.Error(w, "File not found")
+		http.Redirect(w, r, "/files", http.StatusSeeOther)
+		return
+	}
+
+	// Check if the new name is the same as the current name
+	if file.Filename == newName {
+		flash.Success(w, "File name unchanged")
+		http.Redirect(w, r, folderRedirectURL(file.LogicalPath), http.StatusSeeOther)
+		return
+	}
+
+	// Check for name collision in the same folder
+	var count int64
+	h.db.Model(&models.File{}).
+		Where("user_id = ? AND logical_path = ? AND filename = ? AND id != ?", user.ID, file.LogicalPath, newName, file.ID).
+		Count(&count)
+
+	if count > 0 {
+		flash.Error(w, "A file with that name already exists in this folder")
+		http.Redirect(w, r, folderRedirectURL(file.LogicalPath), http.StatusSeeOther)
+		return
+	}
+
+	// Update the filename
+	if err := h.db.Model(&file).Update("filename", newName).Error; err != nil {
+		flash.Error(w, "Failed to rename file")
+		http.Redirect(w, r, folderRedirectURL(file.LogicalPath), http.StatusSeeOther)
+		return
+	}
+
+	flash.Success(w, fmt.Sprintf("File renamed to %s", newName))
+	http.Redirect(w, r, folderRedirectURL(file.LogicalPath), http.StatusSeeOther)
+}
+
+// RenameFolder renames a folder, preventing name collisions within the same parent folder.
+// This also updates the logical_path of all files and subfolders within the folder.
+func (h *FileHandler) RenameFolder(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	currentFolder := sanitizeFolderPath(r.FormValue("current_folder"))
+	oldName := strings.TrimSpace(r.FormValue("old_name"))
+	newName := strings.TrimSpace(r.FormValue("new_name"))
+
+	if oldName == "" || newName == "" {
+		flash.Error(w, "Folder name is required")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Validate folder name length (most filesystems limit to 255 bytes)
+	if len(newName) > 255 {
+		flash.Error(w, "Folder name is too long (max 255 characters)")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Validate folder name (no slashes, no ..)
+	if strings.Contains(newName, "/") || strings.Contains(newName, "..") || strings.Contains(newName, "\\") {
+		flash.Error(w, "Invalid folder name")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Build full old and new paths
+	var oldPath, newPath string
+	if currentFolder == "/" {
+		oldPath = "/" + oldName
+		newPath = "/" + newName
+	} else {
+		oldPath = currentFolder + "/" + oldName
+		newPath = currentFolder + "/" + newName
+	}
+
+	// Check if old name equals new name
+	if oldPath == newPath {
+		flash.Success(w, "Folder name unchanged")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Check if a folder with the new name already exists in the same parent
+	var existingFolder models.Folder
+	if err := h.db.Where("user_id = ? AND folder_path = ?", user.ID, newPath).First(&existingFolder).Error; err == nil {
+		flash.Error(w, "A folder with that name already exists")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Check for implicit folder collision (folder that exists because files are in it)
+	var implicitFolderCount int64
+	h.db.Model(&models.File{}).
+		Where("user_id = ? AND logical_path = ?", user.ID, newPath).
+		Count(&implicitFolderCount)
+	if implicitFolderCount > 0 {
+		flash.Error(w, "A folder with that name already exists")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Verify the source folder exists before attempting rename
+	var sourceFolder models.Folder
+	if err := h.db.Where("user_id = ? AND folder_path = ?", user.ID, oldPath).First(&sourceFolder).Error; err != nil {
+		flash.Error(w, "Folder not found")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Perform rename within a transaction
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		// Update the folder record itself
+		if err := tx.Model(&models.Folder{}).
+			Where("user_id = ? AND folder_path = ?", user.ID, oldPath).
+			Update("folder_path", newPath).Error; err != nil {
+			return err
+		}
+
+		// Update all subfolders (replace prefix)
+		escapedOldPath := escapeSQLLike(oldPath)
+		if err := tx.Model(&models.Folder{}).
+			Where("user_id = ? AND folder_path LIKE ? ESCAPE '\\'", user.ID, escapedOldPath+"/%").
+			Update("folder_path", gorm.Expr("REPLACE(folder_path, ?, ?)", oldPath+"/", newPath+"/")).Error; err != nil {
+			return err
+		}
+
+		// Update all files in the folder (exact match)
+		if err := tx.Model(&models.File{}).
+			Where("user_id = ? AND logical_path = ?", user.ID, oldPath).
+			Update("logical_path", newPath).Error; err != nil {
+			return err
+		}
+
+		// Update all files in subfolders (replace prefix)
+		if err := tx.Model(&models.File{}).
+			Where("user_id = ? AND logical_path LIKE ? ESCAPE '\\'", user.ID, escapedOldPath+"/%").
+			Update("logical_path", gorm.Expr("REPLACE(logical_path, ?, ?)", oldPath+"/", newPath+"/")).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		flash.Error(w, "Failed to rename folder")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	flash.Success(w, fmt.Sprintf("Folder renamed to %s", newName))
+	http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+}
+
 // DismissFailedUpload removes a failed upload and restores the user's quota.
 // This allows users to acknowledge and dismiss failed uploads from the UI.
 func (h *FileHandler) DismissFailedUpload(w http.ResponseWriter, r *http.Request) {

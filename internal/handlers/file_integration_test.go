@@ -62,7 +62,9 @@ func newFileTestApp(t *testing.T) *fileTestApp {
 	router.Post("/upload", fileHandler.Upload)
 	router.Get("/download/{id}", fileHandler.Download)
 	router.Post("/delete/{id}", fileHandler.Delete)
+	router.Post("/rename/{id}", fileHandler.RenameFile)
 	router.Post("/folders/create", fileHandler.CreateFolder)
+	router.Post("/folders/rename", fileHandler.RenameFolder)
 	router.Post("/folders/delete/{name}", fileHandler.DeleteFolder)
 
 	app := &fileTestApp{
@@ -1342,5 +1344,557 @@ func TestFailedUploadVisibleInFileList(t *testing.T) {
 		if f.UploadStatus == "failed" && f.ErrorMessage == "" {
 			t.Error("Failed file should have an error message")
 		}
+	}
+}
+
+// TestRenameFileIntegration tests file renaming functionality
+func TestRenameFileIntegration(t *testing.T) {
+	app := newFileTestApp(t)
+
+	user := app.createTestUser(t, "renamefileuser")
+
+	t.Run("successful file rename", func(t *testing.T) {
+		file := app.createTestFile(t, user, "oldname.txt", "Content")
+
+		form := url.Values{}
+		form.Set("new_name", "newname.txt")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/rename/%d", file.ID), strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFile(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d: %s", w.Code, w.Body.String())
+		}
+
+		// Verify file was renamed
+		var renamedFile models.File
+		if err := app.db.First(&renamedFile, file.ID).Error; err != nil {
+			t.Fatalf("Failed to find file: %v", err)
+		}
+
+		if renamedFile.Filename != "newname.txt" {
+			t.Errorf("Expected filename 'newname.txt', got '%s'", renamedFile.Filename)
+		}
+
+		// Original filename should be unchanged
+		if renamedFile.OriginalFilename != "oldname.txt" {
+			t.Errorf("Expected original filename 'oldname.txt', got '%s'", renamedFile.OriginalFilename)
+		}
+	})
+
+	t.Run("rename to same name succeeds", func(t *testing.T) {
+		file := app.createTestFile(t, user, "samename.txt", "Content")
+
+		form := url.Values{}
+		form.Set("new_name", "samename.txt")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/rename/%d", file.ID), strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFile(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+	})
+
+	t.Run("rename collision prevented", func(t *testing.T) {
+		file1 := app.createTestFile(t, user, "first.txt", "Content 1")
+		app.createTestFile(t, user, "second.txt", "Content 2")
+
+		// Try to rename first.txt to second.txt
+		form := url.Values{}
+		form.Set("new_name", "second.txt")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/rename/%d", file1.ID), strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file1.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFile(w, req)
+
+		// Should redirect with error flash
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify file was NOT renamed
+		var unchangedFile models.File
+		app.db.First(&unchangedFile, file1.ID)
+		if unchangedFile.Filename != "first.txt" {
+			t.Errorf("File should not have been renamed, got '%s'", unchangedFile.Filename)
+		}
+	})
+
+	t.Run("rename with invalid name fails", func(t *testing.T) {
+		file := app.createTestFile(t, user, "validname.txt", "Content")
+
+		form := url.Values{}
+		form.Set("new_name", "invalid/name.txt")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/rename/%d", file.ID), strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFile(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify file was NOT renamed
+		var unchangedFile models.File
+		app.db.First(&unchangedFile, file.ID)
+		if unchangedFile.Filename != "validname.txt" {
+			t.Errorf("File should not have been renamed, got '%s'", unchangedFile.Filename)
+		}
+	})
+
+	t.Run("rename empty name fails", func(t *testing.T) {
+		file := app.createTestFile(t, user, "hasname.txt", "Content")
+
+		form := url.Values{}
+		form.Set("new_name", "")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/rename/%d", file.ID), strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFile(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+	})
+
+	t.Run("rename non-existent file fails", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("new_name", "newname.txt")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/rename/99999", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "99999")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFile(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+	})
+
+	t.Run("rename other user's file fails", func(t *testing.T) {
+		file := app.createTestFile(t, user, "myfile.txt", "Content")
+		otherUser := app.createTestUser(t, "attacker3")
+
+		form := url.Values{}
+		form.Set("new_name", "stolen.txt")
+
+		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/rename/%d", file.ID), strings.NewReader(form.Encode()), otherUser)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFile(w, req)
+
+		// Should redirect with error (file not found for this user)
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify file was NOT renamed
+		var unchangedFile models.File
+		app.db.First(&unchangedFile, file.ID)
+		if unchangedFile.Filename != "myfile.txt" {
+			t.Errorf("File should not have been renamed, got '%s'", unchangedFile.Filename)
+		}
+	})
+
+	t.Run("rename without authentication fails", func(t *testing.T) {
+		file := app.createTestFile(t, user, "authfile.txt", "Content")
+
+		form := url.Values{}
+		form.Set("new_name", "hacked.txt")
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/rename/%d", file.ID), strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = csrf.UnsafeSkipCheck(req)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFile(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401, got %d", w.Code)
+		}
+	})
+}
+
+// TestRenameFolderIntegration tests folder renaming functionality
+func TestRenameFolderIntegration(t *testing.T) {
+	app := newFileTestApp(t)
+
+	user := app.createTestUser(t, "renamefolderuser")
+
+	t.Run("successful folder rename", func(t *testing.T) {
+		app.createTestFolder(t, user, "/oldfolder")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("old_name", "oldfolder")
+		form.Set("new_name", "newfolder")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/rename", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFolder(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d: %s", w.Code, w.Body.String())
+		}
+
+		// Verify folder was renamed
+		var oldFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/oldfolder").First(&oldFolder).Error; err == nil {
+			t.Error("Old folder path should no longer exist")
+		}
+
+		var newFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/newfolder").First(&newFolder).Error; err != nil {
+			t.Errorf("New folder path should exist: %v", err)
+		}
+	})
+
+	t.Run("rename folder updates files inside", func(t *testing.T) {
+		app.createTestFolder(t, user, "/withfiles2")
+
+		// Create a file in the folder
+		file := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "file-in-folder-path",
+			LogicalPath:      "/withfiles2",
+			Filename:         "insidefolder.txt",
+			OriginalFilename: "insidefolder.txt",
+			FileSize:         100,
+			UploadStatus:     "completed",
+		}
+		app.db.Create(file)
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("old_name", "withfiles2")
+		form.Set("new_name", "renamedwithfiles")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/rename", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFolder(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify file's logical path was updated
+		var updatedFile models.File
+		app.db.First(&updatedFile, file.ID)
+		if updatedFile.LogicalPath != "/renamedwithfiles" {
+			t.Errorf("Expected file logical path '/renamedwithfiles', got '%s'", updatedFile.LogicalPath)
+		}
+	})
+
+	t.Run("rename folder updates subfolders", func(t *testing.T) {
+		app.createTestFolder(t, user, "/parent2")
+		app.createTestFolder(t, user, "/parent2/child")
+		app.createTestFolder(t, user, "/parent2/child/grandchild")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("old_name", "parent2")
+		form.Set("new_name", "renamedparent")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/rename", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFolder(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify subfolders were updated
+		var childFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/renamedparent/child").First(&childFolder).Error; err != nil {
+			t.Errorf("Child folder should have been updated: %v", err)
+		}
+
+		var grandchildFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/renamedparent/child/grandchild").First(&grandchildFolder).Error; err != nil {
+			t.Errorf("Grandchild folder should have been updated: %v", err)
+		}
+	})
+
+	t.Run("rename folder collision prevented", func(t *testing.T) {
+		app.createTestFolder(t, user, "/folder1")
+		app.createTestFolder(t, user, "/folder2")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("old_name", "folder1")
+		form.Set("new_name", "folder2")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/rename", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFolder(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify folder was NOT renamed
+		var folder1 models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/folder1").First(&folder1).Error; err != nil {
+			t.Error("folder1 should still exist")
+		}
+	})
+
+	t.Run("rename folder to same name succeeds", func(t *testing.T) {
+		app.createTestFolder(t, user, "/samefolder")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("old_name", "samefolder")
+		form.Set("new_name", "samefolder")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/rename", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFolder(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+	})
+
+	t.Run("rename folder with invalid name fails", func(t *testing.T) {
+		app.createTestFolder(t, user, "/validfolder")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("old_name", "validfolder")
+		form.Set("new_name", "invalid/name")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/rename", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFolder(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify folder was NOT renamed
+		var folder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/validfolder").First(&folder).Error; err != nil {
+			t.Error("Folder should still exist with original name")
+		}
+	})
+
+	t.Run("rename nested folder", func(t *testing.T) {
+		app.createTestFolder(t, user, "/parentfolder")
+		app.createTestFolder(t, user, "/parentfolder/nestedfolder")
+
+		form := url.Values{}
+		form.Set("current_folder", "/parentfolder")
+		form.Set("old_name", "nestedfolder")
+		form.Set("new_name", "renamednestedfolder")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/rename", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFolder(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify nested folder was renamed
+		var renamedFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/parentfolder/renamednestedfolder").First(&renamedFolder).Error; err != nil {
+			t.Errorf("Renamed nested folder should exist: %v", err)
+		}
+	})
+
+	t.Run("rename without authentication fails", func(t *testing.T) {
+		app.createTestFolder(t, user, "/authrequired")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("old_name", "authrequired")
+		form.Set("new_name", "hacked")
+
+		req := httptest.NewRequest(http.MethodPost, "/folders/rename", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = csrf.UnsafeSkipCheck(req)
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFolder(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401, got %d", w.Code)
+		}
+	})
+
+	t.Run("rename folder blocked by implicit folder from files", func(t *testing.T) {
+		// Create an explicit folder we want to rename
+		app.createTestFolder(t, user, "/sourcefolder")
+
+		// Create files at /targetfolder WITHOUT an explicit Folder record
+		// This creates an "implicit" folder that exists only because files are there
+		implicitFile := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "implicit-folder-file-path",
+			LogicalPath:      "/targetfolder",
+			Filename:         "implicit.txt",
+			OriginalFilename: "implicit.txt",
+			FileSize:         100,
+			UploadStatus:     "completed",
+		}
+		app.db.Create(implicitFile)
+
+		// Try to rename sourcefolder to targetfolder (should fail due to implicit folder)
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("old_name", "sourcefolder")
+		form.Set("new_name", "targetfolder")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/rename", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFolder(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify original folder still exists (was not renamed)
+		var folder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/sourcefolder").First(&folder).Error; err != nil {
+			t.Error("Source folder should still exist with original name")
+		}
+
+		// Cleanup
+		app.db.Delete(implicitFile)
+	})
+
+	t.Run("rename folder with too long name fails", func(t *testing.T) {
+		app.createTestFolder(t, user, "/shortname")
+
+		// Create a name that's 256 characters (over the 255 limit)
+		longName := strings.Repeat("a", 256)
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("old_name", "shortname")
+		form.Set("new_name", longName)
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/rename", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFolder(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify folder was NOT renamed
+		var folder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/shortname").First(&folder).Error; err != nil {
+			t.Error("Folder should still exist with original name")
+		}
+	})
+}
+
+// TestRenameFileNameTooLong tests that file renaming rejects overly long names
+func TestRenameFileNameTooLong(t *testing.T) {
+	app := newFileTestApp(t)
+
+	user := app.createTestUser(t, "longnameuser")
+	file := app.createTestFile(t, user, "short.txt", "Content")
+
+	// Create a name that's 256 characters (over the 255 limit)
+	longName := strings.Repeat("a", 256) + ".txt"
+
+	form := url.Values{}
+	form.Set("new_name", longName)
+
+	req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/rename/%d", file.ID), strings.NewReader(form.Encode()), user)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	app.fileHandler.RenameFile(w, req)
+
+	// Should redirect with error
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected redirect status 303, got %d", w.Code)
+	}
+
+	// Verify file was NOT renamed
+	var unchangedFile models.File
+	app.db.First(&unchangedFile, file.ID)
+	if unchangedFile.Filename != "short.txt" {
+		t.Errorf("File should not have been renamed, got '%s'", unchangedFile.Filename)
 	}
 }
