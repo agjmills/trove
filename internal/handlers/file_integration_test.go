@@ -1788,4 +1788,113 @@ func TestRenameFolderIntegration(t *testing.T) {
 			t.Errorf("Expected status 401, got %d", w.Code)
 		}
 	})
+
+	t.Run("rename folder blocked by implicit folder from files", func(t *testing.T) {
+		// Create an explicit folder we want to rename
+		app.createTestFolder(t, user, "/sourcefolder")
+
+		// Create files at /targetfolder WITHOUT an explicit Folder record
+		// This creates an "implicit" folder that exists only because files are there
+		implicitFile := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "implicit-folder-file-path",
+			LogicalPath:      "/targetfolder",
+			Filename:         "implicit.txt",
+			OriginalFilename: "implicit.txt",
+			FileSize:         100,
+			UploadStatus:     "completed",
+		}
+		app.db.Create(implicitFile)
+
+		// Try to rename sourcefolder to targetfolder (should fail due to implicit folder)
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("old_name", "sourcefolder")
+		form.Set("new_name", "targetfolder")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/rename", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFolder(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify original folder still exists (was not renamed)
+		var folder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/sourcefolder").First(&folder).Error; err != nil {
+			t.Error("Source folder should still exist with original name")
+		}
+
+		// Cleanup
+		app.db.Delete(implicitFile)
+	})
+
+	t.Run("rename folder with too long name fails", func(t *testing.T) {
+		app.createTestFolder(t, user, "/shortname")
+
+		// Create a name that's 256 characters (over the 255 limit)
+		longName := strings.Repeat("a", 256)
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("old_name", "shortname")
+		form.Set("new_name", longName)
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/rename", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.RenameFolder(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify folder was NOT renamed
+		var folder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/shortname").First(&folder).Error; err != nil {
+			t.Error("Folder should still exist with original name")
+		}
+	})
+}
+
+// TestRenameFileNameTooLong tests that file renaming rejects overly long names
+func TestRenameFileNameTooLong(t *testing.T) {
+	app := newFileTestApp(t)
+
+	user := app.createTestUser(t, "longnameuser")
+	file := app.createTestFile(t, user, "short.txt", "Content")
+
+	// Create a name that's 256 characters (over the 255 limit)
+	longName := strings.Repeat("a", 256) + ".txt"
+
+	form := url.Values{}
+	form.Set("new_name", longName)
+
+	req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/rename/%d", file.ID), strings.NewReader(form.Encode()), user)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", fmt.Sprintf("%d", file.ID))
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	app.fileHandler.RenameFile(w, req)
+
+	// Should redirect with error
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected redirect status 303, got %d", w.Code)
+	}
+
+	// Verify file was NOT renamed
+	var unchangedFile models.File
+	app.db.First(&unchangedFile, file.ID)
+	if unchangedFile.Filename != "short.txt" {
+		t.Errorf("File should not have been renamed, got '%s'", unchangedFile.Filename)
+	}
 }

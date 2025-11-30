@@ -1047,6 +1047,13 @@ func (h *FileHandler) RenameFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate filename length (most filesystems limit to 255 bytes)
+	if len(newName) > 255 {
+		flash.Error(w, "File name is too long (max 255 characters)")
+		http.Redirect(w, r, "/files", http.StatusSeeOther)
+		return
+	}
+
 	// Validate filename (no slashes, no ..)
 	if strings.Contains(newName, "/") || strings.Contains(newName, "..") || strings.Contains(newName, "\\") {
 		flash.Error(w, "Invalid file name")
@@ -1102,11 +1109,18 @@ func (h *FileHandler) RenameFolder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	currentFolder := sanitizeFolderPath(r.FormValue("current_folder"))
-	oldName := r.FormValue("old_name")
+	oldName := strings.TrimSpace(r.FormValue("old_name"))
 	newName := strings.TrimSpace(r.FormValue("new_name"))
 
 	if oldName == "" || newName == "" {
 		flash.Error(w, "Folder name is required")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Validate folder name length (most filesystems limit to 255 bytes)
+	if len(newName) > 255 {
+		flash.Error(w, "Folder name is too long (max 255 characters)")
 		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
 	}
