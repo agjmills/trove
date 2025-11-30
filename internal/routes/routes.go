@@ -233,6 +233,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Get("/settings", authHandler.ShowSettings)
 		r.Post("/folders/create", fileHandler.CreateFolder)
 		r.Post("/folders/rename", fileHandler.RenameFolder)
+		r.Post("/folders/move", fileHandler.MoveFolder)
 		r.Get("/download/{id}", fileHandler.Download)
 		r.Post("/delete/{id}", fileHandler.Delete)
 		r.Post("/rename/{id}", fileHandler.RenameFile)
