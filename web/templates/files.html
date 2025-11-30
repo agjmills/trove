@@ -44,18 +44,20 @@
 	</div>
 </div>
 
-<!-- Move File Modal -->
+<!-- Move Modal (supports both files and folders) -->
 <div id="move-modal" class="hidden fixed inset-0 z-[9999] overflow-y-auto">
 	<div class="flex min-h-full items-center justify-center p-4">
 		<div class="fixed inset-0 bg-gray-900/50 dark:bg-black/70" onclick="closeMoveModal()"></div>
 		<div class="relative bg-white dark:bg-gray-800 rounded-lg w-full max-w-md p-6 border-2 border-gray-300 dark:border-gray-600" style="box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
 			<div class="flex items-center justify-between mb-4">
-				<h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Move File</h3>
+				<h3 id="move-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">Move</h3>
 				<button onclick="closeMoveModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none">&times;</button>
 			</div>
 			<p id="move-filename" class="text-sm text-gray-600 dark:text-gray-400 mb-4 truncate"></p>
 			<form id="move-form" method="POST" action="">
 				<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+				<input type="hidden" name="current_folder" value="{{.CurrentFolder}}">
+				<input type="hidden" name="folder_name" id="move-folder-name" value="">
 				<div class="mb-4">
 					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select destination folder:</label>
 					<select name="destination_folder" id="move-destination" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400">
@@ -210,6 +212,14 @@
 								</svg>
 								Rename
 							</button>
+							<button type="button" data-item-type="folder" data-item-name="{{.Name}}" onclick="openMoveModal(this.dataset.itemName, '', this.dataset.itemType)" class="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left">
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+									<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+									<polyline points="12 11 12 17"></polyline>
+									<polyline points="9 14 12 11 15 14"></polyline>
+								</svg>
+								Move
+							</button>
 							<div class="my-1 border-t border-gray-200 dark:border-gray-600"></div>
 							<form method="POST" action="/folders/delete/{{.Name}}" onsubmit="return confirm('Are you sure you want to delete this folder and all its contents?');">
 								<input type="hidden" name="current_folder" value="{{$.CurrentFolder}}">
@@ -304,7 +314,7 @@
 											</svg>
 											Rename
 										</button>
-										<button type="button" data-item-name="{{.Filename}}" data-item-id="{{.ID}}" onclick="openMoveModal(this.dataset.itemName, this.dataset.itemId)" class="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left">
+										<button type="button" data-item-name="{{.Filename}}" data-item-id="{{.ID}}" data-item-type="file" onclick="openMoveModal(this.dataset.itemName, this.dataset.itemId, this.dataset.itemType)" class="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left">
 											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 												<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
 												<polyline points="12 11 12 17"></polyline>
@@ -692,7 +702,12 @@
 	}
 
 	// Move modal functions
-	function openMoveModal(filename, fileId) {
+	// Move modal functions - supports both files and folders
+	// Parameters:
+	//   name: filename or folder name
+	//   fileId: file ID (for files) or empty string (for folders)
+	//   itemType: 'file' or 'folder'
+	function openMoveModal(name, fileId, itemType) {
 		// Close any open menu first
 		if (currentOpenMenu) {
 			currentOpenMenu.classList.add('hidden');
@@ -705,14 +720,25 @@
 
 		const modal = document.getElementById('move-modal');
 		const form = document.getElementById('move-form');
+		const titleEl = document.getElementById('move-modal-title');
 		const filenameEl = document.getElementById('move-filename');
+		const folderNameInput = document.getElementById('move-folder-name');
 		const destinationSelect = document.getElementById('move-destination');
 
-		form.action = '/move/' + fileId;
-		filenameEl.textContent = 'Moving: ' + filename;
+		if (itemType === 'folder') {
+			titleEl.textContent = 'Move Folder';
+			form.action = '/folders/move';
+			filenameEl.textContent = 'Moving folder: ' + name;
+			folderNameInput.value = name;
+		} else {
+			titleEl.textContent = 'Move File';
+			form.action = '/move/' + fileId;
+			filenameEl.textContent = 'Moving: ' + name;
+			folderNameInput.value = '';
+		}
 
-		// Populate folder list
-		populateFolderList(destinationSelect);
+		// Populate folder list (excluding the folder being moved for folder moves)
+		populateFolderList(destinationSelect, itemType === 'folder' ? name : null);
 
 		modal.classList.remove('hidden');
 		destinationSelect.focus();
@@ -720,32 +746,63 @@
 
 	function closeMoveModal() {
 		document.getElementById('move-modal').classList.add('hidden');
+		document.getElementById('move-folder-name').value = '';
 	}
 
-	function populateFolderList(selectElement) {
+	// Populate folder dropdown for move operations
+	// excludeFolderName: if provided, excludes this folder and its subfolders from the list
+	function populateFolderList(selectElement, excludeFolderName) {
 		// Get all available folders from the page data
 		// Using jsStr template function to prevent XSS from special characters in folder names
 		const currentFolder = {{jsStr .CurrentFolder}};
 		const allFolders = [];
 		
-		// Always include root
+		// Build the path of the folder being moved (if any)
+		let excludePath = null;
+		if (excludeFolderName) {
+			if (currentFolder === '/') {
+				excludePath = '/' + excludeFolderName;
+			} else {
+				excludePath = currentFolder + '/' + excludeFolderName;
+			}
+		}
+		
+		// Always include root (unless we're moving a folder and root would cause issues)
 		allFolders.push('/');
 		
 		// Add folders from the current view
 		{{range .Folders}}
 		{{if eq $.CurrentFolder "/"}}
-		allFolders.push({{printf "/%s" .Name | jsStr}});
+		(function() {
+			const folderPath = {{printf "/%s" .Name | jsStr}};
+			// Don't include the folder being moved or its subfolders
+			if (!excludePath || (folderPath !== excludePath && !folderPath.startsWith(excludePath + '/'))) {
+				allFolders.push(folderPath);
+			}
+		})();
 		{{else}}
-		allFolders.push({{printf "%s/%s" $.CurrentFolder .Name | jsStr}});
+		(function() {
+			const folderPath = {{printf "%s/%s" $.CurrentFolder .Name | jsStr}};
+			// Don't include the folder being moved or its subfolders
+			if (!excludePath || (folderPath !== excludePath && !folderPath.startsWith(excludePath + '/'))) {
+				allFolders.push(folderPath);
+			}
+		})();
 		{{end}}
 		{{end}}
 		
 		// Add parent folders from breadcrumbs
 		{{range .Breadcrumbs}}
 		{{if ne .Path "/"}}
-		if (!allFolders.includes({{jsStr .Path}})) {
-			allFolders.push({{jsStr .Path}});
-		}
+		(function() {
+			const folderPath = {{jsStr .Path}};
+			// Don't include the folder being moved or its subfolders
+			if (!excludePath || (folderPath !== excludePath && !folderPath.startsWith(excludePath + '/'))) {
+				if (!allFolders.includes(folderPath)) {
+					allFolders.push(folderPath);
+				}
+			}
+		})();
 		{{end}}
 		{{end}}
 		
@@ -764,9 +821,18 @@
 			} else {
 				option.textContent = folder;
 			}
-			// Pre-select current folder
-			if (folder === currentFolder) {
-				option.selected = true;
+			// Pre-select parent folder of current folder (for moving up)
+			// For folder moves, don't pre-select current folder since it wouldn't change anything
+			if (excludeFolderName) {
+				// For folder moves, select root by default or parent if available
+				if (folder === '/') {
+					option.selected = true;
+				}
+			} else {
+				// For file moves, pre-select current folder
+				if (folder === currentFolder) {
+					option.selected = true;
+				}
 			}
 			selectElement.appendChild(option);
 		});

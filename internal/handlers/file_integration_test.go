@@ -66,6 +66,7 @@ func newFileTestApp(t *testing.T) *fileTestApp {
 	router.Post("/move/{id}", fileHandler.MoveFile)
 	router.Post("/folders/create", fileHandler.CreateFolder)
 	router.Post("/folders/rename", fileHandler.RenameFolder)
+	router.Post("/folders/move", fileHandler.MoveFolder)
 	router.Post("/folders/delete/{name}", fileHandler.DeleteFolder)
 
 	app := &fileTestApp{
@@ -2190,5 +2191,364 @@ func TestMoveFileIntegration(t *testing.T) {
 		if movedFile.LogicalPath != "/implicitfolder" {
 			t.Errorf("Expected logical path '/implicitfolder', got '%s'", movedFile.LogicalPath)
 		}
+	})
+}
+
+// TestMoveFolderIntegration tests folder moving functionality
+func TestMoveFolderIntegration(t *testing.T) {
+	app := newFileTestApp(t)
+
+	user := app.createTestUser(t, "movefolderuser")
+
+	t.Run("successful folder move", func(t *testing.T) {
+		app.createTestFolder(t, user, "/sourcefolder")
+		app.createTestFolder(t, user, "/destfolder")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "sourcefolder")
+		form.Set("destination_folder", "/destfolder")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d: %s", w.Code, w.Body.String())
+		}
+
+		// Verify folder was moved
+		var oldFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/sourcefolder").First(&oldFolder).Error; err == nil {
+			t.Error("Old folder path should no longer exist")
+		}
+
+		var newFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/destfolder/sourcefolder").First(&newFolder).Error; err != nil {
+			t.Errorf("Folder should be at new path: %v", err)
+		}
+	})
+
+	t.Run("move folder to root", func(t *testing.T) {
+		app.createTestFolder(t, user, "/parentfolder")
+		app.createTestFolder(t, user, "/parentfolder/childfolder")
+
+		form := url.Values{}
+		form.Set("current_folder", "/parentfolder")
+		form.Set("folder_name", "childfolder")
+		form.Set("destination_folder", "/")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify folder was moved to root
+		var movedFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/childfolder").First(&movedFolder).Error; err != nil {
+			t.Errorf("Folder should be at root: %v", err)
+		}
+	})
+
+	t.Run("move folder updates contained files", func(t *testing.T) {
+		app.createTestFolder(t, user, "/withfiles3")
+		app.createTestFolder(t, user, "/newparent")
+
+		// Create a file in the folder
+		file := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "file-in-moved-folder-path",
+			LogicalPath:      "/withfiles3",
+			Filename:         "insidefolder.txt",
+			OriginalFilename: "insidefolder.txt",
+			FileSize:         100,
+			UploadStatus:     "completed",
+		}
+		app.db.Create(file)
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "withfiles3")
+		form.Set("destination_folder", "/newparent")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify file's logical path was updated
+		var updatedFile models.File
+		app.db.First(&updatedFile, file.ID)
+		if updatedFile.LogicalPath != "/newparent/withfiles3" {
+			t.Errorf("Expected file logical path '/newparent/withfiles3', got '%s'", updatedFile.LogicalPath)
+		}
+	})
+
+	t.Run("move folder updates subfolders", func(t *testing.T) {
+		app.createTestFolder(t, user, "/parent3")
+		app.createTestFolder(t, user, "/parent3/child")
+		app.createTestFolder(t, user, "/parent3/child/grandchild")
+		app.createTestFolder(t, user, "/newdest")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "parent3")
+		form.Set("destination_folder", "/newdest")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify subfolders were updated
+		var childFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/newdest/parent3/child").First(&childFolder).Error; err != nil {
+			t.Errorf("Child folder should have been updated: %v", err)
+		}
+
+		var grandchildFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/newdest/parent3/child/grandchild").First(&grandchildFolder).Error; err != nil {
+			t.Errorf("Grandchild folder should have been updated: %v", err)
+		}
+	})
+
+	t.Run("move to same location succeeds with message", func(t *testing.T) {
+		app.createTestFolder(t, user, "/sameplacefolder")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "sameplacefolder")
+		form.Set("destination_folder", "/")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+	})
+
+	t.Run("cannot move folder into itself", func(t *testing.T) {
+		app.createTestFolder(t, user, "/selffolder")
+		app.createTestFolder(t, user, "/selffolder/subfolder")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "selffolder")
+		form.Set("destination_folder", "/selffolder/subfolder")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify folder was NOT moved
+		var folder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/selffolder").First(&folder).Error; err != nil {
+			t.Error("Folder should still exist at original path")
+		}
+	})
+
+	t.Run("move to non-existent folder fails", func(t *testing.T) {
+		app.createTestFolder(t, user, "/orphanfolder")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "orphanfolder")
+		form.Set("destination_folder", "/nonexistent")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify folder was NOT moved
+		var folder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/orphanfolder").First(&folder).Error; err != nil {
+			t.Error("Folder should still exist at original path")
+		}
+	})
+
+	t.Run("move collision prevented", func(t *testing.T) {
+		app.createTestFolder(t, user, "/collidingsource")
+		app.createTestFolder(t, user, "/collidingtarget")
+		app.createTestFolder(t, user, "/collidingtarget/collidingsource")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "collidingsource")
+		form.Set("destination_folder", "/collidingtarget")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify original folder still exists
+		var folder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/collidingsource").First(&folder).Error; err != nil {
+			t.Error("Source folder should still exist at original path")
+		}
+	})
+
+	t.Run("move non-existent folder fails", func(t *testing.T) {
+		app.createTestFolder(t, user, "/existingdest")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "nonexistentfolder")
+		form.Set("destination_folder", "/existingdest")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+	})
+
+	t.Run("move without authentication fails", func(t *testing.T) {
+		app.createTestFolder(t, user, "/authfolder")
+		app.createTestFolder(t, user, "/authdest2")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "authfolder")
+		form.Set("destination_folder", "/authdest2")
+
+		req := httptest.NewRequest(http.MethodPost, "/folders/move", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = csrf.UnsafeSkipCheck(req)
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401, got %d", w.Code)
+		}
+	})
+
+	t.Run("move to implicit folder succeeds", func(t *testing.T) {
+		// Create a file that creates an implicit folder (no explicit Folder record)
+		implicitFile := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "implicit-folder-file-for-move",
+			LogicalPath:      "/implicitfolderdest",
+			Filename:         "implicit.txt",
+			OriginalFilename: "implicit.txt",
+			FileSize:         100,
+			UploadStatus:     "completed",
+		}
+		app.db.Create(implicitFile)
+
+		// Create a folder to move
+		app.createTestFolder(t, user, "/movabletoimplicit")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "movabletoimplicit")
+		form.Set("destination_folder", "/implicitfolderdest")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify folder was moved
+		var movedFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/implicitfolderdest/movabletoimplicit").First(&movedFolder).Error; err != nil {
+			t.Errorf("Folder should be at new path: %v", err)
+		}
+	})
+
+	t.Run("move folder blocked by implicit folder collision", func(t *testing.T) {
+		// Create a folder we want to move
+		app.createTestFolder(t, user, "/moveblocked")
+		app.createTestFolder(t, user, "/blockingdest")
+
+		// Create files at /blockingdest/moveblocked WITHOUT an explicit Folder record
+		// This creates an "implicit" folder that exists only because files are there
+		implicitFile := &models.File{
+			UserID:           user.ID,
+			StoragePath:      "implicit-folder-collision-path",
+			LogicalPath:      "/blockingdest/moveblocked",
+			Filename:         "blocking.txt",
+			OriginalFilename: "blocking.txt",
+			FileSize:         100,
+			UploadStatus:     "completed",
+		}
+		app.db.Create(implicitFile)
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "moveblocked")
+		form.Set("destination_folder", "/blockingdest")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		// Should redirect with error
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify original folder still exists (was not moved)
+		var folder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/moveblocked").First(&folder).Error; err != nil {
+			t.Error("Source folder should still exist with original name")
+		}
+
+		// Cleanup
+		app.db.Delete(implicitFile)
 	})
 }

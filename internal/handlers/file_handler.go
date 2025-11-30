@@ -1297,6 +1297,148 @@ func (h *FileHandler) RenameFolder(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 }
 
+// MoveFolder moves a folder and all its contents to a new destination.
+// This updates the folder_path for the folder itself and all subfolders,
+// as well as the logical_path for all files within the folder hierarchy.
+func (h *FileHandler) MoveFolder(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	currentFolder := sanitizeFolderPath(r.FormValue("current_folder"))
+	folderName := strings.TrimSpace(r.FormValue("folder_name"))
+	destinationFolder := sanitizeFolderPath(r.FormValue("destination_folder"))
+
+	if folderName == "" {
+		flash.Error(w, "Folder name is required")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Build full source path
+	var sourcePath string
+	if currentFolder == "/" {
+		sourcePath = "/" + folderName
+	} else {
+		sourcePath = currentFolder + "/" + folderName
+	}
+
+	// Build full destination path (destination folder + folder name)
+	var newPath string
+	if destinationFolder == "/" {
+		newPath = "/" + folderName
+	} else {
+		newPath = destinationFolder + "/" + folderName
+	}
+
+	// Check if source and destination are the same
+	if sourcePath == newPath {
+		flash.Success(w, "Folder is already in this location")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Verify the source folder exists
+	var sourceFolder models.Folder
+	if err := h.db.Where("user_id = ? AND folder_path = ?", user.ID, sourcePath).First(&sourceFolder).Error; err != nil {
+		flash.Error(w, "Folder not found")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Prevent moving a folder into itself or any of its subfolders
+	// For example, moving /a to /a/b would create a circular reference
+	if strings.HasPrefix(newPath, sourcePath+"/") || newPath == sourcePath {
+		flash.Error(w, "Cannot move a folder into itself or its subfolders")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Validate destination folder exists (root folder "/" is always valid)
+	if destinationFolder != "/" {
+		// Check if destination folder exists in folders table
+		var folderCount int64
+		h.db.Model(&models.Folder{}).Where("user_id = ? AND folder_path = ?", user.ID, destinationFolder).Count(&folderCount)
+
+		// Also check if any files exist in this folder path (implicit folders)
+		var fileCount int64
+		if folderCount == 0 {
+			h.db.Model(&models.File{}).Where("user_id = ? AND logical_path = ?", user.ID, destinationFolder).Count(&fileCount)
+		}
+
+		// If destination folder doesn't exist in either table, return error
+		if folderCount == 0 && fileCount == 0 {
+			flash.Error(w, "Destination folder does not exist")
+			http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+			return
+		}
+	}
+
+	// Check if a folder with the same name already exists in the destination
+	var existingFolder models.Folder
+	if err := h.db.Where("user_id = ? AND folder_path = ?", user.ID, newPath).First(&existingFolder).Error; err == nil {
+		flash.Error(w, "A folder with that name already exists in the destination")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Check for implicit folder collision (folder that exists because files are in it)
+	var implicitFolderCount int64
+	h.db.Model(&models.File{}).
+		Where("user_id = ? AND logical_path = ?", user.ID, newPath).
+		Count(&implicitFolderCount)
+	if implicitFolderCount > 0 {
+		flash.Error(w, "A folder with that name already exists in the destination")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	// Perform move within a transaction
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		// Update the folder record itself
+		if err := tx.Model(&models.Folder{}).
+			Where("user_id = ? AND folder_path = ?", user.ID, sourcePath).
+			Update("folder_path", newPath).Error; err != nil {
+			return err
+		}
+
+		// Update all subfolders (replace prefix)
+		escapedSourcePath := escapeSQLLike(sourcePath)
+		if err := tx.Model(&models.Folder{}).
+			Where("user_id = ? AND folder_path LIKE ? ESCAPE '\\'", user.ID, escapedSourcePath+"/%").
+			Update("folder_path", gorm.Expr("REPLACE(folder_path, ?, ?)", sourcePath+"/", newPath+"/")).Error; err != nil {
+			return err
+		}
+
+		// Update all files in the folder (exact match)
+		if err := tx.Model(&models.File{}).
+			Where("user_id = ? AND logical_path = ?", user.ID, sourcePath).
+			Update("logical_path", newPath).Error; err != nil {
+			return err
+		}
+
+		// Update all files in subfolders (replace prefix)
+		if err := tx.Model(&models.File{}).
+			Where("user_id = ? AND logical_path LIKE ? ESCAPE '\\'", user.ID, escapedSourcePath+"/%").
+			Update("logical_path", gorm.Expr("REPLACE(logical_path, ?, ?)", sourcePath+"/", newPath+"/")).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		flash.Error(w, "Failed to move folder")
+		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
+		return
+	}
+
+	flash.Success(w, fmt.Sprintf("Folder moved to %s", destinationFolder))
+	http.Redirect(w, r, folderRedirectURL(destinationFolder), http.StatusSeeOther)
+}
+
 // DismissFailedUpload removes a failed upload and restores the user's quota.
 // This allows users to acknowledge and dismiss failed uploads from the UI.
 func (h *FileHandler) DismissFailedUpload(w http.ResponseWriter, r *http.Request) {
