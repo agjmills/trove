@@ -15,7 +15,7 @@ require (
 	github.com/gorilla/csrf v1.7.3
 	github.com/joho/godotenv v1.5.1
 	github.com/liamg/memoryfs v1.6.0
-	github.com/maruel/natural v1.2.1
+	github.com/maruel/natural v1.3.0
 	github.com/prometheus/client_golang v1.23.2
 	golang.org/x/crypto v0.46.0
 	gorm.io/datatypes v1.2.7
