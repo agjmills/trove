@@ -17,6 +17,7 @@ Self-hosted file storage. Your personal Google Drive alternative.
 - 🔄 Content-addressed deduplication (saves storage space)
 - 👥 Multi-user support with authentication and per-user quotas
 - 📁 Virtual folder hierarchy with file organization
+- 🗑️ Deleted items with configurable retention (per-user settings)
 - 🎨 Tailwind CSS with responsive dark mode (system preference aware)
 - 🔒 Secure by default (CSRF protection, bcrypt, rate limiting)
 - 🐳 Easy Docker deployment with multi-arch support
@@ -338,6 +339,7 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
 - ✅ Structured logging
 - ✅ Tailwind CSS with responsive dark mode
 - ✅ Production-ready Docker images (~18MB)
+- ✅ Deleted items with configurable retention
 
 **Planned:**
 - File sharing links

@@ -144,13 +144,14 @@ func plaintextCSRFMiddleware(cfg *config.Config) func(http.Handler) http.Handler
 // multipart upload endpoint is intentionally exempt from the Gorilla CSRF middleware to allow streaming
 // uploads while remaining protected by session-based authentication and SameSite cookie policy.
 //
-// Returns the file handler for graceful shutdown support.
-func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, version string) *handlers.FileHandler {
+// Returns the file handler and deleted handler for graceful shutdown support.
+func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, version string) (*handlers.FileHandler, *handlers.DeletedHandler) {
 	authHandler := handlers.NewAuthHandler(db, cfg, sessionManager)
 	pageHandler := handlers.NewPageHandler(db, cfg)
 	fileHandler := handlers.NewFileHandler(db, cfg, storageService)
 	healthHandler := handlers.NewHealthHandler(db, storageService, version)
 	adminHandler := handlers.NewAdminHandler(db, cfg, storageService)
+	deletedHandler := handlers.NewDeletedHandler(db, cfg, storageService)
 
 	// Create rate limiter for auth endpoints
 	// Allow 5 login/register attempts per 15 minutes per IP
@@ -230,6 +231,12 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Use(plaintextCSRFMiddleware(cfg))
 		r.Use(csrfMiddleware)
 		r.Get("/files", pageHandler.ShowFiles)
+		r.Get("/deleted", deletedHandler.ShowDeleted)
+		r.Post("/deleted/empty", deletedHandler.EmptyDeleted)
+		r.Post("/deleted/files/{id}/restore", deletedHandler.RestoreFile)
+		r.Post("/deleted/files/{id}/delete", deletedHandler.PermanentlyDeleteFile)
+		r.Post("/deleted/folders/{id}/restore", deletedHandler.RestoreFolder)
+		r.Post("/deleted/folders/{id}/delete", deletedHandler.PermanentlyDeleteFolder)
 		r.Get("/settings", authHandler.ShowSettings)
 		r.Post("/folders/create", fileHandler.CreateFolder)
 		r.Post("/folders/rename", fileHandler.RenameFolder)
@@ -286,7 +293,8 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Post("/admin/users/{id}/quota", adminHandler.UpdateUserQuota)
 		r.Post("/admin/users/{id}/delete", adminHandler.DeleteUser)
 		r.Post("/admin/users/{id}/reset-password", adminHandler.ResetUserPassword)
+		r.Post("/admin/deleted/empty-all", deletedHandler.AdminEmptyAllDeleted)
 	})
 
-	return fileHandler
+	return fileHandler, deletedHandler
 }
