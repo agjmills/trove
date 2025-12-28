@@ -390,7 +390,7 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 	if _, err := finalFile.Seek(0, 0); err != nil {
 		logger.Error("failed to seek to beginning of file",
 			"error", err,
-			"sessionID", sessionID,
+			"upload_id", uploadID,
 			"filename", session.Filename,
 		)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -407,6 +407,7 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create file record with storage-generated path
+	// Create directly with "completed" status to avoid inconsistency window
 	file := models.File{
 		UserID:           userID,
 		StoragePath:      saveResult.Path,
@@ -416,7 +417,7 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 		FileSize:         saveResult.Size,
 		MimeType:         session.MimeType,
 		Hash:             calculatedHash,
-		UploadStatus:     "uploading",
+		UploadStatus:     "completed",
 	}
 
 	if err := h.db.Create(&file).Error; err != nil {
@@ -427,14 +428,11 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update file status to completed
-	if err := h.db.Model(&file).Update("upload_status", "completed").Error; err != nil {
-		logger.Error("failed to update file status", "error", err)
-	}
-
 	// Update user storage usage
-	h.db.Model(&models.User{}).Where("id = ?", userID).
-		UpdateColumn("storage_used", gorm.Expr("storage_used + ?", session.TotalSize))
+	if err := h.db.Model(&models.User{}).Where("id = ?", userID).
+		UpdateColumn("storage_used", gorm.Expr("storage_used + ?", session.TotalSize)).Error; err != nil {
+		logger.Error("failed to update user storage usage", "error", err, "user_id", userID, "size", session.TotalSize)
+	}
 
 	// Mark session as completed
 	h.db.Model(&session).Update("status", "completed")
@@ -583,8 +581,12 @@ func (h *UploadHandler) CleanupExpiredSessions() error {
 		)
 	}
 
-	// Delete old completed/cancelled/expired sessions (older than 7 days)
-	cutoff := time.Now().AddDate(0, 0, -7)
+	// Delete old completed/cancelled/expired sessions (older than configured retention period)
+	retentionDays := h.cfg.UploadSessionRetentionDays
+	if retentionDays <= 0 {
+		retentionDays = 7 // Default to 7 days if not configured
+	}
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
 	result := h.db.Where("status IN ? AND updated_at < ?", []string{"completed", "cancelled", "expired"}, cutoff).
 		Delete(&models.UploadSession{})
 
