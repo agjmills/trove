@@ -21,7 +21,7 @@ class ChunkedUploadManager {
 	 * @returns {Promise<string>} uploadId
 	 */
 	async startUpload(file, options = {}) {
-		const { folder = '/', onProgress, onComplete, onError } = options;
+		const { folder = '/', onProgress, onComplete, onError, onCancel } = options;
 
 		// Calculate chunks
 		const totalChunks = Math.ceil(file.size / this.chunkSize);
@@ -71,6 +71,7 @@ class ChunkedUploadManager {
 			onProgress: onProgress || this.onProgress,
 			onComplete: onComplete || this.onComplete,
 			onError: onError || this.onError,
+			onCancel: onCancel || this.onCancel,
 		};
 
 		this.uploadSessions.set(upload_id, session);
@@ -225,7 +226,7 @@ class ChunkedUploadManager {
 			console.error('Failed to cancel upload on server:', err);
 		}
 
-		this.onCancel(uploadId);
+		session.onCancel(uploadId);
 		this.uploadSessions.delete(uploadId);
 	}
 
