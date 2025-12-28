@@ -3,6 +3,7 @@ module github.com/agjmills/trove
 go 1.25
 
 require (
+	filippo.io/csrf v0.2.1
 	github.com/alexedwards/scs/postgresstore v0.0.0-20251002162104-209de6e426de
 	github.com/alexedwards/scs/sqlite3store v0.0.0-20251002162104-209de6e426de
 	github.com/alexedwards/scs/v2 v2.9.0
@@ -12,7 +13,6 @@ require (
 	github.com/didip/tollbooth/v7 v7.0.2
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/csrf v1.7.3
 	github.com/joho/godotenv v1.5.1
 	github.com/liamg/memoryfs v1.6.0
 	github.com/maruel/natural v1.3.0
@@ -48,7 +48,6 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-pkgz/expirable-cache/v3 v3.1.0 // indirect
 	github.com/go-sql-driver/mysql v1.9.3 // indirect
-	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.7.6 // indirect

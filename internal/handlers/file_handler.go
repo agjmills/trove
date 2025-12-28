@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	csrf "filippo.io/csrf/gorilla"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
@@ -28,7 +29,6 @@ import (
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/gorilla/csrf"
 	"gorm.io/gorm"
 )
 

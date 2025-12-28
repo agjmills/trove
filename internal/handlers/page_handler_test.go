@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	csrf "filippo.io/csrf/gorilla"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
-	"github.com/gorilla/csrf"
 	"github.com/maruel/natural"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

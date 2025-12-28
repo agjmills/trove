@@ -8,14 +8,16 @@ import (
 	"testing"
 	"time"
 
+	csrf "filippo.io/csrf/gorilla"
 	"github.com/didip/tollbooth/v7"
 	"github.com/didip/tollbooth/v7/limiter"
-	"github.com/gorilla/csrf"
 )
 
-// TestCSRFProtection verifies that gorilla/csrf middleware is working correctly
+// TestCSRFProtection verifies that filippo.io/csrf/gorilla middleware is working correctly.
+// This package uses Fetch Metadata headers (Sec-Fetch-Site) for CSRF protection instead of tokens.
+// Non-browser requests (without Sec-Fetch-Site or Origin headers) are allowed through.
 func TestCSRFProtection(t *testing.T) {
-	t.Run("POST without CSRF token is rejected", func(t *testing.T) {
+	t.Run("Cross-origin browser POST is rejected", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("success"))
@@ -24,18 +26,44 @@ func TestCSRFProtection(t *testing.T) {
 		csrfKey := []byte("test-secret-key-32-bytes-long!!")
 		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
 
-		req := httptest.NewRequest("POST", "/test", strings.NewReader("data=test"))
+		// Simulate a cross-origin browser request
+		req := httptest.NewRequest("POST", "http://example.com/test", strings.NewReader("data=test"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Sec-Fetch-Site", "cross-site") // Browser header indicating cross-origin
+		req.Header.Set("Origin", "http://attacker.com")
 		w := httptest.NewRecorder()
 
 		protected.ServeHTTP(w, req)
 
 		if w.Code != http.StatusForbidden {
-			t.Errorf("Expected status %d for POST without CSRF token, got %d", http.StatusForbidden, w.Code)
+			t.Errorf("Expected status %d for cross-origin POST, got %d", http.StatusForbidden, w.Code)
 		}
 	})
 
-	t.Run("GET requests work without CSRF token", func(t *testing.T) {
+	t.Run("Same-origin browser POST is allowed", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("success"))
+		})
+
+		csrfKey := []byte("test-secret-key-32-bytes-long!!")
+		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+
+		// Simulate a same-origin browser request
+		req := httptest.NewRequest("POST", "http://example.com/test", strings.NewReader("data=test"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		req.Header.Set("Origin", "http://example.com")
+		w := httptest.NewRecorder()
+
+		protected.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status %d for same-origin POST, got %d", http.StatusOK, w.Code)
+		}
+	})
+
+	t.Run("GET requests work without headers", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("success"))
@@ -54,27 +82,26 @@ func TestCSRFProtection(t *testing.T) {
 		}
 	})
 
-	t.Run("CSRF with custom field name", func(t *testing.T) {
+	t.Run("Non-browser POST requests are allowed", func(t *testing.T) {
+		// filippo.io/csrf allows requests without Sec-Fetch-Site/Origin headers
+		// since CSRF is fundamentally a browser issue
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
 
 		csrfKey := []byte("test-secret-key-32-bytes-long!!")
-		protected := csrf.Protect(
-			csrfKey,
-			csrf.Secure(false),
-			csrf.FieldName("csrf_token"), // Our custom field name
-		)(handler)
+		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
 
-		// Test that POST without token is still rejected
+		// API request without browser headers
 		req := httptest.NewRequest("POST", "/test", strings.NewReader("data=test"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		// No Sec-Fetch-Site or Origin header - simulates non-browser client
 		w := httptest.NewRecorder()
 
 		protected.ServeHTTP(w, req)
 
-		if w.Code != http.StatusForbidden {
-			t.Errorf("Expected status %d, got %d", http.StatusForbidden, w.Code)
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status %d for non-browser POST, got %d", http.StatusOK, w.Code)
 		}
 	})
 }

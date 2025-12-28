@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	csrf "filippo.io/csrf/gorilla"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/handlers"
@@ -16,7 +17,6 @@ import (
 	"github.com/didip/tollbooth/v7"
 	"github.com/didip/tollbooth/v7/limiter"
 	"github.com/go-chi/chi/v5"
-	"github.com/gorilla/csrf"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gorm.io/gorm"
 )
@@ -99,38 +99,15 @@ func getClientIP(r *http.Request, trustedCIDRs []*net.IPNet) string {
 	return r.RemoteAddr
 }
 
-// plaintextCSRFMiddleware returns middleware that marks requests as plaintext HTTP
-// for gorilla/csrf origin validation. In development, all requests are marked plaintext.
-// In production, X-Forwarded-Proto is only trusted when the request comes from a
-// configured trusted proxy CIDR; otherwise r.TLS is used to detect HTTPS.
+// plaintextCSRFMiddleware is now a no-op. With filippo.io/csrf/gorilla, CSRF protection
+// is based on Fetch Metadata headers (Sec-Fetch-Site) rather than Origin/Referer validation.
+// This function is kept for code structure but could be removed in a future cleanup.
+//
+// Deprecated: The filippo.io/csrf/gorilla package handles HTTP/HTTPS automatically and
+// doesn't require PlaintextHTTPRequest marking.
 func plaintextCSRFMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
-	// Pre-parse trusted CIDRs once at middleware creation time
-	trustedCIDRs := parseTrustedCIDRs(cfg.TrustedProxyCIDRs)
-
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if cfg.Env != "production" {
-				// Development: skip origin checks (plaintext HTTP)
-				r = csrf.PlaintextHTTPRequest(r)
-			} else {
-				// Production: determine if request is over HTTPS
-				isHTTPS := false
-
-				// Only trust X-Forwarded-Proto if request is from a trusted proxy
-				if len(trustedCIDRs) > 0 && isIPInCIDRs(r.RemoteAddr, trustedCIDRs) {
-					proto := r.Header.Get("X-Forwarded-Proto")
-					isHTTPS = proto == "https"
-				} else {
-					// No trusted proxy or request not from trusted IP: use r.TLS
-					isHTTPS = r.TLS != nil
-				}
-
-				if !isHTTPS {
-					r = csrf.PlaintextHTTPRequest(r)
-				}
-			}
-			next.ServeHTTP(w, r)
-		})
+		return next
 	}
 }
 
@@ -138,11 +115,12 @@ func plaintextCSRFMiddleware(cfg *config.Config) func(http.Handler) http.Handler
 // health and metrics endpoints, static file serving, authentication flows, CSRF protection (when enabled),
 // and rate limiting for authentication endpoints.
 //
-// When CSRF is enabled, the middleware is initialized with the session secret and its Secure flag is
-// determined from cfg.Env; when disabled, a no-op CSRF middleware is used. Authentication endpoints
-// (login, register, and change-password) are rate-limited to 5 attempts per 15 minutes per IP. The
-// multipart upload endpoint is intentionally exempt from the Gorilla CSRF middleware to allow streaming
-// uploads while remaining protected by session-based authentication and SameSite cookie policy.
+// When CSRF is enabled, the middleware is initialized with filippo.io/csrf/gorilla which uses
+// Fetch Metadata headers for protection instead of tokens; when disabled, a no-op CSRF middleware
+// is used. Authentication endpoints (login, register, and change-password) are rate-limited to 5
+// attempts per 15 minutes per IP. The multipart upload endpoint is intentionally exempt from the
+// CSRF middleware to allow streaming uploads while remaining protected by session-based authentication
+// and SameSite cookie policy.
 //
 // Returns the file handler and deleted handler for graceful shutdown support.
 func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, version string) (*handlers.FileHandler, *handlers.DeletedHandler) {
@@ -164,17 +142,11 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	// CSRF protection (only if enabled in config)
 	var csrfMiddleware func(http.Handler) http.Handler
 	if cfg.CSRFEnabled {
-		// In production (HTTPS), enforce strict origin validation
-		// In development (HTTP), skip origin checks - the CSRF token itself still protects
-		// Note: gorilla/csrf automatically skips origin validation for HTTP when Secure=false
-		isSecure := cfg.Env == "production"
-
+		// filippo.io/csrf/gorilla uses Fetch Metadata headers for CSRF protection
+		// instead of tokens. The authKey parameter is ignored but kept for API compatibility.
+		// Most options (Secure, SameSite, FieldName, RequestHeader) are deprecated stubs.
 		csrfMiddleware = csrf.Protect(
-			[]byte(cfg.SessionSecret),           // Use session secret as CSRF key
-			csrf.Secure(isSecure),               // Only require HTTPS in production
-			csrf.SameSite(csrf.SameSiteLaxMode), // Allow same-site POST requests
-			csrf.FieldName("csrf_token"),        // Form field name
-			csrf.RequestHeader("X-CSRF-Token"),  // Header name for XHR requests
+			[]byte(cfg.SessionSecret), // Ignored by filippo.io/csrf but kept for compatibility
 			csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				logger.Warn("csrf validation failed",
 					"reason", csrf.FailureReason(r),

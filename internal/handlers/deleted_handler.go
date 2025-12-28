@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	csrf "filippo.io/csrf/gorilla"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
@@ -17,7 +18,6 @@ import (
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
-	"github.com/gorilla/csrf"
 	"github.com/maruel/natural"
 	"gorm.io/gorm"
 )

@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
+	csrf "filippo.io/csrf/gorilla"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
-	"github.com/gorilla/csrf"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
