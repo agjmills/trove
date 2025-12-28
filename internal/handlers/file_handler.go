@@ -800,21 +800,21 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 		Path string
 	}
 	var folders []FolderData
-	
+
 	// Get explicit folders
 	h.db.Model(&models.Folder{}).
 		Select("folder_path as path").
 		Where("user_id = ? AND deleted_at IS NULL AND trashed_at IS NULL", user.ID).
 		Order("folder_path").
 		Scan(&folders)
-	
+
 	// Get implicit folders from files
 	h.db.Model(&models.File{}).
 		Select("DISTINCT logical_path as path").
 		Where("user_id = ? AND trashed_at IS NULL AND logical_path != '/'", user.ID).
 		Order("logical_path").
 		Scan(&folders)
-	
+
 	// Deduplicate folders
 	folderMap := make(map[string]bool)
 	for _, f := range folders {
@@ -822,7 +822,7 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 			folderMap[f.Path] = true
 		}
 	}
-	
+
 	// Convert back to slice
 	uniqueFolders := make([]FolderData, 0, len(folderMap))
 	for path := range folderMap {
@@ -896,21 +896,21 @@ func isCodeFile(filename string) bool {
 		".json", ".md", ".markdown", ".rst", ".txt", ".log",
 		".sql", ".graphql", ".proto", ".vue", ".svelte",
 	}
-	
+
 	lowerFilename := strings.ToLower(filename)
-	
+
 	// Check exact matches for files without extensions
 	if lowerFilename == "makefile" || lowerFilename == "dockerfile" || lowerFilename == "readme" {
 		return true
 	}
-	
+
 	// Check extensions
 	for _, ext := range codeExtensions {
 		if strings.HasSuffix(lowerFilename, ext) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
