@@ -623,8 +623,12 @@ func (h *DeletedHandler) EmptyDeleted(w http.ResponseWriter, r *http.Request) {
 // AdminEmptyAllDeleted permanently deletes all items in all users' deleted items (admin only)
 func (h *DeletedHandler) AdminEmptyAllDeleted(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
-	if user == nil || !user.IsAdmin {
+	if user == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !user.IsAdmin {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
 		return
 	}
 
