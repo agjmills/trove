@@ -1334,13 +1334,15 @@ func (h *FileHandler) MoveFolder(w http.ResponseWriter, r *http.Request) {
 
 	// Check if source and destination are the same
 	if sourcePath == newPath {
-		flash.Success(w, "Folder is already in this location")
+		// Silently redirect - no actual move needed
 		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
 	}
 
 	// Prevent moving a folder into itself or its own subfolder (circular reference)
-	if strings.HasPrefix(destinationFolder, sourcePath+"/") || destinationFolder == sourcePath {
+	// Use proper path boundary check to avoid false positives like /folder vs /folderNew
+	if destinationFolder == sourcePath || strings.HasPrefix(destinationFolder+"/", sourcePath+"/") {
+		log.Printf("Prevented circular folder move: user_id=%d source=%s destination=%s", user.ID, sourcePath, destinationFolder)
 		flash.Error(w, "Cannot move a folder into itself or its subfolder")
 		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
@@ -1349,6 +1351,7 @@ func (h *FileHandler) MoveFolder(w http.ResponseWriter, r *http.Request) {
 	// Verify the source folder exists
 	var sourceFolder models.Folder
 	if err := h.db.Where("user_id = ? AND folder_path = ?", user.ID, sourcePath).First(&sourceFolder).Error; err != nil {
+		log.Printf("Folder move failed - source not found: user_id=%d source=%s", user.ID, sourcePath)
 		flash.Error(w, "Source folder not found")
 		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
@@ -1368,6 +1371,7 @@ func (h *FileHandler) MoveFolder(w http.ResponseWriter, r *http.Request) {
 
 		// If folder doesn't exist in either table, return error
 		if folderCount == 0 && fileCount == 0 {
+			log.Printf("Folder move failed - destination not found: user_id=%d destination=%s", user.ID, destinationFolder)
 			flash.Error(w, "Destination folder does not exist")
 			http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 			return
@@ -1377,6 +1381,7 @@ func (h *FileHandler) MoveFolder(w http.ResponseWriter, r *http.Request) {
 	// Check if a folder with the same name already exists in the destination
 	var existingFolder models.Folder
 	if err := h.db.Where("user_id = ? AND folder_path = ?", user.ID, newPath).First(&existingFolder).Error; err == nil {
+		log.Printf("Folder move failed - name collision: user_id=%d source=%s destination=%s", user.ID, sourcePath, newPath)
 		flash.Error(w, "A folder with that name already exists in the destination")
 		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
@@ -1388,6 +1393,7 @@ func (h *FileHandler) MoveFolder(w http.ResponseWriter, r *http.Request) {
 		Where("user_id = ? AND logical_path = ?", user.ID, newPath).
 		Count(&implicitFolderCount)
 	if implicitFolderCount > 0 {
+		log.Printf("Folder move failed - implicit folder collision: user_id=%d source=%s destination=%s", user.ID, sourcePath, newPath)
 		flash.Error(w, "A folder with that name already exists in the destination")
 		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
@@ -1428,11 +1434,13 @@ func (h *FileHandler) MoveFolder(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
+		log.Printf("Failed to move folder: user_id=%d source=%s destination=%s error=%v", user.ID, sourcePath, destinationFolder, err)
 		flash.Error(w, "Failed to move folder")
 		http.Redirect(w, r, folderRedirectURL(currentFolder), http.StatusSeeOther)
 		return
 	}
 
+	log.Printf("Folder moved successfully: user_id=%d source=%s destination=%s", user.ID, sourcePath, destinationFolder)
 	flash.Success(w, fmt.Sprintf("Folder moved to %s", destinationFolder))
 	http.Redirect(w, r, folderRedirectURL(destinationFolder), http.StatusSeeOther)
 }

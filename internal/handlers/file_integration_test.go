@@ -2422,7 +2422,7 @@ func TestMoveFolderIntegration(t *testing.T) {
 		}
 	})
 
-	t.Run("move to same location succeeds with message", func(t *testing.T) {
+	t.Run("move to same location succeeds silently", func(t *testing.T) {
 		app.createTestFolder(t, user, "/same")
 
 		form := url.Values{}
@@ -2438,6 +2438,12 @@ func TestMoveFolderIntegration(t *testing.T) {
 
 		if w.Code != http.StatusSeeOther {
 			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify folder is still at same location
+		var folder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/same").First(&folder).Error; err != nil {
+			t.Error("Folder should still exist at /same")
 		}
 	})
 
@@ -2495,6 +2501,39 @@ func TestMoveFolderIntegration(t *testing.T) {
 		var folder models.Folder
 		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/outer").First(&folder).Error; err != nil {
 			t.Error("Folder should still exist at /outer")
+		}
+	})
+
+	t.Run("allow move between similarly named folders", func(t *testing.T) {
+		// This tests the edge case where /folder and /folderNew should not trigger circular check
+		app.createTestFolder(t, user, "/project")
+		app.createTestFolder(t, user, "/projects")
+
+		form := url.Values{}
+		form.Set("current_folder", "/")
+		form.Set("folder_name", "project")
+		form.Set("destination_folder", "/projects")
+
+		req := app.authenticatedRequest(t, http.MethodPost, "/folders/move", strings.NewReader(form.Encode()), user)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		app.fileHandler.MoveFolder(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Errorf("Expected redirect status 303, got %d", w.Code)
+		}
+
+		// Verify folder WAS moved successfully
+		var movedFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/projects/project").First(&movedFolder).Error; err != nil {
+			t.Errorf("Folder should exist at /projects/project: %v", err)
+		}
+
+		// Verify old location is empty
+		var oldFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/project").First(&oldFolder).Error; err == nil {
+			t.Error("Old folder should not exist at /project")
 		}
 	})
 
