@@ -116,7 +116,7 @@
 							<div class="flex items-center justify-end gap-1">
 								<form method="POST" action="/deleted/files/{{.ID}}/restore" class="inline">
 									<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-									<button type="submit" class="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors text-green-600 dark:text-green-400" title="Restore file">
+									<button type="submit" class="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors text-green-600 dark:text-green-400" title="Restore file" aria-label="Restore file">
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 											<polyline points="1 4 1 10 7 10"></polyline>
 											<path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
@@ -125,7 +125,7 @@
 								</form>
 								<form method="POST" action="/deleted/files/{{.ID}}/delete" onsubmit="return confirm('Permanently delete this file? This cannot be undone.');" class="inline">
 									<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-									<button type="submit" class="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors text-red-600 dark:text-red-400" title="Delete permanently">
+									<button type="submit" class="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors text-red-600 dark:text-red-400" title="Delete permanently" aria-label="Delete permanently">
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 											<polyline points="3 6 5 6 21 6"></polyline>
 											<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
