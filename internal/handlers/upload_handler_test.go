@@ -136,10 +136,19 @@ func TestUploadChunk(t *testing.T) {
 		t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	// Verify chunk file exists
+	// Verify chunk file exists and content matches
 	chunkPath := tempDir + "/chunk_0"
 	if _, err := os.Stat(chunkPath); os.IsNotExist(err) {
 		t.Error("Chunk file not created")
+	}
+
+	// Verify chunk content matches uploaded data
+	savedChunkData, err := os.ReadFile(chunkPath)
+	if err != nil {
+		t.Fatalf("Failed to read chunk file: %v", err)
+	}
+	if !bytes.Equal(savedChunkData, chunkData) {
+		t.Errorf("Chunk content mismatch: expected %d bytes, got %d bytes", len(chunkData), len(savedChunkData))
 	}
 
 	// Verify session updated
