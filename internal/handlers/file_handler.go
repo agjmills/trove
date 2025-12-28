@@ -37,6 +37,11 @@ type uploadJob struct {
 	tempPath string
 }
 
+// FolderData represents a folder path for dropdown selection
+type FolderData struct {
+	Path string
+}
+
 type FileHandler struct {
 	db          *gorm.DB
 	cfg         *config.Config
@@ -796,25 +801,18 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get all folders for move dropdown
-	type FolderData struct {
-		Path string
-	}
+	// Get all folders for move dropdown using UNION for efficiency
 	var folders []FolderData
-
-	// Get explicit folders
-	h.db.Model(&models.Folder{}).
-		Select("folder_path as path").
-		Where("user_id = ? AND deleted_at IS NULL AND trashed_at IS NULL", user.ID).
-		Order("folder_path").
-		Scan(&folders)
-
-	// Get implicit folders from files
-	h.db.Model(&models.File{}).
-		Select("DISTINCT logical_path as path").
-		Where("user_id = ? AND trashed_at IS NULL AND logical_path != '/'", user.ID).
-		Order("logical_path").
-		Scan(&folders)
+	h.db.Raw(`
+		SELECT DISTINCT path FROM (
+			SELECT folder_path as path FROM folders 
+			WHERE user_id = ? AND deleted_at IS NULL AND trashed_at IS NULL
+			UNION
+			SELECT DISTINCT logical_path as path FROM files 
+			WHERE user_id = ? AND deleted_at IS NULL AND trashed_at IS NULL AND logical_path != '/'
+		) AS combined_folders
+		ORDER BY path
+	`, user.ID, user.ID).Scan(&folders)
 
 	// Deduplicate folders
 	folderMap := make(map[string]bool)
