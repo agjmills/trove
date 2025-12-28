@@ -106,6 +106,17 @@ func Load() (*Config, error) {
 		cfg.DeletedCleanupIntervalMin = 1 // Minimum 1 minute
 	}
 
+	// Validate chunked upload configuration
+	if cfg.UploadChunkSize < 1024 {
+		cfg.UploadChunkSize = 5 * 1024 * 1024 // Default to 5MB if invalid
+	}
+	if cfg.UploadSessionTimeout < time.Minute {
+		cfg.UploadSessionTimeout = 24 * time.Hour // Default to 24h if invalid
+	}
+	if cfg.UploadSessionRetentionDays < 0 {
+		cfg.UploadSessionRetentionDays = 0
+	}
+
 	log.Printf("Config loaded: MaxUploadSize=%d bytes (%.2f MB), DefaultUserQuota=%d bytes (%.2f GB)",
 		cfg.MaxUploadSize, float64(cfg.MaxUploadSize)/(1024*1024),
 		cfg.DefaultUserQuota, float64(cfg.DefaultUserQuota)/(1024*1024*1024))
