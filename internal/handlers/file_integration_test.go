@@ -408,7 +408,7 @@ func TestDownloadIntegration(t *testing.T) {
 	})
 
 	t.Run("download other user's file fails", func(t *testing.T) {
-		otherUser := app.createTestUser(t, "otheruser")
+		otherUser := app.createTestUser(t, "download_otheruser")
 
 		req := app.authenticatedRequest(t, http.MethodGet, fmt.Sprintf("/download/%d", file.ID), nil, otherUser)
 
@@ -445,7 +445,7 @@ func TestDownloadIntegration(t *testing.T) {
 func TestDeleteIntegration(t *testing.T) {
 	app := newFileTestApp(t)
 
-	user := app.createTestUser(t, "deleteuser")
+	user := app.createTestUser(t, "file_deleteuser")
 
 	t.Run("successful file deletion soft deletes", func(t *testing.T) {
 		file := app.createTestFile(t, user, "todelete.txt", "Delete me")
@@ -945,7 +945,7 @@ func TestDismissFailedUpload(t *testing.T) {
 	})
 
 	t.Run("cannot dismiss other user's failed upload", func(t *testing.T) {
-		otherUser := app.createTestUser(t, "otheruser2")
+		otherUser := app.createTestUser(t, "dismiss_otheruser")
 
 		// Create a failed file for the original user
 		failedFile := &models.File{

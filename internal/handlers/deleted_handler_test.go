@@ -247,7 +247,7 @@ func (app *deletedTestApp) authenticatedRequest(t *testing.T, method, path strin
 func TestShowDeletedIntegration(t *testing.T) {
 	app := newDeletedTestApp(t)
 
-	user := app.createTestUser(t, "deleteuser")
+	user := app.createTestUser(t, "deleted_deleteuser")
 
 	t.Run("shows empty state when no deleted items", func(t *testing.T) {
 		req := app.authenticatedRequest(t, http.MethodGet, "/deleted", user)
