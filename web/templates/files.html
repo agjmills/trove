@@ -924,10 +924,12 @@
 		// Add parent folders from breadcrumbs
 		{{range .Breadcrumbs}}
 		{{if ne .Path "/"}}
-		const breadcrumbPath = {{jsStr .Path}};
-		// Exclude the folder being moved and its subfolders
-		if (breadcrumbPath !== sourcePath && !breadcrumbPath.startsWith(sourcePath + '/') && !allFolders.includes(breadcrumbPath)) {
-			allFolders.push(breadcrumbPath);
+		{
+			const breadcrumbPath = {{jsStr .Path}};
+			// Exclude the folder being moved and its subfolders
+			if (breadcrumbPath !== sourcePath && !breadcrumbPath.startsWith(sourcePath + '/') && !allFolders.includes(breadcrumbPath)) {
+				allFolders.push(breadcrumbPath);
+			}
 		}
 		{{end}}
 		{{end}}
