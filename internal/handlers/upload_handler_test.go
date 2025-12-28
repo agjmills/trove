@@ -143,7 +143,7 @@ func TestUploadChunk(t *testing.T) {
 	}
 
 	// Verify session updated
-	if err := db.First(session, session.ID).Error; err != nil {
+	if err := db.Where("id = ?", session.ID).First(session).Error; err != nil {
 		t.Fatalf("Failed to reload session: %v", err)
 	}
 
@@ -194,7 +194,7 @@ func TestCancelUpload(t *testing.T) {
 	}
 
 	// Verify session marked as cancelled
-	if err := db.First(session, session.ID).Error; err != nil {
+	if err := db.Where("id = ?", session.ID).First(session).Error; err != nil {
 		t.Fatalf("Failed to reload session: %v", err)
 	}
 
@@ -232,7 +232,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	}
 
 	// Verify session marked as expired
-	if err := db.First(expiredSession, expiredSession.ID).Error; err != nil {
+	if err := db.Where("id = ?", expiredSession.ID).First(expiredSession).Error; err != nil {
 		t.Fatalf("Failed to reload session: %v", err)
 	}
 
