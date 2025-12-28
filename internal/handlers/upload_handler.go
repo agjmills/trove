@@ -479,8 +479,14 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.db.Create(&file).Error; err != nil {
 		logger.Error("failed to create file record", "error", err)
-		// Clean up uploaded file
+		// Clean up uploaded file from storage
 		h.storage.Delete(r.Context(), saveResult.Path)
+		// Clean up temp directory
+		go func() {
+			if err := os.RemoveAll(session.TempDir); err != nil {
+				logger.Error("failed to clean up temp directory", "error", err, "dir", session.TempDir)
+			}
+		}()
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
