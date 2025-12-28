@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/agjmills/trove/internal/auth"
@@ -22,13 +21,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type UploadHandler struct {
-	db         *gorm.DB
-	cfg        *config.Config
-	storage    storage.StorageBackend
-	chunkMutex sync.Mutex // Protects concurrent chunk updates
+	db      *gorm.DB
+	cfg     *config.Config
+	storage storage.StorageBackend
 }
 
 func NewUploadHandler(db *gorm.DB, cfg *config.Config, storage storage.StorageBackend) *UploadHandler {
@@ -204,28 +203,7 @@ func (h *UploadHandler) UploadChunk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse chunks received
-	var chunksReceived []int
-	if err := json.Unmarshal(session.ChunksReceived, &chunksReceived); err != nil {
-		logger.Error("failed to parse chunks received", "error", err)
-		chunksReceived = []int{}
-	}
-
-	// Check if chunk already received
-	for _, num := range chunksReceived {
-		if num == chunkNum {
-			// Chunk already received, return success (idempotent)
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"chunk":           chunkNum,
-				"received_chunks": len(chunksReceived),
-				"total_chunks":    session.TotalChunks,
-			})
-			return
-		}
-	}
-
-	// Save chunk to temp file
+	// Save chunk to temp file first (before acquiring lock)
 	chunkPath := filepath.Join(session.TempDir, fmt.Sprintf("chunk_%d", chunkNum))
 	chunkFile, err := os.Create(chunkPath)
 	if err != nil {
@@ -249,24 +227,50 @@ func (h *UploadHandler) UploadChunk(w http.ResponseWriter, r *http.Request) {
 		"size", written,
 	)
 
-	// Update session with mutex to prevent concurrent modifications
-	h.chunkMutex.Lock()
-	chunksReceived = append(chunksReceived, chunkNum)
-	chunksReceivedJSON, _ := json.Marshal(chunksReceived)
+	// Use a database transaction with SELECT ... FOR UPDATE to prevent lost updates
+	// This locks the row during the read-modify-write sequence
+	var chunksReceived []int
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		// Re-fetch session with row lock to get current state
+		var lockedSession models.UploadSession
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", uploadID).First(&lockedSession).Error; err != nil {
+			return err
+		}
 
-	updates := map[string]interface{}{
-		"received_chunks": len(chunksReceived),
-		"chunks_received": chunksReceivedJSON,
-		"updated_at":      time.Now(),
-	}
+		// Parse chunks received from locked row
+		if err := json.Unmarshal(lockedSession.ChunksReceived, &chunksReceived); err != nil {
+			logger.Error("failed to parse chunks received", "error", err)
+			chunksReceived = []int{}
+		}
 
-	if err := h.db.Model(&session).Updates(updates).Error; err != nil {
-		h.chunkMutex.Unlock()
+		// Check if chunk already received (idempotent)
+		for _, num := range chunksReceived {
+			if num == chunkNum {
+				// Chunk already received, nothing to update
+				return nil
+			}
+		}
+
+		// Append new chunk and update
+		chunksReceived = append(chunksReceived, chunkNum)
+		chunksReceivedJSON, _ := json.Marshal(chunksReceived)
+
+		updates := map[string]interface{}{
+			"received_chunks": len(chunksReceived),
+			"chunks_received": chunksReceivedJSON,
+			"updated_at":      time.Now(),
+		}
+
+		return tx.Model(&lockedSession).Updates(updates).Error
+	})
+
+	if err != nil {
 		logger.Error("failed to update upload session", "error", err)
+		os.Remove(chunkPath)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	h.chunkMutex.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
