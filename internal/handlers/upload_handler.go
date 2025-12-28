@@ -563,7 +563,15 @@ func (h *UploadHandler) CancelUpload(w http.ResponseWriter, r *http.Request) {
 
 	// Mark as cancelled
 	if err := h.db.Model(&session).Update("status", "cancelled").Error; err != nil {
-		logger.Error("failed to update session status", "error", err)
+		logger.Error("failed to update session status", "error", err, "upload_id", uploadID)
+		// Attempt cleanup asynchronously even on failure, but return error to client
+		go func() {
+			if err := os.RemoveAll(session.TempDir); err != nil {
+				logger.Error("failed to clean up temp directory", "error", err, "dir", session.TempDir)
+			}
+		}()
+		http.Error(w, "Failed to cancel upload", http.StatusInternalServerError)
+		return
 	}
 
 	// Clean up temp directory
