@@ -43,8 +43,9 @@ func setupUploadHandlerTest(t *testing.T) (*UploadHandler, *gorm.DB, *models.Use
 	}
 
 	cfg := &config.Config{
-		UploadChunkSize:      5 * 1024 * 1024, // 5MB
-		UploadSessionTimeout: 24 * time.Hour,
+		UploadChunkSize:            5 * 1024 * 1024, // 5MB
+		UploadSessionTimeout:       24 * time.Hour,
+		UploadSessionRetentionDays: 7,
 	}
 
 	memStorage := storage.NewMemoryBackend()
@@ -55,7 +56,6 @@ func setupUploadHandlerTest(t *testing.T) (*UploadHandler, *gorm.DB, *models.Use
 
 func TestInitUpload(t *testing.T) {
 	handler, db, user := setupUploadHandlerTest(t)
-	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
 
 	reqBody := InitUploadRequest{
 		Filename:    "test.txt",
@@ -99,7 +99,6 @@ func TestInitUpload(t *testing.T) {
 
 func TestUploadChunk(t *testing.T) {
 	handler, db, user := setupUploadHandlerTest(t)
-	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
 
 	// Create a session first
 	tempDir := t.TempDir()
@@ -164,7 +163,6 @@ func TestUploadChunk(t *testing.T) {
 
 func TestCancelUpload(t *testing.T) {
 	handler, db, user := setupUploadHandlerTest(t)
-	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
 
 	tempDir := t.TempDir()
 	session := &models.UploadSession{
@@ -215,7 +213,6 @@ func TestCancelUpload(t *testing.T) {
 
 func TestCleanupExpiredSessions(t *testing.T) {
 	handler, db, _ := setupUploadHandlerTest(t)
-	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
 
 	tempDir := t.TempDir()
 
@@ -253,7 +250,6 @@ func TestCleanupExpiredSessions(t *testing.T) {
 
 func TestGetUploadStatus(t *testing.T) {
 	handler, db, user := setupUploadHandlerTest(t)
-	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
 
 	tempDir := t.TempDir()
 	chunksReceived := []int{0, 2}
@@ -314,8 +310,7 @@ func TestGetUploadStatus(t *testing.T) {
 }
 
 func TestGetUploadStatus_NotFound(t *testing.T) {
-	handler, db, user := setupUploadHandlerTest(t)
-	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
+	handler, _, user := setupUploadHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/uploads/nonexistent-id", nil)
 	req = withUser(req, user)
@@ -334,7 +329,6 @@ func TestGetUploadStatus_NotFound(t *testing.T) {
 
 func TestCompleteUpload(t *testing.T) {
 	handler, db, user := setupUploadHandlerTest(t)
-	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
 
 	tempDir := t.TempDir()
 
@@ -431,7 +425,6 @@ func TestCompleteUpload(t *testing.T) {
 
 func TestCompleteUpload_HashMismatch(t *testing.T) {
 	handler, db, user := setupUploadHandlerTest(t)
-	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
 
 	tempDir := t.TempDir()
 
@@ -480,7 +473,6 @@ func TestCompleteUpload_HashMismatch(t *testing.T) {
 
 func TestCompleteUpload_MissingChunks(t *testing.T) {
 	handler, db, user := setupUploadHandlerTest(t)
-	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
 
 	tempDir := t.TempDir()
 	chunksReceived := []int{0} // Only 1 chunk received out of 2
