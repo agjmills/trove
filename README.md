@@ -322,6 +322,10 @@ Development uses human-readable text format.
 | `GET` | `/health` | Health check |
 | `GET` | `/metrics` | Prometheus metrics |
 
+## Security
+
+For security-related documentation including CSRF protection details and migration notes, see [SECURITY.md](SECURITY.md).
+
 ## Contributing
 
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)

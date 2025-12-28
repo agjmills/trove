@@ -10,7 +10,6 @@ import (
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/flash"
-	"github.com/gorilla/csrf"
 	"github.com/maruel/natural"
 	"gorm.io/gorm"
 )
@@ -239,7 +238,6 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		"ParentFolder":  parentFolder,
 		"Breadcrumbs":   breadcrumbs,
 		"Flash":         flashMsg,
-		"CSRFToken":     csrf.Token(r),
 		"Page":          page,
 		"TotalPages":    totalPages,
 		"TotalFiles":    totalFiles,

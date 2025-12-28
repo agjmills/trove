@@ -28,7 +28,6 @@ import (
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/gorilla/csrf"
 	"gorm.io/gorm"
 )
 
@@ -867,7 +866,6 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Title":      file.Filename,
 		"User":       user,
-		"CSRFToken":  csrf.Token(r),
 		"File":       file,
 		"AllFolders": uniqueFolders,
 		"CanPreview": canPreview,

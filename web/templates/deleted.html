@@ -19,7 +19,6 @@
 				</div>
 				{{if or .Files .Folders}}
 				<form method="POST" action="/deleted/empty" onsubmit="return confirm('Are you sure you want to permanently delete ALL items? This cannot be undone.');">
-					<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 					<button type="submit" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors text-sm font-medium">
 						<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 							<polyline points="3 6 5 6 21 6"></polyline>
@@ -56,7 +55,6 @@
 					<!-- Folder action buttons -->
 					<div class="flex items-center gap-1 px-2 border-l border-gray-200 dark:border-gray-600">
 						<form method="POST" action="/deleted/folders/{{.ID}}/restore" class="inline">
-							<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
 							<button type="submit" class="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors text-green-600 dark:text-green-400" title="Restore folder">
 								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 									<polyline points="1 4 1 10 7 10"></polyline>
@@ -65,7 +63,6 @@
 							</button>
 						</form>
 						<form method="POST" action="/deleted/folders/{{.ID}}/delete" onsubmit="return confirm('Permanently delete this folder and all its contents? This cannot be undone.');" class="inline">
-							<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
 							<button type="submit" class="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors text-red-600 dark:text-red-400" title="Delete permanently">
 								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 									<polyline points="3 6 5 6 21 6"></polyline>
@@ -115,7 +112,6 @@
 						<td class="p-3 border-b border-gray-200 dark:border-gray-700 text-right">
 							<div class="flex items-center justify-end gap-1">
 								<form method="POST" action="/deleted/files/{{.ID}}/restore" class="inline">
-									<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
 									<button type="submit" class="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors text-green-600 dark:text-green-400" title="Restore file" aria-label="Restore file">
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 											<polyline points="1 4 1 10 7 10"></polyline>
@@ -124,7 +120,6 @@
 									</button>
 								</form>
 								<form method="POST" action="/deleted/files/{{.ID}}/delete" onsubmit="return confirm('Permanently delete this file? This cannot be undone.');" class="inline">
-									<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
 									<button type="submit" class="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors text-red-600 dark:text-red-400" title="Delete permanently" aria-label="Delete permanently">
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 											<polyline points="3 6 5 6 21 6"></polyline>

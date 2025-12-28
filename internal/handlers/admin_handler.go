@@ -13,7 +13,6 @@ import (
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
-	"github.com/gorilla/csrf"
 	"gorm.io/gorm"
 )
 
@@ -73,7 +72,6 @@ func (h *AdminHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 		"Title":     "Admin Dashboard",
 		"User":      user,
 		"Stats":     stats,
-		"CSRFToken": csrf.Token(r),
 		"FullWidth": true,
 	})
 }
@@ -130,7 +128,6 @@ func (h *AdminHandler) ShowUsers(w http.ResponseWriter, r *http.Request) {
 		"Title":        "User Management",
 		"User":         user,
 		"Users":        usersWithStats,
-		"CSRFToken":    csrf.Token(r),
 		"FullWidth":    true,
 		"DefaultQuota": h.cfg.DefaultUserQuota,
 	})

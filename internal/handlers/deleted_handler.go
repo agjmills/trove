@@ -17,7 +17,6 @@ import (
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
-	"github.com/gorilla/csrf"
 	"github.com/maruel/natural"
 	"gorm.io/gorm"
 )
@@ -340,7 +339,6 @@ func (h *DeletedHandler) ShowDeleted(w http.ResponseWriter, r *http.Request) {
 		"Files":            fileInfos,
 		"Folders":          folderInfos,
 		"Flash":            flashMsg,
-		"CSRFToken":        csrf.Token(r),
 		"Page":             page,
 		"TotalPages":       totalPages,
 		"TotalFiles":       totalFiles,

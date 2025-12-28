@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	csrf "filippo.io/csrf/gorilla"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/handlers"
@@ -16,7 +17,6 @@ import (
 	"github.com/didip/tollbooth/v7"
 	"github.com/didip/tollbooth/v7/limiter"
 	"github.com/go-chi/chi/v5"
-	"github.com/gorilla/csrf"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gorm.io/gorm"
 )
@@ -99,50 +99,41 @@ func getClientIP(r *http.Request, trustedCIDRs []*net.IPNet) string {
 	return r.RemoteAddr
 }
 
-// plaintextCSRFMiddleware returns middleware that marks requests as plaintext HTTP
-// for gorilla/csrf origin validation. In development, all requests are marked plaintext.
-// In production, X-Forwarded-Proto is only trusted when the request comes from a
-// configured trusted proxy CIDR; otherwise r.TLS is used to detect HTTPS.
-func plaintextCSRFMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
-	// Pre-parse trusted CIDRs once at middleware creation time
-	trustedCIDRs := parseTrustedCIDRs(cfg.TrustedProxyCIDRs)
-
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if cfg.Env != "production" {
-				// Development: skip origin checks (plaintext HTTP)
-				r = csrf.PlaintextHTTPRequest(r)
-			} else {
-				// Production: determine if request is over HTTPS
-				isHTTPS := false
-
-				// Only trust X-Forwarded-Proto if request is from a trusted proxy
-				if len(trustedCIDRs) > 0 && isIPInCIDRs(r.RemoteAddr, trustedCIDRs) {
-					proto := r.Header.Get("X-Forwarded-Proto")
-					isHTTPS = proto == "https"
-				} else {
-					// No trusted proxy or request not from trusted IP: use r.TLS
-					isHTTPS = r.TLS != nil
-				}
-
-				if !isHTTPS {
-					r = csrf.PlaintextHTTPRequest(r)
-				}
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
 // Setup configures HTTP routes and middleware on the provided chi.Router, wiring application handlers,
 // health and metrics endpoints, static file serving, authentication flows, CSRF protection (when enabled),
 // and rate limiting for authentication endpoints.
 //
-// When CSRF is enabled, the middleware is initialized with the session secret and its Secure flag is
-// determined from cfg.Env; when disabled, a no-op CSRF middleware is used. Authentication endpoints
-// (login, register, and change-password) are rate-limited to 5 attempts per 15 minutes per IP. The
-// multipart upload endpoint is intentionally exempt from the Gorilla CSRF middleware to allow streaming
-// uploads while remaining protected by session-based authentication and SameSite cookie policy.
+// CSRF PROTECTION (filippo.io/csrf v0.2.1):
+// This middleware uses Fetch Metadata headers (Sec-Fetch-Site, Origin) for CSRF protection
+// instead of the traditional double-submit token pattern. Key behavioral differences:
+//
+// Browser Request Detection:
+//   - Requests WITH Sec-Fetch-Site header are validated as browser requests
+//   - Cross-site browser requests (Sec-Fetch-Site: cross-site) are BLOCKED
+//   - Same-site browser requests (Sec-Fetch-Site: same-site) are BLOCKED (includes subdomains)
+//   - Same-origin browser requests (Sec-Fetch-Site: same-origin) are ALLOWED
+//
+// Non-Browser Client Behavior:
+//   - Requests WITHOUT Sec-Fetch-Site or Origin headers are ALLOWED through
+//   - This permits CLI tools (curl, wget), API clients, webhooks, and mobile apps
+//   - These clients cannot be exploited via CSRF since they don't automatically attach cookies
+//   - Authentication still required via session cookie (obtained through login flow)
+//
+// Security Model:
+//   - CSRF attacks require a browser to automatically attach session cookies
+//   - Non-browser clients must explicitly manage cookies, preventing unwitting attacks
+//   - Session-based auth + SameSite=Lax cookies provide baseline protection
+//
+// Token-based CSRF validation is NOT performed. The csrf.Token() function exists for API
+// compatibility but tokens are not validated on state-changing requests.
+//
+// API ENDPOINTS EXEMPT FROM CSRF:
+// The following endpoints are exempt from CSRF middleware for non-browser client support:
+//   - /upload (streaming multipart uploads)
+//   - /api/uploads/* (chunked upload JSON API)
+//   - /api/files/status (SSE, GET-only)
+//
+// These endpoints rely on session-based authentication and SameSite cookie policy.
 //
 // Returns the file handler and deleted handler for graceful shutdown support.
 func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, version string) (*handlers.FileHandler, *handlers.DeletedHandler) {
@@ -164,17 +155,11 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	// CSRF protection (only if enabled in config)
 	var csrfMiddleware func(http.Handler) http.Handler
 	if cfg.CSRFEnabled {
-		// In production (HTTPS), enforce strict origin validation
-		// In development (HTTP), skip origin checks - the CSRF token itself still protects
-		// Note: gorilla/csrf automatically skips origin validation for HTTP when Secure=false
-		isSecure := cfg.Env == "production"
-
+		// filippo.io/csrf uses Fetch Metadata headers (Sec-Fetch-Site, Origin) for CSRF protection.
+		// The authKey is required and must be exactly 32 bytes. It is used internally for
+		// cryptographic operations. Keep this key secret and persist it across restarts.
 		csrfMiddleware = csrf.Protect(
-			[]byte(cfg.SessionSecret),           // Use session secret as CSRF key
-			csrf.Secure(isSecure),               // Only require HTTPS in production
-			csrf.SameSite(csrf.SameSiteLaxMode), // Allow same-site POST requests
-			csrf.FieldName("csrf_token"),        // Form field name
-			csrf.RequestHeader("X-CSRF-Token"),  // Header name for XHR requests
+			[]byte(cfg.SessionSecret),
 			csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				logger.Warn("csrf validation failed",
 					"reason", csrf.FailureReason(r),
@@ -221,7 +206,6 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	// Logout endpoint needs session middleware and CSRF protection
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
-		r.Use(plaintextCSRFMiddleware(cfg))
 		r.Use(csrfMiddleware)
 		r.Post("/logout", authHandler.Logout)
 	})
@@ -229,7 +213,6 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
 		r.Use(auth.RequireAuth(db, sessionManager))
-		r.Use(plaintextCSRFMiddleware(cfg))
 		r.Use(csrfMiddleware)
 		r.Get("/files", pageHandler.ShowFiles)
 		r.Get("/files/{id}", fileHandler.ViewFile)
@@ -266,7 +249,6 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Use(func(next http.Handler) http.Handler {
 			return tollbooth.LimitHandler(authRateLimiter, next)
 		})
-		r.Use(plaintextCSRFMiddleware(cfg))
 		r.Use(csrfMiddleware)
 		r.Post("/settings/change-password", authHandler.ChangePassword)
 	})
@@ -300,7 +282,6 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Use(sessionManager.LoadAndSave)
 		r.Use(auth.RequireAuth(db, sessionManager))
 		r.Use(auth.RequireAdmin())
-		r.Use(plaintextCSRFMiddleware(cfg))
 		r.Use(csrfMiddleware)
 		r.Get("/admin", adminHandler.ShowDashboard)
 		r.Get("/admin/users", adminHandler.ShowUsers)
