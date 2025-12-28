@@ -99,28 +99,28 @@ func getClientIP(r *http.Request, trustedCIDRs []*net.IPNet) string {
 	return r.RemoteAddr
 }
 
-// plaintextCSRFMiddleware is now a no-op. With filippo.io/csrf/gorilla, CSRF protection
-// is based on Fetch Metadata headers (Sec-Fetch-Site) rather than Origin/Referer validation.
-// This function is kept for code structure but could be removed in a future cleanup.
-//
-// Deprecated: The filippo.io/csrf/gorilla package handles HTTP/HTTPS automatically and
-// doesn't require PlaintextHTTPRequest marking.
-func plaintextCSRFMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return next
-	}
-}
-
 // Setup configures HTTP routes and middleware on the provided chi.Router, wiring application handlers,
 // health and metrics endpoints, static file serving, authentication flows, CSRF protection (when enabled),
 // and rate limiting for authentication endpoints.
 //
-// When CSRF is enabled, the middleware is initialized with filippo.io/csrf/gorilla which uses
-// Fetch Metadata headers for protection instead of tokens; when disabled, a no-op CSRF middleware
-// is used. Authentication endpoints (login, register, and change-password) are rate-limited to 5
-// attempts per 15 minutes per IP. The multipart upload endpoint is intentionally exempt from the
-// CSRF middleware to allow streaming uploads while remaining protected by session-based authentication
-// and SameSite cookie policy.
+// CSRF PROTECTION (filippo.io/csrf v0.2.1):
+// When CSRF is enabled, the middleware uses Fetch Metadata headers for browser detection:
+//   - Requests WITH Sec-Fetch-Site header are validated (browser requests)
+//   - Requests WITHOUT Sec-Fetch-Site header are ALLOWED (non-browser API clients, CLI tools)
+//   - Cross-site browser requests (Sec-Fetch-Site: cross-site) are BLOCKED
+//   - Same-site browser requests (Sec-Fetch-Site: same-site) are BLOCKED (subdomains)
+//   - Same-origin browser requests (Sec-Fetch-Site: same-origin) are ALLOWED
+//
+// Token-based CSRF validation is NOT performed. The Token() function returns values for
+// template compatibility but tokens are not validated on POST requests.
+//
+// API ENDPOINTS EXEMPT FROM CSRF:
+// The following endpoints are exempt from CSRF middleware for non-browser client support:
+//   - /upload (streaming multipart uploads)
+//   - /api/uploads/* (chunked upload JSON API)
+//   - /api/files/status (SSE, GET-only)
+//
+// These endpoints rely on session-based authentication and SameSite cookie policy.
 //
 // Returns the file handler and deleted handler for graceful shutdown support.
 func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, version string) (*handlers.FileHandler, *handlers.DeletedHandler) {
@@ -193,7 +193,6 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	// Logout endpoint needs session middleware and CSRF protection
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
-		r.Use(plaintextCSRFMiddleware(cfg))
 		r.Use(csrfMiddleware)
 		r.Post("/logout", authHandler.Logout)
 	})
@@ -201,7 +200,6 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
 		r.Use(auth.RequireAuth(db, sessionManager))
-		r.Use(plaintextCSRFMiddleware(cfg))
 		r.Use(csrfMiddleware)
 		r.Get("/files", pageHandler.ShowFiles)
 		r.Get("/files/{id}", fileHandler.ViewFile)
@@ -238,7 +236,6 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Use(func(next http.Handler) http.Handler {
 			return tollbooth.LimitHandler(authRateLimiter, next)
 		})
-		r.Use(plaintextCSRFMiddleware(cfg))
 		r.Use(csrfMiddleware)
 		r.Post("/settings/change-password", authHandler.ChangePassword)
 	})
@@ -272,7 +269,6 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Use(sessionManager.LoadAndSave)
 		r.Use(auth.RequireAuth(db, sessionManager))
 		r.Use(auth.RequireAdmin())
-		r.Use(plaintextCSRFMiddleware(cfg))
 		r.Use(csrfMiddleware)
 		r.Get("/admin", adminHandler.ShowDashboard)
 		r.Get("/admin/users", adminHandler.ShowUsers)
