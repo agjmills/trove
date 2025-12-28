@@ -155,11 +155,11 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	// CSRF protection (only if enabled in config)
 	var csrfMiddleware func(http.Handler) http.Handler
 	if cfg.CSRFEnabled {
-		// filippo.io/csrf/gorilla uses Fetch Metadata headers for CSRF protection
-		// instead of tokens. The authKey parameter is ignored but kept for API compatibility.
-		// Most options (Secure, SameSite, FieldName, RequestHeader) are deprecated stubs.
+		// filippo.io/csrf uses Fetch Metadata headers (Sec-Fetch-Site, Origin) for CSRF protection.
+		// The authKey is required and must be exactly 32 bytes. It is used internally for
+		// cryptographic operations. Keep this key secret and persist it across restarts.
 		csrfMiddleware = csrf.Protect(
-			[]byte(cfg.SessionSecret), // Ignored by filippo.io/csrf but kept for compatibility
+			[]byte(cfg.SessionSecret),
 			csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				logger.Warn("csrf validation failed",
 					"reason", csrf.FailureReason(r),
