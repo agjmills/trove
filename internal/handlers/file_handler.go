@@ -766,7 +766,7 @@ func (h *FileHandler) Preview(w http.ResponseWriter, r *http.Request) {
 
 	// Add security headers for preview
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; media-src 'self'; img-src 'self'; script-src 'none';")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self'; worker-src 'self' blob:; connect-src 'self';")
 
 	// Stream file to response
 	if _, err := io.Copy(w, reader); err != nil {
