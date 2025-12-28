@@ -232,7 +232,11 @@ func (h *UploadHandler) UploadChunk(w http.ResponseWriter, r *http.Request) {
 
 	// Check if session has expired
 	if time.Now().After(session.ExpiresAt) {
-		h.db.Model(&session).Update("status", "expired")
+		if err := h.db.Model(&session).Update("status", "expired").Error; err != nil {
+			logger.Error("failed to mark session as expired", "error", err, "upload_id", uploadID)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 		http.Error(w, "Upload session has expired", http.StatusGone)
 		return
 	}
