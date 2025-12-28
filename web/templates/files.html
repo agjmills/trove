@@ -548,21 +548,46 @@
 		const menu = document.getElementById(`file-menu-${fileId}`);
 		if (!menu) return;
 
-		// Find the first child that's not the delete form and replace it
+		// Get the filename from the row
+		const filenameElement = row.querySelector('td:first-child span.truncate');
+		const filename = filenameElement ? filenameElement.textContent : 'file';
+
+		// Find the first child that's not the delete form and replace it with full menu
 		const downloadPlaceholder = menu.querySelector('span, a');
 		if (downloadPlaceholder) {
-			const downloadLink = document.createElement('a');
-			downloadLink.href = `/download/${fileId}`;
-			downloadLink.className = 'w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors';
-			downloadLink.innerHTML = `
-				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-					<polyline points="7 10 12 15 17 10"></polyline>
-					<line x1="12" y1="15" x2="12" y2="3"></line>
-				</svg>
-				Download
+			// Create a container for the menu items
+			const menuItems = document.createElement('div');
+			menuItems.innerHTML = `
+				<a href="/download/${fileId}" class="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+						<polyline points="7 10 12 15 17 10"></polyline>
+						<line x1="12" y1="15" x2="12" y2="3"></line>
+					</svg>
+					Download
+				</a>
+				<button type="button" data-item-type="file" data-item-name="${escapeHtml(filename)}" data-item-id="${fileId}" onclick="openRenameModal(this.dataset.itemType, this.dataset.itemName, this.dataset.itemId)" class="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left">
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+						<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+					</svg>
+					Rename
+				</button>
+				<button type="button" data-item-name="${escapeHtml(filename)}" data-item-id="${fileId}" onclick="openMoveModal(this.dataset.itemName, this.dataset.itemId)" class="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left">
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+						<polyline points="12 11 12 17"></polyline>
+						<polyline points="9 14 12 11 15 14"></polyline>
+					</svg>
+					Move
+				</button>
 			`;
-			downloadPlaceholder.replaceWith(downloadLink);
+			
+			// Replace the placeholder with all new menu items
+			while (menuItems.firstChild) {
+				downloadPlaceholder.parentNode.insertBefore(menuItems.firstChild, downloadPlaceholder);
+			}
+			downloadPlaceholder.remove();
 		}
 	}
 
