@@ -87,6 +87,11 @@ func main() {
 
 	uploadHandler := handlers.NewUploadHandler(db, cfg, storageService)
 	go func() {
+		// Run initial cleanup immediately on startup
+		if err := uploadHandler.CleanupExpiredSessions(); err != nil {
+			logger.Error("initial upload cleanup failed", "error", err)
+		}
+
 		for {
 			select {
 			case <-uploadCleanupTicker.C:
