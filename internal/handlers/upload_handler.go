@@ -665,8 +665,8 @@ func (h *UploadHandler) CleanupExpiredSessions() error {
 
 	// Delete old completed/cancelled/expired sessions (older than configured retention period)
 	retentionDays := h.cfg.UploadSessionRetentionDays
-	if retentionDays <= 0 {
-		retentionDays = 7 // Default to 7 days if not configured
+	if retentionDays < 0 {
+		retentionDays = 7 // Default to 7 days if negative (not configured); 0 means delete immediately
 	}
 	cutoff := time.Now().AddDate(0, 0, -retentionDays)
 	result := h.db.Where("status IN ? AND updated_at < ?", []string{"completed", "cancelled", "expired"}, cutoff).
