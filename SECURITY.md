@@ -58,15 +58,16 @@ Requests with `Sec-Fetch-Site: same-site` (e.g., from subdomains) are **blocked*
 2. Use API endpoints that are exempt from CSRF (see below)
 3. Use non-browser clients for cross-subdomain operations
 
-### Token Deprecation
+### Token Removal
 
-**CSRF tokens are no longer validated.** The `csrf.Token()` function returns values for template compatibility, but:
+**CSRF tokens have been removed from templates.** The `filippo.io/csrf` library:
 
-- Tokens are NOT checked on POST requests
-- Invalid/missing tokens do NOT cause request failures
+- Does NOT use token-based validation
 - Protection is solely based on Fetch Metadata headers
+- Hidden `csrf_token` form fields are no longer rendered
+- JavaScript no longer needs to extract or send tokens
 
-If your application relies on extracting/validating CSRF tokens programmatically, this will no longer work.
+If your application relied on extracting/validating CSRF tokens programmatically, those patterns are no longer applicable.
 
 ### CSRF-Exempt Endpoints
 

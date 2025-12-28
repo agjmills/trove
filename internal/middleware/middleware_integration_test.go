@@ -478,37 +478,10 @@ func TestCSRFBrowserBehavior(t *testing.T) {
 }
 
 // TestCSRFTokenBehavior documents that token-based CSRF validation is NOT enforced
-// by filippo.io/csrf. The Token() function still returns a value for API compatibility,
-// but the middleware does not validate tokens - it uses Fetch Metadata instead.
+// by filippo.io/csrf. The middleware uses Fetch Metadata headers instead of tokens.
+// Token() exists only for API compatibility but is not used in this codebase.
 func TestCSRFTokenBehavior(t *testing.T) {
 	csrfKey := []byte("test-secret-key-32-bytes-long!!")
-
-	t.Run("Token function returns value for compatibility", func(t *testing.T) {
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Token() returns a value for API compatibility but is NOT validated
-			token := csrf.Token(r)
-			// filippo.io/csrf/gorilla returns tokens for template compatibility
-			// but does NOT validate them on POST requests
-			if token == "" {
-				t.Log("Token is empty - this is acceptable for filippo.io/csrf")
-			} else {
-				t.Logf("Token returned: %s (not validated, for template compatibility only)", token)
-			}
-			w.WriteHeader(http.StatusOK)
-		})
-
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
-
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.Header.Set("Sec-Fetch-Site", "same-origin")
-		w := httptest.NewRecorder()
-
-		protected.ServeHTTP(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
-		}
-	})
 
 	t.Run("POST without token succeeds if same-origin", func(t *testing.T) {
 		// Key difference from gorilla/csrf: no token validation

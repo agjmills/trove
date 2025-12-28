@@ -104,15 +104,28 @@ func getClientIP(r *http.Request, trustedCIDRs []*net.IPNet) string {
 // and rate limiting for authentication endpoints.
 //
 // CSRF PROTECTION (filippo.io/csrf v0.2.1):
-// When CSRF is enabled, the middleware uses Fetch Metadata headers for browser detection:
-//   - Requests WITH Sec-Fetch-Site header are validated (browser requests)
-//   - Requests WITHOUT Sec-Fetch-Site header are ALLOWED (non-browser API clients, CLI tools)
+// This middleware uses Fetch Metadata headers (Sec-Fetch-Site, Origin) for CSRF protection
+// instead of the traditional double-submit token pattern. Key behavioral differences:
+//
+// Browser Request Detection:
+//   - Requests WITH Sec-Fetch-Site header are validated as browser requests
 //   - Cross-site browser requests (Sec-Fetch-Site: cross-site) are BLOCKED
-//   - Same-site browser requests (Sec-Fetch-Site: same-site) are BLOCKED (subdomains)
+//   - Same-site browser requests (Sec-Fetch-Site: same-site) are BLOCKED (includes subdomains)
 //   - Same-origin browser requests (Sec-Fetch-Site: same-origin) are ALLOWED
 //
-// Token-based CSRF validation is NOT performed. The Token() function returns values for
-// template compatibility but tokens are not validated on POST requests.
+// Non-Browser Client Behavior:
+//   - Requests WITHOUT Sec-Fetch-Site or Origin headers are ALLOWED through
+//   - This permits CLI tools (curl, wget), API clients, webhooks, and mobile apps
+//   - These clients cannot be exploited via CSRF since they don't automatically attach cookies
+//   - Authentication still required via session cookie (obtained through login flow)
+//
+// Security Model:
+//   - CSRF attacks require a browser to automatically attach session cookies
+//   - Non-browser clients must explicitly manage cookies, preventing unwitting attacks
+//   - Session-based auth + SameSite=Lax cookies provide baseline protection
+//
+// Token-based CSRF validation is NOT performed. The csrf.Token() function exists for API
+// compatibility but tokens are not validated on state-changing requests.
 //
 // API ENDPOINTS EXEMPT FROM CSRF:
 // The following endpoints are exempt from CSRF middleware for non-browser client support:

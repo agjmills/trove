@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	csrf "filippo.io/csrf/gorilla"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
@@ -239,7 +238,6 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		"ParentFolder":  parentFolder,
 		"Breadcrumbs":   breadcrumbs,
 		"Flash":         flashMsg,
-		"CSRFToken":     csrf.Token(r),
 		"Page":          page,
 		"TotalPages":    totalPages,
 		"TotalFiles":    totalFiles,

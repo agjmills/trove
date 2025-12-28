@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	csrf "filippo.io/csrf/gorilla"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
@@ -73,7 +72,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			render(w, "register.html", map[string]any{
 				"Title":              "Register",
 				"Error":              "All fields are required",
-				"CSRFToken":          csrf.Token(r),
 				"EnableRegistration": h.cfg.EnableRegistration,
 			})
 		}
@@ -224,7 +222,6 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 
 	render(w, "login.html", map[string]any{
 		"Title":              "Login",
-		"CSRFToken":          csrf.Token(r),
 		"EnableRegistration": h.cfg.EnableRegistration,
 	})
 }
@@ -243,7 +240,6 @@ func (h *AuthHandler) ShowRegister(w http.ResponseWriter, r *http.Request) {
 
 	render(w, "register.html", map[string]any{
 		"Title":              "Register",
-		"CSRFToken":          csrf.Token(r),
 		"EnableRegistration": h.cfg.EnableRegistration,
 	})
 }
@@ -258,7 +254,6 @@ func (h *AuthHandler) ShowSettings(w http.ResponseWriter, r *http.Request) {
 	render(w, "settings.html", map[string]any{
 		"Title":     "Settings",
 		"User":      user,
-		"CSRFToken": csrf.Token(r),
 		"FullWidth": true,
 	})
 }
@@ -302,7 +297,6 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 			render(w, "settings.html", map[string]any{
 				"Title":     "Settings",
 				"User":      user,
-				"CSRFToken": csrf.Token(r),
 				"Error":     "All fields are required",
 				"FullWidth": true,
 			})
@@ -317,7 +311,6 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 			render(w, "settings.html", map[string]any{
 				"Title":     "Settings",
 				"User":      user,
-				"CSRFToken": csrf.Token(r),
 				"Error":     "New passwords do not match",
 				"FullWidth": true,
 			})
@@ -332,7 +325,6 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 			render(w, "settings.html", map[string]any{
 				"Title":     "Settings",
 				"User":      user,
-				"CSRFToken": csrf.Token(r),
 				"Error":     "New password must be at least 8 characters",
 				"FullWidth": true,
 			})
@@ -347,7 +339,6 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 			render(w, "settings.html", map[string]any{
 				"Title":     "Settings",
 				"User":      user,
-				"CSRFToken": csrf.Token(r),
 				"Error":     "New password must be at most 72 characters",
 				"FullWidth": true,
 			})
@@ -370,7 +361,6 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 			render(w, "settings.html", map[string]any{
 				"Title":     "Settings",
 				"User":      user,
-				"CSRFToken": csrf.Token(r),
 				"Error":     "Current password is incorrect",
 				"FullWidth": true,
 			})
@@ -398,7 +388,6 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		render(w, "settings.html", map[string]any{
 			"Title":     "Settings",
 			"User":      user,
-			"CSRFToken": csrf.Token(r),
 			"Success":   "Password changed successfully",
 			"FullWidth": true,
 		})

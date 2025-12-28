@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	csrf "filippo.io/csrf/gorilla"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
@@ -867,7 +866,6 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Title":      file.Filename,
 		"User":       user,
-		"CSRFToken":  csrf.Token(r),
 		"File":       file,
 		"AllFolders": uniqueFolders,
 		"CanPreview": canPreview,

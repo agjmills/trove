@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	csrf "filippo.io/csrf/gorilla"
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
@@ -340,7 +339,6 @@ func (h *DeletedHandler) ShowDeleted(w http.ResponseWriter, r *http.Request) {
 		"Files":            fileInfos,
 		"Folders":          folderInfos,
 		"Flash":            flashMsg,
-		"CSRFToken":        csrf.Token(r),
 		"Page":             page,
 		"TotalPages":       totalPages,
 		"TotalFiles":       totalFiles,
