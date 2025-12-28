@@ -368,6 +368,19 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 	// Sort chunks to ensure correct order
 	sort.Ints(chunksReceived)
 
+	// Verify chunk contiguity: ensure we have exactly chunks 0 through N-1
+	// This catches duplicate chunks or gaps that could slip past the count check
+	if len(chunksReceived) != session.TotalChunks {
+		http.Error(w, fmt.Sprintf("Chunk count mismatch: expected %d, got %d unique chunks", session.TotalChunks, len(chunksReceived)), http.StatusBadRequest)
+		return
+	}
+	for i, chunkNum := range chunksReceived {
+		if chunkNum != i {
+			http.Error(w, fmt.Sprintf("Missing chunk %d", i), http.StatusBadRequest)
+			return
+		}
+	}
+
 	// Create final file by assembling chunks
 	finalPath := filepath.Join(session.TempDir, "complete")
 	finalFile, err := os.Create(finalPath)
