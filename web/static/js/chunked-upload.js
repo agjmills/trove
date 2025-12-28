@@ -256,7 +256,7 @@ class ChunkedUploadManager {
 			uploadedChunks: session.uploadedChunks.size,
 			totalChunks: session.totalChunks,
 			percentage,
-			uploadedBytes: session.uploadedChunks.size * this.chunkSize,
+			uploadedBytes: Math.min(session.uploadedChunks.size * this.chunkSize, session.file.size),
 			totalBytes: session.file.size,
 		});
 	}
