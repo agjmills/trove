@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -823,11 +824,12 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Convert back to slice
-	uniqueFolders := make([]FolderData, 0, len(folderMap))
+	// Convert back to slice and sort
+	uniqueFolders := make([]string, 0, len(folderMap))
 	for path := range folderMap {
-		uniqueFolders = append(uniqueFolders, FolderData{Path: path})
+		uniqueFolders = append(uniqueFolders, path)
 	}
+	sort.Strings(uniqueFolders)
 
 	// Determine preview capabilities
 	canPreview := false
