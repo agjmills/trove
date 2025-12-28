@@ -83,13 +83,19 @@ func main() {
 
 	// Start upload session cleanup worker
 	uploadCleanupTicker := time.NewTicker(1 * time.Hour)
-	defer uploadCleanupTicker.Stop()
+	uploadCleanupDone := make(chan struct{})
 
 	uploadHandler := handlers.NewUploadHandler(db, cfg, storageService)
 	go func() {
-		for range uploadCleanupTicker.C {
-			if err := uploadHandler.CleanupExpiredSessions(); err != nil {
-				logger.Error("upload cleanup failed", "error", err)
+		for {
+			select {
+			case <-uploadCleanupTicker.C:
+				if err := uploadHandler.CleanupExpiredSessions(); err != nil {
+					logger.Error("upload cleanup failed", "error", err)
+				}
+			case <-uploadCleanupDone:
+				uploadCleanupTicker.Stop()
+				return
 			}
 		}
 	}()
@@ -126,6 +132,9 @@ func main() {
 
 		// Stop trash cleanup worker
 		deletedHandler.Shutdown()
+
+		// Stop upload cleanup worker
+		close(uploadCleanupDone)
 
 		// Shutdown HTTP server
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
