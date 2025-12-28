@@ -189,6 +189,10 @@ func (h *DeletedHandler) permanentlyDeleteFile(ctx context.Context, file *models
 // ShowDeleted displays the user's deleted items
 func (h *DeletedHandler) ShowDeleted(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	// Pagination parameters
 	page := 1
