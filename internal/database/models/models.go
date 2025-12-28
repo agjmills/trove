@@ -60,3 +60,26 @@ type File struct {
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
 }
+
+// UploadSession tracks state for resumable chunked uploads
+type UploadSession struct {
+	ID             string         `gorm:"primaryKey;size:36" json:"id"` // UUID
+	UserID         uint           `gorm:"not null;index" json:"user_id"`
+	Filename       string         `gorm:"not null;size:255" json:"filename"`
+	LogicalPath    string         `gorm:"not null;size:1024;default:'/'" json:"logical_path"`
+	TotalSize      int64          `gorm:"not null" json:"total_size"`
+	TotalChunks    int            `gorm:"not null" json:"total_chunks"`
+	ChunkSize      int64          `gorm:"not null" json:"chunk_size"`
+	ReceivedChunks int            `gorm:"not null;default:0" json:"received_chunks"`
+	ChunksReceived datatypes.JSON `gorm:"type:json" json:"chunks_received"`             // Array of chunk numbers received
+	Status         string         `gorm:"size:20;default:'active';index" json:"status"` // active, completed, cancelled, expired
+	Hash           string         `gorm:"size:64" json:"hash,omitempty"`                // Expected hash for verification (optional)
+	MimeType       string         `gorm:"size:100" json:"mime_type"`
+	TempDir        string         `gorm:"size:1024" json:"temp_dir"` // Temporary directory for chunks
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	ExpiresAt      time.Time      `gorm:"index" json:"expires_at"` // When this session should be cleaned up
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
+
+	User User `gorm:"foreignKey:UserID" json:"-"`
+}

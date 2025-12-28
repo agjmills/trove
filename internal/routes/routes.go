@@ -149,6 +149,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	authHandler := handlers.NewAuthHandler(db, cfg, sessionManager)
 	pageHandler := handlers.NewPageHandler(db, cfg)
 	fileHandler := handlers.NewFileHandler(db, cfg, storageService)
+	uploadHandler := handlers.NewUploadHandler(db, cfg, storageService)
 	healthHandler := handlers.NewHealthHandler(db, storageService, version)
 	adminHandler := handlers.NewAdminHandler(db, cfg, storageService)
 	deletedHandler := handlers.NewDeletedHandler(db, cfg, storageService)
@@ -278,6 +279,18 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Use(auth.RequireAuth(db, sessionManager))
 		// No CSRF middleware - streaming uploads handle their own protection
 		r.Post("/upload", fileHandler.Upload)
+	})
+
+	// Chunked upload API endpoints - JSON API for resumable uploads
+	r.Group(func(r chi.Router) {
+		r.Use(sessionManager.LoadAndSave)
+		r.Use(auth.RequireAuth(db, sessionManager))
+		// No CSRF middleware - JSON API with session authentication
+		r.Post("/api/uploads/init", uploadHandler.InitUpload)
+		r.Post("/api/uploads/{id}/chunk", uploadHandler.UploadChunk)
+		r.Post("/api/uploads/{id}/complete", uploadHandler.CompleteUpload)
+		r.Delete("/api/uploads/{id}", uploadHandler.CancelUpload)
+		r.Get("/api/uploads/{id}/status", uploadHandler.GetUploadStatus)
 	})
 
 	// Admin routes - require admin privileges
