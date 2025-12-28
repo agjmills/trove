@@ -292,7 +292,7 @@
 						</thead>
 						<tbody id="files-table-body">
 						{{range .Files}}
-						<tr data-file-id="{{.ID}}" data-upload-status="{{.UploadStatus}}" class="file-row hover:bg-gray-50 dark:hover:bg-gray-700/50 {{if ne .UploadStatus "completed"}}bg-yellow-50 dark:bg-yellow-900/10{{end}}">
+						<tr data-file-id="{{.ID}}" data-upload-status="{{.UploadStatus}}" class="file-row hover:bg-gray-50 dark:hover:bg-gray-700/50 {{if eq .UploadStatus "completed"}}cursor-pointer{{end}} {{if ne .UploadStatus "completed"}}bg-yellow-50 dark:bg-yellow-900/10{{end}}" {{if eq .UploadStatus "completed"}}onclick="navigateToFile(event, {{.ID}})"{{end}}>
 							<td class="p-3 border-b border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 max-w-0">
 								<div class="flex items-center gap-2 min-w-0">
 									<span class="status-indicator">
@@ -335,6 +335,13 @@
 									<!-- File dropdown menu -->
 									<div id="file-menu-{{.ID}}" class="hidden absolute right-0 top-full mt-1 w-36 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 z-50 py-1">
 										{{if eq .UploadStatus "completed"}}
+										<a href="/files/{{.ID}}" class="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+												<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+												<circle cx="12" cy="12" r="3"></circle>
+											</svg>
+											View
+										</a>
 										<a href="/download/{{.ID}}" class="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
 											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 												<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -942,6 +949,15 @@
 	// Folder menu functions
 	let currentOpenMenu = null;
 
+	// Navigate to file view page
+	function navigateToFile(event, fileId) {
+		// Don't navigate if clicking on the menu button or within the menu
+		if (event.target.closest('button') || event.target.closest('[id^="file-menu-"]')) {
+			return;
+		}
+		window.location.href = '/files/' + fileId;
+	}
+
 	function toggleItemMenu(event, menuId) {
 		event.preventDefault();
 		event.stopPropagation();
@@ -1016,6 +1032,7 @@
 			}
 		}
 	});
+
 
 	// Drag and drop functionality
 	const dragOverlay = document.getElementById('drag-overlay');

@@ -39,6 +39,12 @@ Self-hostable file storage in Go with server-side rendering, minimal JS, Docker 
   - Persistent upload sessions with 24h expiration
   - Background cleanup of abandoned uploads
   - SHA-256 hash verification on completion
+- [x] File preview and view page
+  - Dedicated file view page at `/files/{id}` with file metadata and actions
+  - Preview support for images, PDFs, videos, audio, and text/code files
+  - Displays file information (size, type, upload date, SHA-256 hash, location)
+  - Quick access to download, rename, move, and delete actions
+  - Clickable file rows for quick navigation
 
 ### Web Interface ✅
 - [x] Layout template with navigation
@@ -295,6 +301,11 @@ Tailwind CSS migration with dark mode, responsive design, system preference dete
 **Next**: Template caching, performance optimization, file sharing links
 
 **Recent**:
+- ✅ Implemented file preview and view page
+  - Dedicated file view page with preview support for images, PDFs, videos, audio, and text/code files
+  - Comprehensive file metadata display (size, type, dates, SHA-256 hash, location)
+  - Integrated actions (download, rename, move, delete) on view page
+  - Clickable file rows in list view for quick navigation
 - ✅ Implemented resumable chunked uploads with pause/resume/cancel
   - Minimal REST API for upload management (init, chunk, complete, cancel, status)
   - Client-side chunking with automatic retry (ChunkedUploadManager)

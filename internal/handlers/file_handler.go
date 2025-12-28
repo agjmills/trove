@@ -27,6 +27,7 @@ import (
 	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/gorilla/csrf"
 	"gorm.io/gorm"
 )
 
@@ -705,6 +706,212 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(w, reader); err != nil {
 		log.Printf("Warning: error streaming file %s: %v", file.StoragePath, err)
 	}
+}
+
+// Preview serves a file for in-browser preview (inline disposition)
+func (h *FileHandler) Preview(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get file ID from URL
+	fileID := chi.URLParam(r, "id")
+	if fileID == "" {
+		http.Error(w, "File ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Fetch file from database
+	var file models.File
+	if err := h.db.Where("id = ? AND user_id = ?", fileID, user.ID).First(&file).Error; err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	ctx := r.Context()
+
+	// Check if file exists in storage
+	_, err := h.storage.Stat(ctx, file.StoragePath)
+	if errors.Is(err, storage.ErrNotFound) {
+		http.Error(w, "File not found in storage", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Failed to access file", http.StatusInternalServerError)
+		return
+	}
+
+	// Open file from storage
+	reader, err := h.storage.Open(ctx, file.StoragePath)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.Error(w, "File not found in storage", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Failed to open file", http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	// Set headers for inline display
+	w.Header().Set("Content-Type", file.MimeType)
+	// Use inline disposition to allow browser preview
+	safeFilename := strings.ReplaceAll(file.Filename, `"`, `\"`)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"; filename*=UTF-8''%s`,
+		safeFilename, url.PathEscape(file.Filename)))
+	w.Header().Set("Content-Length", strconv.FormatInt(file.FileSize, 10))
+
+	// Add security headers for preview
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; media-src 'self'; img-src 'self'; script-src 'none';")
+
+	// Stream file to response
+	if _, err := io.Copy(w, reader); err != nil {
+		log.Printf("Warning: error streaming file %s: %v", file.StoragePath, err)
+	}
+}
+
+// ViewFile displays a file view page with preview and metadata
+func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get file ID from URL
+	fileID := chi.URLParam(r, "id")
+	if fileID == "" {
+		http.Error(w, "File ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Fetch file from database
+	var file models.File
+	if err := h.db.Where("id = ? AND user_id = ?", fileID, user.ID).First(&file).Error; err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	// Get all folders for move dropdown
+	type FolderData struct {
+		Path string
+	}
+	var folders []FolderData
+	
+	// Get explicit folders
+	h.db.Model(&models.Folder{}).
+		Select("folder_path as path").
+		Where("user_id = ? AND deleted_at IS NULL AND trashed_at IS NULL", user.ID).
+		Order("folder_path").
+		Scan(&folders)
+	
+	// Get implicit folders from files
+	h.db.Model(&models.File{}).
+		Select("DISTINCT logical_path as path").
+		Where("user_id = ? AND trashed_at IS NULL AND logical_path != '/'", user.ID).
+		Order("logical_path").
+		Scan(&folders)
+	
+	// Deduplicate folders
+	folderMap := make(map[string]bool)
+	for _, f := range folders {
+		if f.Path != "" && f.Path != "/" {
+			folderMap[f.Path] = true
+		}
+	}
+	
+	// Convert back to slice
+	uniqueFolders := make([]FolderData, 0, len(folderMap))
+	for path := range folderMap {
+		uniqueFolders = append(uniqueFolders, FolderData{Path: path})
+	}
+
+	// Determine preview capabilities
+	canPreview := false
+	isImage := false
+	isPDF := false
+	isVideo := false
+	isAudio := false
+	isText := false
+
+	mimeType := strings.ToLower(file.MimeType)
+	filename := strings.ToLower(file.Filename)
+
+	// Check if file can be previewed
+	if strings.HasPrefix(mimeType, "image/") {
+		canPreview = true
+		isImage = true
+	} else if mimeType == "application/pdf" {
+		canPreview = true
+		isPDF = true
+	} else if strings.HasPrefix(mimeType, "video/") {
+		canPreview = true
+		isVideo = true
+	} else if strings.HasPrefix(mimeType, "audio/") {
+		canPreview = true
+		isAudio = true
+	} else if strings.HasPrefix(mimeType, "text/") ||
+		mimeType == "application/json" ||
+		mimeType == "application/xml" ||
+		mimeType == "application/javascript" ||
+		mimeType == "application/x-sh" ||
+		isCodeFile(filename) {
+		canPreview = true
+		isText = true
+	}
+
+	// Render template
+	data := map[string]interface{}{
+		"Title":      file.Filename,
+		"User":       user,
+		"CSRFToken":  csrf.Token(r),
+		"File":       file,
+		"AllFolders": uniqueFolders,
+		"CanPreview": canPreview,
+		"IsImage":    isImage,
+		"IsPDF":      isPDF,
+		"IsVideo":    isVideo,
+		"IsAudio":    isAudio,
+		"IsText":     isText,
+		"FullWidth":  true,
+	}
+
+	if err := render(w, "file_view.html", data); err != nil {
+		log.Printf("Error rendering file view template: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// isCodeFile checks if a filename has a code file extension
+func isCodeFile(filename string) bool {
+	codeExtensions := []string{
+		".go", ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".c", ".cpp", ".h", ".hpp",
+		".cs", ".php", ".rb", ".rs", ".swift", ".kt", ".scala", ".r", ".m", ".mm",
+		".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
+		".html", ".htm", ".css", ".scss", ".sass", ".less",
+		".xml", ".yaml", ".yml", ".toml", ".ini", ".conf", ".config",
+		".json", ".md", ".markdown", ".rst", ".txt", ".log",
+		".sql", ".graphql", ".proto", ".vue", ".svelte",
+	}
+	
+	lowerFilename := strings.ToLower(filename)
+	
+	// Check exact matches for files without extensions
+	if lowerFilename == "makefile" || lowerFilename == "dockerfile" || lowerFilename == "readme" {
+		return true
+	}
+	
+	// Check extensions
+	for _, ext := range codeExtensions {
+		if strings.HasSuffix(lowerFilename, ext) {
+			return true
+		}
+	}
+	
+	return false
 }
 
 func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
