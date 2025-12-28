@@ -120,7 +120,11 @@ class ChunkedUploadManager {
 					retries++;
 					if (retries > this.maxRetries) {
 						session.onError(new Error(`Failed to upload chunk ${chunkNum} after ${this.maxRetries} retries`));
-						this.cancelUpload(uploadId);
+						try {
+							await this.cancelUpload(uploadId);
+						} catch (cancelErr) {
+							session.onError(cancelErr);
+						}
 						return;
 					}
 					// Wait before retry (exponential backoff)
