@@ -276,11 +276,21 @@ class ChunkedUploadManager {
 
 	/**
 	 * Calculate SHA-256 hash of entire file
+	 * 
+	 * Note: Client-side hashing is memory-constrained because crypto.subtle.digest()
+	 * requires the complete data at once (no incremental/streaming support).
+	 * For files over 500MB, we skip client-side hashing and rely on server-side
+	 * verification to avoid memory issues with multi-GB uploads.
 	 */
 	async calculateFileHash(file) {
-		// Use streaming approach for large files
-		const chunkSize = 64 * 1024 * 1024; // 64MB chunks for hashing
-		const chunks = Math.ceil(file.size / chunkSize);
+		// Skip hashing for very large files to avoid memory issues
+		// crypto.subtle.digest() doesn't support incremental hashing,
+		// so we'd have to load the entire file into memory
+		const MAX_HASH_SIZE = 500 * 1024 * 1024; // 500MB
+		if (file.size > MAX_HASH_SIZE) {
+			console.info(`Skipping client-side hash for large file (${(file.size / (1024 * 1024)).toFixed(1)}MB). Server will verify integrity.`);
+			return '';
+		}
 		
 		// For files under 100MB, use simple approach
 		if (file.size < 100 * 1024 * 1024) {
@@ -290,25 +300,10 @@ class ChunkedUploadManager {
 				.join('');
 		}
 		
-		// For larger files, process in chunks using a stream
-		const stream = file.stream();
-		const reader = stream.getReader();
-		const hashBuffer = [];
-		
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			hashBuffer.push(value);
-		}
-		
-		const combined = new Uint8Array(hashBuffer.reduce((acc, arr) => acc + arr.length, 0));
-		let offset = 0;
-		for (const arr of hashBuffer) {
-			combined.set(arr, offset);
-			offset += arr.length;
-		}
-		
-		const hashDigest = await crypto.subtle.digest('SHA-256', combined);
+		// For medium files (100MB-500MB), load into memory and hash
+		// This is acceptable memory usage for most devices
+		const arrayBuffer = await file.arrayBuffer();
+		const hashDigest = await crypto.subtle.digest('SHA-256', arrayBuffer);
 		return Array.from(new Uint8Array(hashDigest))
 			.map(b => b.toString(16).padStart(2, '0'))
 			.join('');
