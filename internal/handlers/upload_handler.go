@@ -477,9 +477,26 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 		UploadStatus:     "completed",
 	}
 
-	if err := h.db.Create(&file).Error; err != nil {
-		logger.Error("failed to create file record", "error", err)
-		// Clean up uploaded file from storage
+	// Use a transaction to atomically create file record and update storage_used
+	// This prevents quota drift if one operation succeeds and the other fails
+	txErr := h.db.Transaction(func(tx *gorm.DB) error {
+		// Create the file record
+		if err := tx.Create(&file).Error; err != nil {
+			return fmt.Errorf("failed to create file record: %w", err)
+		}
+
+		// Update user storage usage atomically within the same transaction
+		if err := tx.Model(&models.User{}).Where("id = ?", userID).
+			UpdateColumn("storage_used", gorm.Expr("storage_used + ?", session.TotalSize)).Error; err != nil {
+			return fmt.Errorf("failed to update user storage usage: %w", err)
+		}
+
+		return nil
+	})
+
+	if txErr != nil {
+		logger.Error("failed to complete upload transaction", "error", txErr, "user_id", userID, "filename", session.Filename)
+		// Clean up uploaded file from storage since transaction failed
 		h.storage.Delete(r.Context(), saveResult.Path)
 		// Clean up temp directory
 		go func() {
@@ -489,12 +506,6 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 		}()
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
-	}
-
-	// Update user storage usage
-	if err := h.db.Model(&models.User{}).Where("id = ?", userID).
-		UpdateColumn("storage_used", gorm.Expr("storage_used + ?", session.TotalSize)).Error; err != nil {
-		logger.Error("failed to update user storage usage", "error", err, "user_id", userID, "size", session.TotalSize)
 	}
 
 	// Mark session as completed
