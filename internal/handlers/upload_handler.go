@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -67,21 +68,21 @@ type ChunkStatusResponse struct {
 
 // normalizeLogicalPath validates and normalizes a logical path to prevent
 // directory traversal attacks. It returns an empty string if the path is invalid.
-func normalizeLogicalPath(path string) string {
+// Uses path.Clean (not filepath.Clean) for consistent cross-platform behavior
+// since these are web paths using forward slashes, not OS filesystem paths.
+func normalizeLogicalPath(p string) string {
 	// Default to root if empty
-	if path == "" {
+	if p == "" {
 		return "/"
 	}
 
 	// Replace backslashes with forward slashes for consistency
-	path = strings.ReplaceAll(path, "\\", "/")
+	p = strings.ReplaceAll(p, "\\", "/")
 
-	// Use filepath.Clean to normalize the path (resolves .., ., multiple slashes)
-	// We work with the path without the leading slash to properly detect traversal
-	cleanPath := filepath.Clean(path)
-
-	// Convert back to forward slashes (filepath.Clean uses OS separator)
-	cleanPath = filepath.ToSlash(cleanPath)
+	// Use path.Clean (not filepath.Clean) to normalize the path.
+	// path.Clean always uses forward slashes and provides consistent behavior
+	// across platforms, which is appropriate for web/logical paths.
+	cleanPath := path.Clean(p)
 
 	// Reject paths that try to escape root (start with .. or resolve to ..)
 	if cleanPath == ".." || strings.HasPrefix(cleanPath, "../") {
@@ -137,9 +138,14 @@ func (h *UploadHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create temporary directory for chunks
+	// Use configured TempDir if set, otherwise fall back to system temp directory
 	uploadID := uuid.New().String()
-	tempDir := filepath.Join(os.TempDir(), "trove-uploads", uploadID)
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
+	baseTempDir := h.cfg.TempDir
+	if baseTempDir == "" {
+		baseTempDir = os.TempDir()
+	}
+	tempDir := filepath.Join(baseTempDir, "trove-uploads", uploadID)
+	if err := os.MkdirAll(tempDir, 0700); err != nil {
 		logger.Error("failed to create temp directory", "error", err, "dir", tempDir)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -641,11 +647,21 @@ func (h *UploadHandler) CleanupExpiredSessions() error {
 		return fmt.Errorf("failed to query expired sessions: %w", err)
 	}
 
+	var updateErrors []string
 	for _, session := range expiredSessions {
-		// Mark as expired
-		h.db.Model(&session).Update("status", "expired")
+		// Mark as expired - track errors but continue processing other sessions
+		if err := h.db.Model(&session).Update("status", "expired").Error; err != nil {
+			logger.Error("failed to mark session as expired",
+				"error", err,
+				"upload_id", session.ID,
+			)
+			updateErrors = append(updateErrors, fmt.Sprintf("session %s: %v", session.ID, err))
+			// Skip temp directory cleanup if we couldn't update the status,
+			// so the session can be retried on the next cleanup run
+			continue
+		}
 
-		// Clean up temp directory
+		// Clean up temp directory only after successfully marking as expired
 		if session.TempDir != "" {
 			if err := os.RemoveAll(session.TempDir); err != nil {
 				logger.Error("failed to clean up temp directory",
@@ -660,6 +676,14 @@ func (h *UploadHandler) CleanupExpiredSessions() error {
 			"upload_id", session.ID,
 			"user_id", session.UserID,
 			"filename", session.Filename,
+		)
+	}
+
+	// Report aggregate update errors if any occurred
+	if len(updateErrors) > 0 {
+		logger.Warn("some sessions failed to update during cleanup",
+			"failed_count", len(updateErrors),
+			"total_count", len(expiredSessions),
 		)
 	}
 
