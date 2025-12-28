@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -247,5 +248,273 @@ func TestCleanupExpiredSessions(t *testing.T) {
 
 	if expiredSession.Status != "expired" {
 		t.Errorf("Expected status 'expired', got '%s'", expiredSession.Status)
+	}
+}
+
+func TestGetUploadStatus(t *testing.T) {
+	handler, db, user := setupUploadHandlerTest(t)
+	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
+
+	tempDir := t.TempDir()
+	chunksReceived := []int{0, 2}
+	chunksReceivedJSON, _ := json.Marshal(chunksReceived)
+
+	session := &models.UploadSession{
+		ID:             "test-upload-status",
+		UserID:         user.ID,
+		Filename:       "status-test.txt",
+		LogicalPath:    "/docs",
+		TotalSize:      1536,
+		TotalChunks:    3,
+		ChunkSize:      512,
+		ReceivedChunks: 2,
+		ChunksReceived: chunksReceivedJSON,
+		Status:         "active",
+		TempDir:        tempDir,
+		ExpiresAt:      time.Now().Add(24 * time.Hour),
+	}
+	if err := db.Create(session).Error; err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/uploads/test-upload-status", nil)
+	req = withUser(req, user)
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-upload-status")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	handler.GetUploadStatus(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp ChunkStatusResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if resp.UploadID != "test-upload-status" {
+		t.Errorf("Expected upload ID 'test-upload-status', got '%s'", resp.UploadID)
+	}
+	if resp.Status != "active" {
+		t.Errorf("Expected status 'active', got '%s'", resp.Status)
+	}
+	if resp.ReceivedChunks != 2 {
+		t.Errorf("Expected 2 received chunks, got %d", resp.ReceivedChunks)
+	}
+	if resp.TotalChunks != 3 {
+		t.Errorf("Expected 3 total chunks, got %d", resp.TotalChunks)
+	}
+	if len(resp.ChunksReceived) != 2 || resp.ChunksReceived[0] != 0 || resp.ChunksReceived[1] != 2 {
+		t.Errorf("Expected chunks received [0, 2], got %v", resp.ChunksReceived)
+	}
+}
+
+func TestGetUploadStatus_NotFound(t *testing.T) {
+	handler, db, user := setupUploadHandlerTest(t)
+	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/uploads/nonexistent-id", nil)
+	req = withUser(req, user)
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "nonexistent-id")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	handler.GetUploadStatus(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Expected status 404, got %d", w.Code)
+	}
+}
+
+func TestCompleteUpload(t *testing.T) {
+	handler, db, user := setupUploadHandlerTest(t)
+	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
+
+	tempDir := t.TempDir()
+
+	// Create chunks with known content
+	chunk0Data := []byte("Hello, ")
+	chunk1Data := []byte("World!")
+	totalSize := int64(len(chunk0Data) + len(chunk1Data))
+
+	// Write chunk files
+	if err := os.WriteFile(filepath.Join(tempDir, "chunk_0"), chunk0Data, 0644); err != nil {
+		t.Fatalf("Failed to write chunk 0: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "chunk_1"), chunk1Data, 0644); err != nil {
+		t.Fatalf("Failed to write chunk 1: %v", err)
+	}
+
+	chunksReceived := []int{0, 1}
+	chunksReceivedJSON, _ := json.Marshal(chunksReceived)
+
+	session := &models.UploadSession{
+		ID:             "test-upload-complete",
+		UserID:         user.ID,
+		Filename:       "complete-test.txt",
+		LogicalPath:    "/",
+		TotalSize:      totalSize,
+		TotalChunks:    2,
+		ChunkSize:      7,
+		ReceivedChunks: 2,
+		ChunksReceived: chunksReceivedJSON,
+		Status:         "active",
+		MimeType:       "text/plain",
+		TempDir:        tempDir,
+		ExpiresAt:      time.Now().Add(24 * time.Hour),
+	}
+	if err := db.Create(session).Error; err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/uploads/test-upload-complete/complete", nil)
+	req = withUser(req, user)
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-upload-complete")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	handler.CompleteUpload(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if resp["filename"] != "complete-test.txt" {
+		t.Errorf("Expected filename 'complete-test.txt', got '%v'", resp["filename"])
+	}
+	if resp["size"].(float64) != float64(totalSize) {
+		t.Errorf("Expected size %d, got %v", totalSize, resp["size"])
+	}
+	if resp["hash"] == nil || resp["hash"].(string) == "" {
+		t.Error("Expected non-empty hash in response")
+	}
+
+	// Verify session marked as completed
+	if err := db.Where("id = ?", session.ID).First(session).Error; err != nil {
+		t.Fatalf("Failed to reload session: %v", err)
+	}
+	if session.Status != "completed" {
+		t.Errorf("Expected session status 'completed', got '%s'", session.Status)
+	}
+
+	// Verify file record created
+	var file models.File
+	if err := db.Where("filename = ?", "complete-test.txt").First(&file).Error; err != nil {
+		t.Fatalf("File record not found: %v", err)
+	}
+	if file.FileSize != totalSize {
+		t.Errorf("Expected file size %d, got %d", totalSize, file.FileSize)
+	}
+
+	// Verify user storage usage updated
+	var updatedUser models.User
+	if err := db.First(&updatedUser, user.ID).Error; err != nil {
+		t.Fatalf("Failed to reload user: %v", err)
+	}
+	if updatedUser.StorageUsed != totalSize {
+		t.Errorf("Expected storage used %d, got %d", totalSize, updatedUser.StorageUsed)
+	}
+}
+
+func TestCompleteUpload_HashMismatch(t *testing.T) {
+	handler, db, user := setupUploadHandlerTest(t)
+	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
+
+	tempDir := t.TempDir()
+
+	// Create chunk with known content
+	chunkData := []byte("test content")
+	if err := os.WriteFile(filepath.Join(tempDir, "chunk_0"), chunkData, 0644); err != nil {
+		t.Fatalf("Failed to write chunk: %v", err)
+	}
+
+	chunksReceived := []int{0}
+	chunksReceivedJSON, _ := json.Marshal(chunksReceived)
+
+	session := &models.UploadSession{
+		ID:             "test-upload-hash-mismatch",
+		UserID:         user.ID,
+		Filename:       "hash-test.txt",
+		LogicalPath:    "/",
+		TotalSize:      int64(len(chunkData)),
+		TotalChunks:    1,
+		ChunkSize:      int64(len(chunkData)),
+		ReceivedChunks: 1,
+		ChunksReceived: chunksReceivedJSON,
+		Status:         "active",
+		Hash:           "invalid-hash-value", // Intentionally wrong hash
+		TempDir:        tempDir,
+		ExpiresAt:      time.Now().Add(24 * time.Hour),
+	}
+	if err := db.Create(session).Error; err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/uploads/test-upload-hash-mismatch/complete", nil)
+	req = withUser(req, user)
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-upload-hash-mismatch")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	handler.CompleteUpload(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400 for hash mismatch, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCompleteUpload_MissingChunks(t *testing.T) {
+	handler, db, user := setupUploadHandlerTest(t)
+	defer db.Exec("DROP TABLE IF EXISTS upload_sessions")
+
+	tempDir := t.TempDir()
+	chunksReceived := []int{0} // Only 1 chunk received out of 2
+	chunksReceivedJSON, _ := json.Marshal(chunksReceived)
+
+	session := &models.UploadSession{
+		ID:             "test-upload-missing",
+		UserID:         user.ID,
+		Filename:       "missing-test.txt",
+		LogicalPath:    "/",
+		TotalSize:      1024,
+		TotalChunks:    2,
+		ChunkSize:      512,
+		ReceivedChunks: 1, // Only 1 out of 2 received
+		ChunksReceived: chunksReceivedJSON,
+		Status:         "active",
+		TempDir:        tempDir,
+		ExpiresAt:      time.Now().Add(24 * time.Hour),
+	}
+	if err := db.Create(session).Error; err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/uploads/test-upload-missing/complete", nil)
+	req = withUser(req, user)
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-upload-missing")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	handler.CompleteUpload(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400 for missing chunks, got %d", w.Code)
 	}
 }
