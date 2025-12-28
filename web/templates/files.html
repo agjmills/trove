@@ -425,6 +425,51 @@
 <script src="/static/js/chunked-upload.js"></script>
 
 <script>
+	// Focus trap utility for modal accessibility
+	function createFocusTrap(modal) {
+		const focusableSelectors = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+		let firstFocusable = null;
+		let lastFocusable = null;
+
+		function updateFocusableElements() {
+			const focusableElements = modal.querySelectorAll(focusableSelectors);
+			const visible = Array.from(focusableElements).filter(el => {
+				return el.offsetParent !== null && !el.disabled;
+			});
+			firstFocusable = visible[0];
+			lastFocusable = visible[visible.length - 1];
+		}
+
+		function handleKeydown(e) {
+			if (e.key !== 'Tab') return;
+
+			updateFocusableElements();
+			if (!firstFocusable || !lastFocusable) return;
+
+			if (e.shiftKey) {
+				if (document.activeElement === firstFocusable) {
+					e.preventDefault();
+					lastFocusable.focus();
+				}
+			} else {
+				if (document.activeElement === lastFocusable) {
+					e.preventDefault();
+					firstFocusable.focus();
+				}
+			}
+		}
+
+		return {
+			activate: function() {
+				updateFocusableElements();
+				modal.addEventListener('keydown', handleKeydown);
+			},
+			deactivate: function() {
+				modal.removeEventListener('keydown', handleKeydown);
+			}
+		};
+	}
+
 	// SSE connection for real-time status updates
 	let eventSource = null;
 	let sseReconnectTimeout = null;
@@ -710,13 +755,21 @@
 		}
 	});
 
+	// Create focus traps for modals
+	const createFolderModalTrap = createFocusTrap(document.getElementById('create-folder-modal'));
+	const renameModalTrap = createFocusTrap(document.getElementById('rename-modal'));
+	const moveModalTrap = createFocusTrap(document.getElementById('move-modal'));
+	const moveFolderModalTrap = createFocusTrap(document.getElementById('move-folder-modal'));
+
 	// Create folder modal functions
 	function openCreateFolderModal() {
 		document.getElementById('create-folder-modal').classList.remove('hidden');
+		createFolderModalTrap.activate();
 		document.getElementById('folder-name-input').focus();
 	}
 	
 	function closeCreateFolderModal() {
+		createFolderModalTrap.deactivate();
 		document.getElementById('create-folder-modal').classList.add('hidden');
 		document.getElementById('folder-name-input').value = '';
 	}
@@ -751,6 +804,7 @@
 
 		newNameInput.value = currentName;
 		modal.classList.remove('hidden');
+		renameModalTrap.activate();
 		
 		// Select the filename without extension for files, or full name for folders
 		newNameInput.focus();
@@ -767,6 +821,7 @@
 	}
 
 	function closeRenameModal() {
+		renameModalTrap.deactivate();
 		document.getElementById('rename-modal').classList.add('hidden');
 		document.getElementById('rename-new-name').value = '';
 		document.getElementById('rename-old-name').value = '';
@@ -796,10 +851,12 @@
 		populateFolderList(destinationSelect);
 
 		modal.classList.remove('hidden');
+		moveModalTrap.activate();
 		destinationSelect.focus();
 	}
 
 	function closeMoveModal() {
+		moveModalTrap.deactivate();
 		document.getElementById('move-modal').classList.add('hidden');
 	}
 
@@ -827,10 +884,12 @@
 		populateFolderListForMove(destinationSelect, folderName);
 
 		modal.classList.remove('hidden');
+		moveFolderModalTrap.activate();
 		destinationSelect.focus();
 	}
 
 	function closeMoveFolderModal() {
+		moveFolderModalTrap.deactivate();
 		document.getElementById('move-folder-modal').classList.add('hidden');
 	}
 

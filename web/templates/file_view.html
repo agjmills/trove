@@ -202,21 +202,74 @@
 </div>
 
 <script>
+	// Focus trap utility for modal accessibility
+	function createFocusTrap(modal) {
+		const focusableSelectors = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+		let firstFocusable = null;
+		let lastFocusable = null;
+
+		function updateFocusableElements() {
+			const focusableElements = modal.querySelectorAll(focusableSelectors);
+			const visible = Array.from(focusableElements).filter(el => {
+				return el.offsetParent !== null && !el.disabled;
+			});
+			firstFocusable = visible[0];
+			lastFocusable = visible[visible.length - 1];
+		}
+
+		function handleKeydown(e) {
+			if (e.key !== 'Tab') return;
+
+			updateFocusableElements();
+			if (!firstFocusable || !lastFocusable) return;
+
+			if (e.shiftKey) {
+				if (document.activeElement === firstFocusable) {
+					e.preventDefault();
+					lastFocusable.focus();
+				}
+			} else {
+				if (document.activeElement === lastFocusable) {
+					e.preventDefault();
+					firstFocusable.focus();
+				}
+			}
+		}
+
+		return {
+			activate: function() {
+				updateFocusableElements();
+				modal.addEventListener('keydown', handleKeydown);
+			},
+			deactivate: function() {
+				modal.removeEventListener('keydown', handleKeydown);
+			}
+		};
+	}
+
+	// Create focus traps for modals
+	const renameModalTrap = createFocusTrap(document.getElementById('rename-modal'));
+	const moveModalTrap = createFocusTrap(document.getElementById('move-modal'));
+
 	function openRenameDialog() {
 		document.getElementById('rename-modal').classList.remove('hidden');
+		renameModalTrap.activate();
 		document.getElementById('rename-input').focus();
 		document.getElementById('rename-input').select();
 	}
 
 	function closeRenameDialog() {
+		renameModalTrap.deactivate();
 		document.getElementById('rename-modal').classList.add('hidden');
 	}
 
 	function openMoveDialog() {
 		document.getElementById('move-modal').classList.remove('hidden');
+		moveModalTrap.activate();
 	}
 
 	function closeMoveDialog() {
+		moveModalTrap.deactivate();
 		document.getElementById('move-modal').classList.add('hidden');
 	}
 
