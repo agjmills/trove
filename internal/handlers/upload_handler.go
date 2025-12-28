@@ -537,7 +537,7 @@ func (h *UploadHandler) GetUploadStatus(w http.ResponseWriter, r *http.Request) 
 // CleanupExpiredSessions removes expired upload sessions and their temp files
 func (h *UploadHandler) CleanupExpiredSessions() error {
 	var expiredSessions []models.UploadSession
-	
+
 	// Find sessions that are expired or have been inactive for too long
 	err := h.db.Where("status = ? AND expires_at < ?", "active", time.Now()).
 		Find(&expiredSessions).Error
@@ -571,7 +571,7 @@ func (h *UploadHandler) CleanupExpiredSessions() error {
 	cutoff := time.Now().AddDate(0, 0, -7)
 	result := h.db.Where("status IN ? AND updated_at < ?", []string{"completed", "cancelled", "expired"}, cutoff).
 		Delete(&models.UploadSession{})
-	
+
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete old sessions: %w", result.Error)
 	}

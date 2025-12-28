@@ -47,8 +47,8 @@ type Config struct {
 	DeletedCleanupIntervalMin int // Interval in minutes between deleted items cleanup runs
 
 	// Chunked upload configuration
-	UploadChunkSize       int64         // Default chunk size for resumable uploads (e.g., 5MB)
-	UploadSessionTimeout  time.Duration // How long upload sessions remain active
+	UploadChunkSize      int64         // Default chunk size for resumable uploads (e.g., 5MB)
+	UploadSessionTimeout time.Duration // How long upload sessions remain active
 
 	// TrustedProxyCIDRs is a list of CIDR ranges (e.g., "127.0.0.1/32", "10.0.0.0/8")
 	// from which X-Forwarded-Proto headers will be trusted for CSRF origin validation.
