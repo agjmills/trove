@@ -89,13 +89,13 @@ func Load() (*Config, error) {
 		CORSAllowedOrigins:        getEnvStringSlice("CORS_ALLOWED_ORIGINS", nil),
 	}
 
-// Validate deleted items configuration
-if cfg.DeletedRetentionDays < 0 {
-	cfg.DeletedRetentionDays = 0
-}
-if cfg.DeletedCleanupIntervalMin < 1 {
-	cfg.DeletedCleanupIntervalMin = 1 // Minimum 1 minute
-}
+	// Validate deleted items configuration
+	if cfg.DeletedRetentionDays < 0 {
+		cfg.DeletedRetentionDays = 0
+	}
+	if cfg.DeletedCleanupIntervalMin < 1 {
+		cfg.DeletedCleanupIntervalMin = 1 // Minimum 1 minute
+	}
 
 	log.Printf("Config loaded: MaxUploadSize=%d bytes (%.2f MB), DefaultUserQuota=%d bytes (%.2f GB)",
 		cfg.MaxUploadSize, float64(cfg.MaxUploadSize)/(1024*1024),
