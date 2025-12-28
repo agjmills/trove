@@ -31,6 +31,7 @@ type DeletedHandler struct {
 	// Background cleanup
 	stopChan chan struct{}
 	wg       sync.WaitGroup
+	once     sync.Once
 }
 
 // NewDeletedHandler creates a new DeletedHandler and starts the background cleanup job
@@ -51,7 +52,9 @@ func NewDeletedHandler(db *gorm.DB, cfg *config.Config, storage storage.StorageB
 
 // Shutdown stops the background cleanup worker
 func (h *DeletedHandler) Shutdown() {
-	close(h.stopChan)
+	h.once.Do(func() {
+		close(h.stopChan)
+	})
 	h.wg.Wait()
 }
 
@@ -88,66 +91,76 @@ func (h *DeletedHandler) runCleanup() {
 	ctx := context.Background()
 	logger.Debug("Running deleted items cleanup")
 
-	// Get all users with their deleted retention settings
-	var users []models.User
-	if err := h.db.Find(&users).Error; err != nil {
-		logger.Error("Deleted items cleanup: failed to fetch users", "error", err)
-		return
-	}
-
 	totalFiles := 0
 	totalFolders := 0
 	totalBytes := int64(0)
 
-	for _, user := range users {
-		// Determine retention days for this user
-		retentionDays := h.cfg.DeletedRetentionDays
-		if user.DeletedRetentionDays != nil {
-			retentionDays = *user.DeletedRetentionDays
+	// Process users in batches to avoid loading all users into memory
+	const batchSize = 100
+	var lastID uint = 0
+
+	for {
+		var users []models.User
+		if err := h.db.Where("id > ?", lastID).Order("id").Limit(batchSize).Find(&users).Error; err != nil {
+			logger.Error("Deleted items cleanup: failed to fetch users", "error", err)
+			return
+		}
+		if len(users) == 0 {
+			break
 		}
 
-		// Skip if retention is 0 (means keep forever, which shouldn't happen with deleted items)
-		// or negative (disabled)
-		if retentionDays <= 0 {
-			continue
-		}
+		for _, user := range users {
+			// Determine retention days for this user
+			retentionDays := h.cfg.DeletedRetentionDays
+			if user.DeletedRetentionDays != nil {
+				retentionDays = *user.DeletedRetentionDays
+			}
 
-		cutoffTime := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour)
-
-		// Find expired deleted files for this user
-		var expiredFiles []models.File
-		if err := h.db.Where("user_id = ? AND trashed_at IS NOT NULL AND trashed_at < ?", user.ID, cutoffTime).
-			Find(&expiredFiles).Error; err != nil {
-			logger.Error("Deleted items cleanup: failed to find expired files", "user_id", user.ID, "error", err)
-			continue
-		}
-
-		// Permanently delete expired files
-		for _, file := range expiredFiles {
-			if err := h.permanentlyDeleteFile(ctx, &file); err != nil {
-				logger.Error("Deleted items cleanup: failed to delete file", "file_id", file.ID, "error", err)
+			// Skip if retention is 0 (means keep forever, which shouldn't happen with deleted items)
+			// or negative (disabled)
+			if retentionDays <= 0 {
 				continue
 			}
-			totalFiles++
-			totalBytes += file.FileSize
-		}
 
-		// Find expired deleted folders for this user
-		var expiredFolders []models.Folder
-		if err := h.db.Where("user_id = ? AND trashed_at IS NOT NULL AND trashed_at < ?", user.ID, cutoffTime).
-			Find(&expiredFolders).Error; err != nil {
-			logger.Error("Deleted items cleanup: failed to find expired folders", "user_id", user.ID, "error", err)
-			continue
-		}
+			cutoffTime := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour)
 
-		// Permanently delete expired folders
-		for _, folder := range expiredFolders {
-			if err := h.db.Delete(&folder).Error; err != nil {
-				logger.Error("Deleted items cleanup: failed to delete folder", "folder_id", folder.ID, "error", err)
+			// Find expired deleted files for this user
+			var expiredFiles []models.File
+			if err := h.db.Where("user_id = ? AND trashed_at IS NOT NULL AND trashed_at < ?", user.ID, cutoffTime).
+				Find(&expiredFiles).Error; err != nil {
+				logger.Error("Deleted items cleanup: failed to find expired files", "user_id", user.ID, "error", err)
 				continue
 			}
-			totalFolders++
+
+			// Permanently delete expired files
+			for _, file := range expiredFiles {
+				if err := h.permanentlyDeleteFile(ctx, &file); err != nil {
+					logger.Error("Deleted items cleanup: failed to delete file", "file_id", file.ID, "error", err)
+					continue
+				}
+				totalFiles++
+				totalBytes += file.FileSize
+			}
+
+			// Find expired deleted folders for this user
+			var expiredFolders []models.Folder
+			if err := h.db.Where("user_id = ? AND trashed_at IS NOT NULL AND trashed_at < ?", user.ID, cutoffTime).
+				Find(&expiredFolders).Error; err != nil {
+				logger.Error("Deleted items cleanup: failed to find expired folders", "user_id", user.ID, "error", err)
+				continue
+			}
+
+			// Permanently delete expired folders
+			for _, folder := range expiredFolders {
+				if err := h.db.Delete(&folder).Error; err != nil {
+					logger.Error("Deleted items cleanup: failed to delete folder", "folder_id", folder.ID, "error", err)
+					continue
+				}
+				totalFolders++
+			}
 		}
+
+		lastID = users[len(users)-1].ID
 	}
 
 	if totalFiles > 0 || totalFolders > 0 {
@@ -205,11 +218,19 @@ func (h *DeletedHandler) ShowDeleted(w http.ResponseWriter, r *http.Request) {
 
 	// Get deleted files
 	var allFiles []models.File
-	h.db.Where("user_id = ? AND trashed_at IS NOT NULL", user.ID).Find(&allFiles)
+	if err := h.db.Where("user_id = ? AND trashed_at IS NOT NULL", user.ID).Find(&allFiles).Error; err != nil {
+		logger.Error("Failed to fetch deleted files", "user_id", user.ID, "error", err)
+		http.Error(w, "Failed to load deleted items", http.StatusInternalServerError)
+		return
+	}
 
 	// Get deleted folders
 	var allFolders []models.Folder
-	h.db.Where("user_id = ? AND trashed_at IS NOT NULL", user.ID).Find(&allFolders)
+	if err := h.db.Where("user_id = ? AND trashed_at IS NOT NULL", user.ID).Find(&allFolders).Error; err != nil {
+		logger.Error("Failed to fetch deleted folders", "user_id", user.ID, "error", err)
+		http.Error(w, "Failed to load deleted items", http.StatusInternalServerError)
+		return
+	}
 
 	// Sort files naturally by filename
 	sort.Slice(allFiles, func(i, j int) bool {
@@ -565,24 +586,34 @@ func (h *DeletedHandler) PermanentlyDeleteFolder(w http.ResponseWriter, r *http.
 	ctx := r.Context()
 	folderPath := folder.FolderPath
 
-	// Find and delete all files in this folder and subfolders
-	var files []models.File
-	escapedFolderPath := escapeSQLLike(folderPath)
-	h.db.Where("user_id = ? AND (logical_path = ? OR logical_path LIKE ? ESCAPE '\\') AND trashed_at IS NOT NULL",
-		user.ID, folderPath, escapedFolderPath+"/%").Find(&files)
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		// Find and delete all files in this folder and subfolders
+		var files []models.File
+		escapedFolderPath := escapeSQLLike(folderPath)
+		tx.Where("user_id = ? AND (logical_path = ? OR logical_path LIKE ? ESCAPE '\\') AND trashed_at IS NOT NULL",
+			user.ID, folderPath, escapedFolderPath+"/%").Find(&files)
 
-	for _, file := range files {
-		if err := h.permanentlyDeleteFile(ctx, &file); err != nil {
-			logger.Error("Failed to delete file", "file_id", file.ID, "error", err)
+		for _, file := range files {
+			if err := h.permanentlyDeleteFile(ctx, &file); err != nil {
+				logger.Error("Failed to delete file", "file_id", file.ID, "error", err)
+			}
 		}
+
+		// Delete all subfolders
+		if err := tx.Unscoped().Where("user_id = ? AND folder_path LIKE ? ESCAPE '\\' AND trashed_at IS NOT NULL",
+			user.ID, escapedFolderPath+"/%").Delete(&models.Folder{}).Error; err != nil {
+			return err
+		}
+
+		// Delete the folder itself
+		return tx.Unscoped().Delete(&folder).Error
+	})
+
+	if err != nil {
+		flash.Error(w, "Failed to permanently delete folder")
+		http.Redirect(w, r, "/deleted", http.StatusSeeOther)
+		return
 	}
-
-	// Delete all subfolders
-	h.db.Unscoped().Where("user_id = ? AND folder_path LIKE ? ESCAPE '\\' AND trashed_at IS NOT NULL",
-		user.ID, escapedFolderPath+"/%").Delete(&models.Folder{})
-
-	// Delete the folder itself
-	h.db.Unscoped().Delete(&folder)
 
 	// Use original path if available, otherwise fall back to a generic message
 	folderName := extractFolderName(folder.OriginalFolderPath)
@@ -606,7 +637,11 @@ func (h *DeletedHandler) EmptyDeleted(w http.ResponseWriter, r *http.Request) {
 
 	// Find all deleted files
 	var files []models.File
-	h.db.Where("user_id = ? AND trashed_at IS NOT NULL", user.ID).Find(&files)
+	if err := h.db.Where("user_id = ? AND trashed_at IS NOT NULL", user.ID).Find(&files).Error; err != nil {
+		flash.Error(w, "Failed to empty deleted items")
+		http.Redirect(w, r, "/deleted", http.StatusSeeOther)
+		return
+	}
 
 	deletedCount := 0
 	for _, file := range files {
@@ -618,7 +653,9 @@ func (h *DeletedHandler) EmptyDeleted(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete all deleted folders
-	h.db.Unscoped().Where("user_id = ? AND trashed_at IS NOT NULL", user.ID).Delete(&models.Folder{})
+	if err := h.db.Unscoped().Where("user_id = ? AND trashed_at IS NOT NULL", user.ID).Delete(&models.Folder{}).Error; err != nil {
+		logger.Error("Failed to delete folders", "user_id", user.ID, "error", err)
+	}
 
 	flash.Success(w, fmt.Sprintf("All deleted items permanently removed: %d files", deletedCount))
 	http.Redirect(w, r, "/deleted", http.StatusSeeOther)
