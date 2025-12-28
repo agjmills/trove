@@ -219,7 +219,11 @@ class ChunkedUploadManager {
 	 */
 	async cancelUpload(uploadId) {
 		const session = this.uploadSessions.get(uploadId);
-		if (!session) return;
+		if (!session) {
+			// Fallback to class-level handler if session not found
+			this.onCancel(uploadId);
+			return;
+		}
 
 		session.isCancelled = true;
 
@@ -233,7 +237,8 @@ class ChunkedUploadManager {
 			console.error('Failed to cancel upload on server:', err);
 		}
 
-		session.onCancel(uploadId);
+		const cancelCallback = session.onCancel || this.onCancel;
+		cancelCallback(uploadId);
 		this.uploadSessions.delete(uploadId);
 	}
 
