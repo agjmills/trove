@@ -386,7 +386,16 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Upload to storage backend first to get the generated path
-	finalFile.Seek(0, 0) // Reset file pointer
+	// Reset file pointer before saving to storage
+	if _, err := finalFile.Seek(0, 0); err != nil {
+		logger.Error("failed to seek to beginning of file",
+			"error", err,
+			"sessionID", sessionID,
+			"filename", session.Filename,
+		)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 	saveResult, err := h.storage.Save(r.Context(), finalFile, storage.SaveOptions{
 		OriginalFilename: session.Filename,
 		ContentType:      session.MimeType,
