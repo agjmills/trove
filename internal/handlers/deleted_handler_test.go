@@ -697,8 +697,8 @@ func TestAdminEmptyAllDeletedIntegration(t *testing.T) {
 		w := httptest.NewRecorder()
 		app.deletedHandler.AdminEmptyAllDeleted(w, req)
 
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status 401, got %d", w.Code)
+		if w.Code != http.StatusForbidden {
+			t.Errorf("Expected status 403, got %d", w.Code)
 		}
 	})
 }

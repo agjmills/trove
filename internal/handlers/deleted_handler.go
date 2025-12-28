@@ -586,30 +586,35 @@ func (h *DeletedHandler) PermanentlyDeleteFolder(w http.ResponseWriter, r *http.
 	ctx := r.Context()
 	folderPath := folder.FolderPath
 
-	err := h.db.Transaction(func(tx *gorm.DB) error {
-		// Find and delete all files in this folder and subfolders
-		var files []models.File
-		escapedFolderPath := escapeSQLLike(folderPath)
-		tx.Where("user_id = ? AND (logical_path = ? OR logical_path LIKE ? ESCAPE '\\') AND trashed_at IS NOT NULL",
-			user.ID, folderPath, escapedFolderPath+"/%").Find(&files)
+	// Find and delete all files in this folder and subfolders
+	var files []models.File
+	escapedFolderPath := escapeSQLLike(folderPath)
+	if err := h.db.Where("user_id = ? AND (logical_path = ? OR logical_path LIKE ? ESCAPE '\\') AND trashed_at IS NOT NULL",
+		user.ID, folderPath, escapedFolderPath+"/%").Find(&files).Error; err != nil {
+		logger.Error("Failed to fetch files in folder", "folder_id", folderID, "error", err)
+		flash.Error(w, "Failed to permanently delete folder")
+		http.Redirect(w, r, "/deleted", http.StatusSeeOther)
+		return
+	}
 
-		for _, file := range files {
-			if err := h.permanentlyDeleteFile(ctx, &file); err != nil {
-				logger.Error("Failed to delete file", "file_id", file.ID, "error", err)
-			}
+	for _, file := range files {
+		if err := h.permanentlyDeleteFile(ctx, &file); err != nil {
+			logger.Error("Failed to delete file", "file_id", file.ID, "error", err)
 		}
+	}
 
-		// Delete all subfolders
-		if err := tx.Unscoped().Where("user_id = ? AND folder_path LIKE ? ESCAPE '\\' AND trashed_at IS NOT NULL",
-			user.ID, escapedFolderPath+"/%").Delete(&models.Folder{}).Error; err != nil {
-			return err
-		}
+	// Delete all subfolders
+	if err := h.db.Unscoped().Where("user_id = ? AND folder_path LIKE ? ESCAPE '\\' AND trashed_at IS NOT NULL",
+		user.ID, escapedFolderPath+"/%").Delete(&models.Folder{}).Error; err != nil {
+		logger.Error("Failed to delete subfolders", "folder_id", folderID, "error", err)
+		flash.Error(w, "Failed to permanently delete folder")
+		http.Redirect(w, r, "/deleted", http.StatusSeeOther)
+		return
+	}
 
-		// Delete the folder itself
-		return tx.Unscoped().Delete(&folder).Error
-	})
-
-	if err != nil {
+	// Delete the folder itself
+	if err := h.db.Unscoped().Delete(&folder).Error; err != nil {
+		logger.Error("Failed to delete folder", "folder_id", folderID, "error", err)
 		flash.Error(w, "Failed to permanently delete folder")
 		http.Redirect(w, r, "/deleted", http.StatusSeeOther)
 		return
