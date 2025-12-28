@@ -185,8 +185,11 @@ class ChunkedUploadManager {
 		}
 
 		const result = await response.json();
-		session.onComplete(result);
-		this.uploadSessions.delete(uploadId);
+		try {
+			await session.onComplete(result);
+		} finally {
+			this.uploadSessions.delete(uploadId);
+		}
 		return result;
 	}
 
