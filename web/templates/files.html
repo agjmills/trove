@@ -910,14 +910,16 @@
 		
 		// Add folders from the current view
 		{{range .Folders}}
-		{{if eq $.CurrentFolder "/"}}
-		const folderPath{{.ID}} = {{printf "/%s" .Name | jsStr}};
-		{{else}}
-		const folderPath{{.ID}} = {{printf "%s/%s" $.CurrentFolder .Name | jsStr}};
-		{{end}}
-		// Exclude the folder being moved and its subfolders
-		if (folderPath{{.ID}} !== sourcePath && !folderPath{{.ID}}.startsWith(sourcePath + '/')) {
-			allFolders.push(folderPath{{.ID}});
+		{
+			{{if eq $.CurrentFolder "/"}}
+			const folderPath = {{printf "/%s" .Name | jsStr}};
+			{{else}}
+			const folderPath = {{printf "%s/%s" $.CurrentFolder .Name | jsStr}};
+			{{end}}
+			// Exclude the folder being moved and its subfolders
+			if (folderPath !== sourcePath && !folderPath.startsWith(sourcePath + '/')) {
+				allFolders.push(folderPath);
+			}
 		}
 		{{end}}
 		
