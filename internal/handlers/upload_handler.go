@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/agjmills/trove/internal/auth"
@@ -24,9 +25,10 @@ import (
 )
 
 type UploadHandler struct {
-	db      *gorm.DB
-	cfg     *config.Config
-	storage storage.StorageBackend
+	db         *gorm.DB
+	cfg        *config.Config
+	storage    storage.StorageBackend
+	chunkMutex sync.Mutex // Protects concurrent chunk updates
 }
 
 func NewUploadHandler(db *gorm.DB, cfg *config.Config, storage storage.StorageBackend) *UploadHandler {
@@ -247,7 +249,8 @@ func (h *UploadHandler) UploadChunk(w http.ResponseWriter, r *http.Request) {
 		"size", written,
 	)
 
-	// Update session
+	// Update session with mutex to prevent concurrent modifications
+	h.chunkMutex.Lock()
 	chunksReceived = append(chunksReceived, chunkNum)
 	chunksReceivedJSON, _ := json.Marshal(chunksReceived)
 
@@ -258,10 +261,12 @@ func (h *UploadHandler) UploadChunk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Model(&session).Updates(updates).Error; err != nil {
+		h.chunkMutex.Unlock()
 		logger.Error("failed to update upload session", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	h.chunkMutex.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -376,17 +381,26 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate storage path
-	storagePath := uuid.New().String()
+	// Upload to storage backend first to get the generated path
+	finalFile.Seek(0, 0) // Reset file pointer
+	saveResult, err := h.storage.Save(r.Context(), finalFile, storage.SaveOptions{
+		OriginalFilename: session.Filename,
+		ContentType:      session.MimeType,
+	})
+	if err != nil {
+		logger.Error("failed to upload to storage", "error", err)
+		http.Error(w, "Failed to upload file", http.StatusInternalServerError)
+		return
+	}
 
-	// Create file record
+	// Create file record with storage-generated path
 	file := models.File{
 		UserID:           userID,
-		StoragePath:      storagePath,
+		StoragePath:      saveResult.Path,
 		LogicalPath:      session.LogicalPath,
 		Filename:         session.Filename,
 		OriginalFilename: session.Filename,
-		FileSize:         session.TotalSize,
+		FileSize:         saveResult.Size,
 		MimeType:         session.MimeType,
 		Hash:             calculatedHash,
 		UploadStatus:     "uploading",
@@ -394,20 +408,9 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.db.Create(&file).Error; err != nil {
 		logger.Error("failed to create file record", "error", err)
+		// Clean up uploaded file
+		h.storage.Delete(r.Context(), saveResult.Path)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	// Upload to storage backend
-	finalFile.Seek(0, 0) // Reset file pointer
-	_, err = h.storage.Save(r.Context(), finalFile, storage.SaveOptions{
-		OriginalFilename: session.Filename,
-		ContentType:      session.MimeType,
-	})
-	if err != nil {
-		logger.Error("failed to upload to storage", "error", err)
-		h.db.Delete(&file)
-		http.Error(w, "Failed to upload file", http.StatusInternalServerError)
 		return
 	}
 

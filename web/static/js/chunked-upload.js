@@ -262,13 +262,16 @@ class ChunkedUploadManager {
 	}
 
 	/**
-	 * Calculate SHA-256 hash of file
+	 * Calculate SHA-256 hash of entire file
 	 */
 	async calculateFileHash(file) {
 		const chunkSize = 64 * 1024 * 1024; // 64MB chunks for hashing
 		const chunks = Math.ceil(file.size / chunkSize);
-		const hashBuffer = await crypto.subtle.digest('SHA-256', await file.slice(0, Math.min(chunkSize, file.size)).arrayBuffer());
-		return Array.from(new Uint8Array(hashBuffer))
+		
+		// Hash the entire file by processing it in chunks
+		const hashDigest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+		
+		return Array.from(new Uint8Array(hashDigest))
 			.map(b => b.toString(16).padStart(2, '0'))
 			.join('');
 	}
