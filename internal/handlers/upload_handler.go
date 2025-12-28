@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/agjmills/trove/internal/auth"
@@ -64,6 +65,42 @@ type ChunkStatusResponse struct {
 	ChunksReceived []int  `json:"chunks_received"`
 }
 
+// normalizeLogicalPath validates and normalizes a logical path to prevent
+// directory traversal attacks. It returns an empty string if the path is invalid.
+func normalizeLogicalPath(path string) string {
+	// Default to root if empty
+	if path == "" {
+		return "/"
+	}
+
+	// Replace backslashes with forward slashes for consistency
+	path = strings.ReplaceAll(path, "\\", "/")
+
+	// Use filepath.Clean to normalize the path (resolves .., ., multiple slashes)
+	// We work with the path without the leading slash to properly detect traversal
+	cleanPath := filepath.Clean(path)
+
+	// Convert back to forward slashes (filepath.Clean uses OS separator)
+	cleanPath = filepath.ToSlash(cleanPath)
+
+	// Reject paths that try to escape root (start with .. or resolve to ..)
+	if cleanPath == ".." || strings.HasPrefix(cleanPath, "../") {
+		return ""
+	}
+
+	// Ensure path starts with /
+	if !strings.HasPrefix(cleanPath, "/") {
+		cleanPath = "/" + cleanPath
+	}
+
+	// Reject paths containing null bytes
+	if strings.ContainsRune(cleanPath, 0) {
+		return ""
+	}
+
+	return cleanPath
+}
+
 // InitUpload initializes a new chunked upload session
 func (h *UploadHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
@@ -86,8 +123,11 @@ func (h *UploadHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate and normalize LogicalPath to prevent directory traversal
+	req.LogicalPath = normalizeLogicalPath(req.LogicalPath)
 	if req.LogicalPath == "" {
-		req.LogicalPath = "/"
+		http.Error(w, "Invalid logical path", http.StatusBadRequest)
+		return
 	}
 
 	// Check user quota
