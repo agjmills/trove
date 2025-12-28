@@ -195,9 +195,20 @@
 				<div class="h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden mb-2">
 					<div id="upload-progress-fill" class="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300 rounded-full" style="width: 0%"></div>
 				</div>
-				<div class="flex justify-between text-xs text-gray-600 dark:text-gray-400">
+				<div class="flex justify-between items-center text-xs text-gray-600 dark:text-gray-400 mb-2">
 					<span id="upload-speed">Speed: calculating...</span>
 					<span id="upload-eta">Time remaining: calculating...</span>
+				</div>
+				<div class="flex gap-2 justify-end">
+					<button id="pause-upload-btn" class="hidden px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded transition-colors">
+						Pause
+					</button>
+					<button id="resume-upload-btn" class="hidden px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
+						Resume
+					</button>
+					<button id="cancel-upload-btn" class="hidden px-3 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 rounded transition-colors">
+						Cancel
+					</button>
 				</div>
 			</div>
 		</div>
@@ -402,6 +413,9 @@
 		{{end}}
 	</main>
 </div>
+
+<!-- Chunked Upload Script -->
+<script src="/static/js/chunked-upload.js"></script>
 
 <script>
 	// SSE connection for real-time status updates
@@ -1028,6 +1042,13 @@
 		return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 	}
 
+	// Chunked upload manager instance
+	const chunkSize = 5 * 1024 * 1024; // 5MB chunks (configurable)
+	const chunkedUploadManager = new ChunkedUploadManager({ chunkSize });
+	let currentUploadId = null;
+	let uploadStartTime = null;
+	let uploadBytesStart = 0;
+
 	// Function to upload file with progress tracking
 	function uploadFile(file) {
 		// Start SSE connection for status updates
@@ -1046,9 +1067,86 @@
 			return;
 		}
 
+		const folder = uploadForm.querySelector('input[name="folder"]').value;
+
+		// Determine if we should use chunked upload (for files > 10MB)
+		const useChunkedUpload = file.size > 10 * 1024 * 1024;
+
+		if (useChunkedUpload) {
+			uploadFileChunked(file, folder);
+		} else {
+			uploadFileTraditional(file, folder);
+		}
+	}
+
+	// Chunked upload for large files (resumable)
+	function uploadFileChunked(file, folder) {
+		isUploading = true;
+		uploadStartTime = Date.now();
+		uploadBytesStart = 0;
+
+		// Show progress UI
+		uploadButton.classList.add('hidden');
+		progressContainer.classList.remove('hidden');
+		uploadFilename.textContent = file.name;
+		uploadPercentage.textContent = '0%';
+		progressFill.style.width = '0%';
+		document.getElementById('upload-speed').textContent = 'Speed: calculating...';
+		document.getElementById('upload-eta').textContent = 'Time remaining: calculating...';
+		document.getElementById('pause-upload-btn').classList.remove('hidden');
+		document.getElementById('cancel-upload-btn').classList.remove('hidden');
+		document.getElementById('resume-upload-btn').classList.add('hidden');
+
+		chunkedUploadManager.startUpload(file, {
+			folder,
+			onProgress: (progress) => {
+				currentUploadId = progress.uploadId;
+				const percentage = progress.percentage;
+				progressFill.style.width = percentage + '%';
+				uploadPercentage.textContent = percentage + '%';
+
+				// Calculate speed and ETA
+				const currentTime = Date.now();
+				const elapsedSeconds = (currentTime - uploadStartTime) / 1000;
+				const uploadedBytes = progress.uploadedBytes;
+				
+				if (elapsedSeconds > 0.5) {
+					const speed = uploadedBytes / elapsedSeconds;
+					const remainingBytes = file.size - uploadedBytes;
+					const eta = speed > 0 ? remainingBytes / speed : 0;
+
+					document.getElementById('upload-speed').textContent = 'Speed: ' + formatBytes(speed) + '/s';
+					
+					if (eta > 0) {
+						const etaFormatted = eta < 60 
+							? Math.round(eta) + 's' 
+							: Math.floor(eta / 60) + 'm ' + Math.round(eta % 60) + 's';
+						document.getElementById('upload-eta').textContent = 'Time remaining: ' + etaFormatted;
+					}
+				}
+			},
+			onComplete: (result) => {
+				isUploading = false;
+				currentUploadId = null;
+				// Success - reload page to show updated file list
+				window.location.reload();
+			},
+			onError: (error) => {
+				isUploading = false;
+				currentUploadId = null;
+				alert('Upload failed: ' + error.message);
+				progressContainer.classList.add('hidden');
+				uploadButton.classList.remove('hidden');
+				checkSSENeeded();
+			}
+		});
+	}
+
+	// Traditional upload for small files
+	function uploadFileTraditional(file, folder) {
 		const formData = new FormData();
 		formData.append('file', file);
-		formData.append('folder', uploadForm.querySelector('input[name="folder"]').value);
+		formData.append('folder', folder);
 		formData.append('csrf_token', document.getElementById('csrf-token').value);
 
 		// Mark upload as active for beforeunload warning
@@ -1062,6 +1160,10 @@
 		progressFill.style.width = '0%';
 		document.getElementById('upload-speed').textContent = 'Speed: calculating...';
 		document.getElementById('upload-eta').textContent = 'Time remaining: calculating...';
+		// Hide pause/resume/cancel for traditional upload
+		document.getElementById('pause-upload-btn').classList.add('hidden');
+		document.getElementById('resume-upload-btn').classList.add('hidden');
+		document.getElementById('cancel-upload-btn').classList.add('hidden');
 
 		// Create XHR for upload with progress tracking
 		const xhr = new XMLHttpRequest();
@@ -1157,6 +1259,34 @@
 		xhr.open('POST', '/upload');
 		xhr.send(formData);
 	}
+
+	// Pause/Resume/Cancel button handlers
+	document.getElementById('pause-upload-btn').addEventListener('click', function() {
+		if (currentUploadId) {
+			chunkedUploadManager.pauseUpload(currentUploadId);
+			document.getElementById('pause-upload-btn').classList.add('hidden');
+			document.getElementById('resume-upload-btn').classList.remove('hidden');
+		}
+	});
+
+	document.getElementById('resume-upload-btn').addEventListener('click', function() {
+		if (currentUploadId) {
+			chunkedUploadManager.resumeUpload(currentUploadId);
+			document.getElementById('resume-upload-btn').classList.add('hidden');
+			document.getElementById('pause-upload-btn').classList.remove('hidden');
+		}
+	});
+
+	document.getElementById('cancel-upload-btn').addEventListener('click', function() {
+		if (currentUploadId && confirm('Are you sure you want to cancel this upload?')) {
+			chunkedUploadManager.cancelUpload(currentUploadId);
+			currentUploadId = null;
+			isUploading = false;
+			progressContainer.classList.add('hidden');
+			uploadButton.classList.remove('hidden');
+			checkSSENeeded();
+		}
+	});
 
 	// Prevent default drag behaviors on the entire page
 	['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {

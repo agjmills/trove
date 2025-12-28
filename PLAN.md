@@ -31,6 +31,14 @@ Self-hostable file storage in Go with server-side rendering, minimal JS, Docker 
 - [x] Hash-based deduplication (SHA-256)
 - [x] Streaming uploads for large files (multi-GB support)
 - [x] Client-side file size and quota validation
+- [x] Rename files and folders
+- [x] Move files and folders between directories
+- [x] Resumable chunked uploads with pause/resume/cancel
+  - Chunked upload API for files > 10MB
+  - Automatic retry on network failures
+  - Persistent upload sessions with 24h expiration
+  - Background cleanup of abandoned uploads
+  - SHA-256 hash verification on completion
 
 ### Web Interface ✅
 - [x] Layout template with navigation
@@ -158,8 +166,16 @@ storage_used, is_admin, created_at, updated_at
 
 ### Files
 ```sql
-id, user_id (fk), filename, original_filename, file_path, file_size,
-mime_type, hash (SHA-256, indexed), folder_path, created_at, updated_at
+id, user_id (fk), filename, original_filename, storage_path, logical_path,
+file_size, mime_type, hash (SHA-256, indexed), upload_status, folder_path,
+created_at, updated_at, trashed_at
+```
+
+### UploadSessions
+```sql
+id (UUID), user_id (fk), filename, logical_path, total_size, total_chunks,
+chunk_size, received_chunks, chunks_received (JSON), status, temp_dir,
+created_at, updated_at, expires_at
 ```
 
 ### Sessions
@@ -179,7 +195,11 @@ download_count, max_downloads, created_at
 
 **Protected**: `/dashboard` (file list), `/upload`, `POST /upload`, `/files/:id/view`, 
 `/files/:id/download`, `POST /files/:id/delete`, `POST /files/:id/rename`, 
-`POST /files/:id/move`, `/settings`, `POST /settings`, `/storage`
+`POST /files/:id/move`, `POST /folders/create`, `POST /folders/rename`,
+`POST /folders/move`, `POST /folders/delete/:name`, `/settings`, `POST /settings`, `/storage`
+
+**Upload API**: `POST /api/uploads/init`, `POST /api/uploads/:id/chunk`, 
+`POST /api/uploads/:id/complete`, `DELETE /api/uploads/:id`, `GET /api/uploads/:id/status`
 
 **Admin**: `/admin` (dashboard), `/admin/users` (user management), 
 `POST /admin/users/create`, `POST /admin/users/:id/toggle-admin`,
@@ -204,9 +224,14 @@ DB_USER=trove
 DB_PASSWORD=changeme
 
 # Storage
+STORAGE_BACKEND=disk              # or s3, memory
 STORAGE_PATH=./data/files
 DEFAULT_USER_QUOTA=10G            # Supports: B, K/KB, M/MB, G/GB, T/TB
 MAX_UPLOAD_SIZE=500M              # Supports: B, K/KB, M/MB, G/GB, T/TB
+
+# Chunked Uploads
+UPLOAD_CHUNK_SIZE=5M              # Default chunk size for resumable uploads
+UPLOAD_SESSION_TIMEOUT=24h        # How long upload sessions remain valid
 
 # Security
 SESSION_SECRET=changeme_generate_random_secret
@@ -265,11 +290,24 @@ Tailwind CSS migration with dark mode, responsive design, system preference dete
 
 ## Current Status
 
-**Working**: Full authentication system with alexedwards/scs session management, file upload/download/delete with SHA-256 deduplication, folder organization, drag-and-drop uploads, upload progress tracking, pagination, CSRF protection, custom error pages, Tailwind CSS with responsive dark mode, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints, production-ready Docker image (~18MB), pluggable storage backends (disk/S3/memory), comprehensive unit tests (88+ tests, 70-90% coverage), streaming uploads for multi-GB files, health checks and Prometheus metrics, admin dashboard with user management, integration tests for handlers and routes
+**Working**: Full authentication system with alexedwards/scs session management, file upload/download/delete with SHA-256 deduplication, folder organization with rename/move operations, drag-and-drop uploads, resumable chunked uploads with pause/resume/cancel, upload progress tracking, pagination, CSRF protection, custom error pages, Tailwind CSS with responsive dark mode, mobile optimizations, human-readable size configuration (10G, 500M), file size validation with descriptive errors, comprehensive security headers, rate limiting on authentication endpoints, production-ready Docker image (~18MB), pluggable storage backends (disk/S3/memory), comprehensive unit tests (90+ tests, 70-90% coverage), streaming uploads for multi-GB files, health checks and Prometheus metrics, admin dashboard with user management, integration tests for handlers and routes
 
 **Next**: Template caching, performance optimization, file sharing links
 
 **Recent**:
+- ✅ Implemented resumable chunked uploads with pause/resume/cancel
+  - Minimal REST API for upload management (init, chunk, complete, cancel, status)
+  - Client-side chunking with automatic retry (ChunkedUploadManager)
+  - Files > 10MB use chunked upload, < 10MB use traditional upload
+  - Upload sessions expire after 24h (configurable)
+  - Hourly background cleanup of abandoned uploads
+  - SHA-256 hash verification on completion
+  - Pause/Resume/Cancel UI controls
+  - See RESUMABLE_UPLOADS.md for details
+- ✅ Added file and folder rename/move operations
+  - Rename files and folders via modal dialogs
+  - Move files and folders between directories with dropdown selection
+  - Maintains logical paths and updates folder structure
 - ✅ Added comprehensive integration tests for handlers and routes
 - ✅ Implemented admin dashboard with user management
   - First registered user automatically becomes admin

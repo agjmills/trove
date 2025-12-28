@@ -81,6 +81,19 @@ func main() {
 	versionInfo := fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date)
 	fileHandler, deletedHandler := routes.Setup(r, db, cfg, storageService, sessionManager, versionInfo)
 
+	// Start upload session cleanup worker
+	uploadCleanupTicker := time.NewTicker(1 * time.Hour)
+	defer uploadCleanupTicker.Stop()
+
+	uploadHandler := handlers.NewUploadHandler(db, cfg, storageService)
+	go func() {
+		for range uploadCleanupTicker.C {
+			if err := uploadHandler.CleanupExpiredSessions(); err != nil {
+				logger.Error("upload cleanup failed", "error", err)
+			}
+		}
+	}()
+
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	logger.Info("starting trove server",
 		"address", addr,

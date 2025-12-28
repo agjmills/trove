@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -44,6 +45,10 @@ type Config struct {
 	// Deleted items configuration
 	DeletedRetentionDays      int // Default number of days to retain deleted files (0 = permanent delete immediately)
 	DeletedCleanupIntervalMin int // Interval in minutes between deleted items cleanup runs
+
+	// Chunked upload configuration
+	UploadChunkSize       int64         // Default chunk size for resumable uploads (e.g., 5MB)
+	UploadSessionTimeout  time.Duration // How long upload sessions remain active
 
 	// TrustedProxyCIDRs is a list of CIDR ranges (e.g., "127.0.0.1/32", "10.0.0.0/8")
 	// from which X-Forwarded-Proto headers will be trusted for CSRF origin validation.
@@ -85,6 +90,8 @@ func Load() (*Config, error) {
 		EnableFileDeduplication:   getEnvBool("ENABLE_FILE_DEDUPLICATION", true),
 		DeletedRetentionDays:      getEnvInt("DELETED_RETENTION_DAYS", 30),
 		DeletedCleanupIntervalMin: getEnvInt("DELETED_CLEANUP_INTERVAL_MIN", 60),
+		UploadChunkSize:           getEnvSize("UPLOAD_CHUNK_SIZE", "5M"),
+		UploadSessionTimeout:      getEnvDuration("UPLOAD_SESSION_TIMEOUT", "24h"),
 		TrustedProxyCIDRs:         getEnvStringSlice("TRUSTED_PROXY_CIDRS", nil),
 		CORSAllowedOrigins:        getEnvStringSlice("CORS_ALLOWED_ORIGINS", nil),
 	}
@@ -217,4 +224,18 @@ func getEnvSize(key string, defaultValue string) int64 {
 	}
 	log.Printf("getEnvSize: parsed %s to %d bytes", value, size)
 	return size
+}
+
+// getEnvDuration parses duration strings like "24h", "30m" or raw values
+func getEnvDuration(key string, defaultValue string) time.Duration {
+	value := getEnv(key, defaultValue)
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		log.Printf("getEnvDuration: parse failed for %s: %v, trying default", value, err)
+		if defaultDuration, defaultErr := time.ParseDuration(defaultValue); defaultErr == nil {
+			return defaultDuration
+		}
+		return 24 * time.Hour // Fallback to 24 hours
+	}
+	return duration
 }
