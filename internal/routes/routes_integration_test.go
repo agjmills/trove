@@ -88,11 +88,12 @@ func newRouteTestApp(t *testing.T) *routeTestApp {
 	memStorage := storage.NewMemoryBackend()
 
 	router := chi.NewRouter()
-	fileHandler := Setup(router, db, cfg, memStorage, sessionManager, "test-version")
+	fileHandler, deletedHandler := Setup(router, db, cfg, memStorage, sessionManager, "test-version")
 
 	// Ensure cleanup
 	t.Cleanup(func() {
 		fileHandler.Shutdown()
+		deletedHandler.Shutdown()
 	})
 
 	return &routeTestApp{
@@ -376,9 +377,10 @@ func TestRegistrationDisabled(t *testing.T) {
 
 	// Re-setup routes with new config
 	router := chi.NewRouter()
-	fileHandler := Setup(router, app.db, app.cfg, app.storage, app.sessionManager, "test-version")
+	fileHandler, deletedHandler := Setup(router, app.db, app.cfg, app.storage, app.sessionManager, "test-version")
 	t.Cleanup(func() {
 		fileHandler.Shutdown()
+		deletedHandler.Shutdown()
 	})
 
 	t.Run("GET register returns 404", func(t *testing.T) {
@@ -582,9 +584,10 @@ func TestCSRFProtection(t *testing.T) {
 	memStorage := storage.NewMemoryBackend()
 
 	router := chi.NewRouter()
-	fileHandler := Setup(router, db, cfg, memStorage, sessionManager, "test-version")
+	fileHandler, deletedHandler := Setup(router, db, cfg, memStorage, sessionManager, "test-version")
 	t.Cleanup(func() {
 		fileHandler.Shutdown()
+		deletedHandler.Shutdown()
 	})
 
 	// Create a user for testing

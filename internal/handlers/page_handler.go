@@ -60,7 +60,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := (page - 1) * pageSize
 
-	// Get direct subfolders from Folders table
+	// Get direct subfolders from Folders table (exclude deleted)
 	var folders []models.Folder
 	if currentFolder == "/" {
 		// Root level: get folders that don't contain additional slashes after the first one
@@ -71,6 +71,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 			AND folder_path NOT LIKE '%/%/%'
 			AND LENGTH(folder_path) - LENGTH(REPLACE(folder_path, '/', '')) = 1
 			AND deleted_at IS NULL
+			AND trashed_at IS NULL
 			ORDER BY folder_path
 		`, user.ID).Scan(&folders)
 	} else {
@@ -81,18 +82,20 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 			AND folder_path LIKE ?
 			AND folder_path NOT LIKE ?
 			AND deleted_at IS NULL
+			AND trashed_at IS NULL
 			ORDER BY folder_path
 		`, user.ID, currentFolder+"/%", currentFolder+"/%/%").Scan(&folders)
 	}
 
 	// Also check for implicit folders (folders that only exist because files are in them)
+	// Exclude deleted files
 	type implicitFolderPath struct {
 		LogicalPath string
 	}
 	var implicitFolders []implicitFolderPath
 	h.db.Model(&models.File{}).
 		Select("DISTINCT logical_path").
-		Where("user_id = ? AND logical_path LIKE ? AND logical_path != ?",
+		Where("user_id = ? AND logical_path LIKE ? AND logical_path != ? AND trashed_at IS NULL",
 			user.ID, currentFolder+"/%", currentFolder).
 		Scan(&implicitFolders)
 
@@ -155,8 +158,9 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 
 	// Get all files in current folder for natural sorting
 	// Exclude failed uploads - they are shown as toast notifications instead
+	// Exclude deleted files
 	var allFiles []models.File
-	h.db.Where("user_id = ? AND logical_path = ? AND upload_status != ?", user.ID, currentFolder, "failed").Find(&allFiles)
+	h.db.Where("user_id = ? AND logical_path = ? AND upload_status != ? AND trashed_at IS NULL", user.ID, currentFolder, "failed").Find(&allFiles)
 
 	// Sort files naturally (handles "file2" before "file10" correctly)
 	sort.Slice(allFiles, func(i, j int) bool {
@@ -214,8 +218,17 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 
 	// Get any failed uploads for this user to show as toast notifications
 	// These will be auto-dismissed after being shown to the user
+	// Exclude deleted files
 	var failedUploads []models.File
-	h.db.Where("user_id = ? AND upload_status = ?", user.ID, "failed").Find(&failedUploads)
+	h.db.Where("user_id = ? AND upload_status = ? AND trashed_at IS NULL", user.ID, "failed").Find(&failedUploads)
+
+	// Count deleted items for nav badge (single query for both files and folders)
+	var deletedCount int64
+	h.db.Raw(`
+		SELECT 
+			(SELECT COUNT(*) FROM files WHERE user_id = ? AND trashed_at IS NOT NULL AND deleted_at IS NULL) +
+			(SELECT COUNT(*) FROM folders WHERE user_id = ? AND trashed_at IS NOT NULL AND deleted_at IS NULL) AS total
+	`, user.ID, user.ID).Scan(&deletedCount)
 
 	render(w, "files.html", map[string]any{
 		"Title":         "Files",
@@ -233,5 +246,6 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		"FullWidth":     true,
 		"MaxUploadSize": h.cfg.MaxUploadSize,
 		"FailedUploads": failedUploads,
+		"DeletedCount":  deletedCount,
 	})
 }

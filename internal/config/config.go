@@ -41,6 +41,10 @@ type Config struct {
 	EnableRegistration      bool
 	EnableFileDeduplication bool
 
+	// Deleted items configuration
+	DeletedRetentionDays      int // Default number of days to retain deleted files (0 = permanent delete immediately)
+	DeletedCleanupIntervalMin int // Interval in minutes between deleted items cleanup runs
+
 	// TrustedProxyCIDRs is a list of CIDR ranges (e.g., "127.0.0.1/32", "10.0.0.0/8")
 	// from which X-Forwarded-Proto headers will be trusted for CSRF origin validation.
 	// If empty, X-Forwarded-Proto is never trusted and r.TLS is used to detect HTTPS.
@@ -56,35 +60,41 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		Port:                    getEnv("PORT", "8080"),
-		Host:                    getEnv("HOST", "0.0.0.0"),
-		Env:                     getEnv("ENV", "development"),
-		DBType:                  getEnv("DB_TYPE", "sqlite"),
-		DBHost:                  getEnv("DB_HOST", "localhost"),
-		DBPort:                  getEnv("DB_PORT", "5432"),
-		DBName:                  getEnv("DB_NAME", "trove"),
-		DBUser:                  getEnv("DB_USER", "trove"),
-		DBPassword:              getEnv("DB_PASSWORD", ""),
-		DBPath:                  getEnv("DB_PATH", "./data/trove.db"),
-		StorageBackend:          getEnv("STORAGE_BACKEND", "disk"),
-		StoragePath:             getEnv("STORAGE_PATH", "./data/files"),
-		TempDir:                 getEnv("TEMP_DIR", ""),
-		S3Bucket:                getEnv("S3_BUCKET", ""),
-		S3UsePathStyle:          getEnvBool("S3_USE_PATH_STYLE", false),
-		DefaultUserQuota:        getEnvSize("DEFAULT_USER_QUOTA", "10G"),
-		MaxUploadSize:           getEnvSize("MAX_UPLOAD_SIZE", "500M"),
-		SessionSecret:           getEnv("SESSION_SECRET", "change_me_in_production"),
-		SessionDuration:         getEnv("SESSION_DURATION", "168h"),
-		BcryptCost:              getEnvInt("BCRYPT_COST", 10),
-		CSRFEnabled:             getEnvBool("CSRF_ENABLED", true),
-		EnableRegistration:      getEnvBool("ENABLE_REGISTRATION", true),
-		EnableFileDeduplication: getEnvBool("ENABLE_FILE_DEDUPLICATION", true),
-		TrustedProxyCIDRs:       getEnvStringSlice("TRUSTED_PROXY_CIDRS", nil),
-		CORSAllowedOrigins:      getEnvStringSlice("CORS_ALLOWED_ORIGINS", nil),
+		Port:                      getEnv("PORT", "8080"),
+		Host:                      getEnv("HOST", "0.0.0.0"),
+		Env:                       getEnv("ENV", "development"),
+		DBType:                    getEnv("DB_TYPE", "sqlite"),
+		DBHost:                    getEnv("DB_HOST", "localhost"),
+		DBPort:                    getEnv("DB_PORT", "5432"),
+		DBName:                    getEnv("DB_NAME", "trove"),
+		DBUser:                    getEnv("DB_USER", "trove"),
+		DBPassword:                getEnv("DB_PASSWORD", ""),
+		DBPath:                    getEnv("DB_PATH", "./data/trove.db"),
+		StorageBackend:            getEnv("STORAGE_BACKEND", "disk"),
+		StoragePath:               getEnv("STORAGE_PATH", "./data/files"),
+		TempDir:                   getEnv("TEMP_DIR", ""),
+		S3Bucket:                  getEnv("S3_BUCKET", ""),
+		S3UsePathStyle:            getEnvBool("S3_USE_PATH_STYLE", false),
+		DefaultUserQuota:          getEnvSize("DEFAULT_USER_QUOTA", "10G"),
+		MaxUploadSize:             getEnvSize("MAX_UPLOAD_SIZE", "500M"),
+		SessionSecret:             getEnv("SESSION_SECRET", "change_me_in_production"),
+		SessionDuration:           getEnv("SESSION_DURATION", "168h"),
+		BcryptCost:                getEnvInt("BCRYPT_COST", 10),
+		CSRFEnabled:               getEnvBool("CSRF_ENABLED", true),
+		EnableRegistration:        getEnvBool("ENABLE_REGISTRATION", true),
+		EnableFileDeduplication:   getEnvBool("ENABLE_FILE_DEDUPLICATION", true),
+		DeletedRetentionDays:      getEnvInt("DELETED_RETENTION_DAYS", 30),
+		DeletedCleanupIntervalMin: getEnvInt("DELETED_CLEANUP_INTERVAL_MIN", 60),
+		TrustedProxyCIDRs:         getEnvStringSlice("TRUSTED_PROXY_CIDRS", nil),
+		CORSAllowedOrigins:        getEnvStringSlice("CORS_ALLOWED_ORIGINS", nil),
 	}
 
-	if cfg.SessionSecret == "change_me_in_production" && cfg.Env == "production" {
-		return nil, fmt.Errorf("SESSION_SECRET must be set in production")
+	// Validate deleted items configuration
+	if cfg.DeletedRetentionDays < 0 {
+		cfg.DeletedRetentionDays = 0
+	}
+	if cfg.DeletedCleanupIntervalMin < 1 {
+		cfg.DeletedCleanupIntervalMin = 1 // Minimum 1 minute
 	}
 
 	log.Printf("Config loaded: MaxUploadSize=%d bytes (%.2f MB), DefaultUserQuota=%d bytes (%.2f GB)",

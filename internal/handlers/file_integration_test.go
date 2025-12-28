@@ -408,7 +408,7 @@ func TestDownloadIntegration(t *testing.T) {
 	})
 
 	t.Run("download other user's file fails", func(t *testing.T) {
-		otherUser := app.createTestUser(t, "otheruser")
+		otherUser := app.createTestUser(t, "download_otheruser")
 
 		req := app.authenticatedRequest(t, http.MethodGet, fmt.Sprintf("/download/%d", file.ID), nil, otherUser)
 
@@ -445,9 +445,9 @@ func TestDownloadIntegration(t *testing.T) {
 func TestDeleteIntegration(t *testing.T) {
 	app := newFileTestApp(t)
 
-	user := app.createTestUser(t, "deleteuser")
+	user := app.createTestUser(t, "file_deleteuser")
 
-	t.Run("successful file deletion", func(t *testing.T) {
+	t.Run("successful file deletion soft deletes", func(t *testing.T) {
 		file := app.createTestFile(t, user, "todelete.txt", "Delete me")
 
 		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/delete/%d", file.ID), nil, user)
@@ -463,10 +463,16 @@ func TestDeleteIntegration(t *testing.T) {
 			t.Errorf("Expected redirect status 303, got %d", w.Code)
 		}
 
-		// Verify file is deleted from database
+		// Verify file is soft deleted (SoftDeletedAt is set)
 		var deletedFile models.File
-		if err := app.db.First(&deletedFile, file.ID).Error; err == nil {
-			t.Error("File should have been deleted from database")
+		if err := app.db.First(&deletedFile, file.ID).Error; err != nil {
+			t.Error("File should still exist in database after being deleted")
+		}
+		if deletedFile.SoftDeletedAt == nil {
+			t.Error("File should have SoftDeletedAt set after deletion")
+		}
+		if deletedFile.OriginalLogicalPath != "/" {
+			t.Errorf("Expected OriginalLogicalPath to be '/', got '%s'", deletedFile.OriginalLogicalPath)
 		}
 	})
 
@@ -621,7 +627,7 @@ func TestDeleteFolderIntegration(t *testing.T) {
 
 	user := app.createTestUser(t, "delfolder")
 
-	t.Run("delete empty folder", func(t *testing.T) {
+	t.Run("delete empty folder soft deletes", func(t *testing.T) {
 		app.createTestFolder(t, user, "/todelete")
 
 		form := url.Values{}
@@ -641,14 +647,17 @@ func TestDeleteFolderIntegration(t *testing.T) {
 			t.Errorf("Expected redirect status 303, got %d", w.Code)
 		}
 
-		// Verify folder was deleted
+		// Verify folder was soft deleted (SoftDeletedAt is set)
 		var folder models.Folder
-		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/todelete").First(&folder).Error; err == nil {
-			t.Error("Folder should have been deleted")
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/todelete").First(&folder).Error; err != nil {
+			t.Error("Folder should still exist in database after being deleted")
+		}
+		if folder.SoftDeletedAt == nil {
+			t.Error("Folder should have SoftDeletedAt set after deletion")
 		}
 	})
 
-	t.Run("delete folder with files fails", func(t *testing.T) {
+	t.Run("delete folder with files soft deletes all", func(t *testing.T) {
 		app.createTestFolder(t, user, "/withfiles")
 
 		// Create a file in the folder
@@ -678,19 +687,31 @@ func TestDeleteFolderIntegration(t *testing.T) {
 		w := httptest.NewRecorder()
 		app.fileHandler.DeleteFolder(w, req)
 
-		// Should redirect with error (folder not empty)
+		// Should redirect successfully (folder and contents soft deleted)
 		if w.Code != http.StatusSeeOther {
 			t.Errorf("Expected redirect status 303, got %d", w.Code)
 		}
 
-		// Verify folder still exists
+		// Verify folder was soft deleted
 		var folder models.Folder
 		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/withfiles").First(&folder).Error; err != nil {
-			t.Error("Folder should not have been deleted")
+			t.Fatal("Folder should still exist in database")
+		}
+		if folder.SoftDeletedAt == nil {
+			t.Error("Folder should have SoftDeletedAt set after deletion")
+		}
+
+		// Verify file was also soft deleted
+		var deletedFile models.File
+		if err := app.db.First(&deletedFile, file.ID).Error; err != nil {
+			t.Fatal("File should still exist in database")
+		}
+		if deletedFile.SoftDeletedAt == nil {
+			t.Error("File should have SoftDeletedAt set after folder deletion")
 		}
 	})
 
-	t.Run("delete folder with subfolders fails", func(t *testing.T) {
+	t.Run("delete folder with subfolders soft deletes all", func(t *testing.T) {
 		app.createTestFolder(t, user, "/withsub")
 		app.createTestFolder(t, user, "/withsub/child")
 
@@ -707,15 +728,27 @@ func TestDeleteFolderIntegration(t *testing.T) {
 		w := httptest.NewRecorder()
 		app.fileHandler.DeleteFolder(w, req)
 
-		// Should redirect with error
+		// Should redirect successfully
 		if w.Code != http.StatusSeeOther {
 			t.Errorf("Expected redirect status 303, got %d", w.Code)
 		}
 
-		// Verify folder still exists
+		// Verify parent folder was soft deleted
 		var folder models.Folder
 		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/withsub").First(&folder).Error; err != nil {
-			t.Error("Folder should not have been deleted")
+			t.Fatal("Folder should still exist in database")
+		}
+		if folder.SoftDeletedAt == nil {
+			t.Error("Parent folder should have SoftDeletedAt set after deletion")
+		}
+
+		// Verify subfolder was also soft deleted
+		var childFolder models.Folder
+		if err := app.db.Where("user_id = ? AND folder_path = ?", user.ID, "/withsub/child").First(&childFolder).Error; err != nil {
+			t.Fatal("Child folder should still exist in database")
+		}
+		if childFolder.SoftDeletedAt == nil {
+			t.Error("Child folder should have SoftDeletedAt set after parent folder deletion")
 		}
 	})
 
@@ -912,7 +945,7 @@ func TestDismissFailedUpload(t *testing.T) {
 	})
 
 	t.Run("cannot dismiss other user's failed upload", func(t *testing.T) {
-		otherUser := app.createTestUser(t, "otheruser2")
+		otherUser := app.createTestUser(t, "dismiss_otheruser")
 
 		// Create a failed file for the original user
 		failedFile := &models.File{
