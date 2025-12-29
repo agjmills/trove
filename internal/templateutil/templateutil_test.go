@@ -1,6 +1,182 @@
 package templateutil
 
-import "testing"
+import (
+	"html/template"
+	"testing"
+)
+
+func TestFormatBytes(t *testing.T) {
+	tests := []struct {
+		name     string
+		bytes    int64
+		expected string
+	}{
+		{"zero bytes", 0, "0 B"},
+		{"small bytes", 500, "500 B"},
+		{"exactly 1 KB", 1024, "1.0 KB"},
+		{"small KB", 2048, "2.0 KB"},
+		{"exactly 1 MB", 1048576, "1.0 MB"},
+		{"large MB", 52428800, "50.0 MB"},
+		{"exactly 1 GB", 1073741824, "1.0 GB"},
+		{"multiple GB", 5368709120, "5.0 GB"},
+		{"exactly 1 TB", 1099511627776, "1.0 TB"},
+		{"fractional KB", 1536, "1.5 KB"},
+		{"fractional MB", 1572864, "1.5 MB"},
+		{"large value", 10995116277760, "10.0 TB"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FormatBytes(tt.bytes)
+			if result != tt.expected {
+				t.Errorf("FormatBytes(%d) = %q, want %q", tt.bytes, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestStoragePercentage(t *testing.T) {
+	tests := []struct {
+		name     string
+		used     int64
+		quota    int64
+		expected int
+	}{
+		{"zero usage, zero quota", 0, 0, 0},
+		{"zero usage, non-zero quota", 0, 1000, 0},
+		{"half used", 500, 1000, 50},
+		{"full usage", 1000, 1000, 100},
+		{"over quota capped at 100", 1500, 1000, 100},
+		{"small percentage", 10, 1000, 1},
+		{"99 percent", 990, 1000, 99},
+		{"large numbers", 5368709120, 10737418240, 50},
+		{"just over half", 501, 1000, 50},
+		{"just under full", 999, 1000, 99},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := StoragePercentage(tt.used, tt.quota)
+			if result != tt.expected {
+				t.Errorf("StoragePercentage(%d, %d) = %d, want %d", tt.used, tt.quota, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestAdd(t *testing.T) {
+	tests := []struct {
+		a, b, expected int
+	}{
+		{0, 0, 0},
+		{1, 1, 2},
+		{5, 3, 8},
+		{-5, 3, -2},
+		{-5, -3, -8},
+		{100, 200, 300},
+	}
+
+	for _, tt := range tests {
+		result := Add(tt.a, tt.b)
+		if result != tt.expected {
+			t.Errorf("Add(%d, %d) = %d, want %d", tt.a, tt.b, result, tt.expected)
+		}
+	}
+}
+
+func TestMul(t *testing.T) {
+	tests := []struct {
+		a, b, expected int64
+	}{
+		{0, 0, 0},
+		{1, 1, 1},
+		{5, 3, 15},
+		{-5, 3, -15},
+		{-5, -3, 15},
+		{100, 200, 20000},
+		{1024, 1024, 1048576},
+	}
+
+	for _, tt := range tests {
+		result := Mul(tt.a, tt.b)
+		if result != tt.expected {
+			t.Errorf("Mul(%d, %d) = %d, want %d", tt.a, tt.b, result, tt.expected)
+		}
+	}
+}
+
+func TestDiv(t *testing.T) {
+	tests := []struct {
+		name     string
+		a, b     int64
+		expected int64
+	}{
+		{"normal division", 10, 2, 5},
+		{"division with remainder", 10, 3, 3},
+		{"zero numerator", 0, 5, 0},
+		{"division by zero", 10, 0, 0},
+		{"exact division", 100, 10, 10},
+		{"negative division", -10, 2, -5},
+		{"both negative", -10, -2, 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Div(tt.a, tt.b)
+			if result != tt.expected {
+				t.Errorf("Div(%d, %d) = %d, want %d", tt.a, tt.b, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestDivFloat(t *testing.T) {
+	tests := []struct {
+		name     string
+		a, b     uint64
+		expected float64
+	}{
+		{"normal division", 10, 2, 5.0},
+		{"division with decimal", 10, 3, 3.3333333333333335},
+		{"zero numerator", 0, 5, 0.0},
+		{"division by zero", 10, 0, 0.0},
+		{"exact division", 100, 10, 10.0},
+		{"fractional result", 1, 2, 0.5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := DivFloat(tt.a, tt.b)
+			if result != tt.expected {
+				t.Errorf("DivFloat(%d, %d) = %f, want %f", tt.a, tt.b, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMulFloat(t *testing.T) {
+	tests := []struct {
+		a        float64
+		b        int
+		expected float64
+	}{
+		{2.5, 2, 5.0},
+		{0.0, 10, 0.0},
+		{1.5, 3, 4.5},
+		{-2.5, 2, -5.0},
+		{10.5, 0, 0.0},
+		{3.14, 10, 31.4},
+	}
+
+	for _, tt := range tests {
+		result := MulFloat(tt.a, tt.b)
+		// Use a small epsilon for floating point comparison
+		epsilon := 0.0001
+		if diff := result - tt.expected; diff < -epsilon || diff > epsilon {
+			t.Errorf("MulFloat(%f, %d) = %f, want %f", tt.a, tt.b, result, tt.expected)
+		}
+	}
+}
 
 func TestSanitizeID(t *testing.T) {
 	tests := []struct {
@@ -147,3 +323,55 @@ func TestJsStr(t *testing.T) {
 		})
 	}
 }
+
+func TestFuncMap(t *testing.T) {
+	funcMap := FuncMap()
+
+	// Check that all expected functions are present
+	expectedFuncs := []string{
+		"formatBytes",
+		"storagePercentage",
+		"add",
+		"mul",
+		"div",
+		"divFloat",
+		"mulFloat",
+		"sanitizeID",
+		"jsStr",
+	}
+
+	for _, funcName := range expectedFuncs {
+		if _, exists := funcMap[funcName]; !exists {
+			t.Errorf("FuncMap missing expected function: %s", funcName)
+		}
+	}
+
+	// Verify the count matches
+	if len(funcMap) != len(expectedFuncs) {
+		t.Errorf("FuncMap has %d functions, expected %d", len(funcMap), len(expectedFuncs))
+	}
+}
+
+func TestFuncMapIntegration(t *testing.T) {
+	// Test that FuncMap can be used with html/template
+	tmpl, err := template.New("test").Funcs(FuncMap()).Parse(`
+		{{formatBytes 1024}}
+		{{storagePercentage 50 100}}
+		{{add 5 3}}
+		{{mul 4 5}}
+		{{div 10 2}}
+		{{divFloat 10 4}}
+		{{mulFloat 2.5 4}}
+		{{sanitizeID "my folder"}}
+		{{jsStr "test string"}}
+	`)
+
+	if err != nil {
+		t.Fatalf("Failed to parse template with FuncMap: %v", err)
+	}
+
+	if tmpl == nil {
+		t.Fatal("Template should not be nil")
+	}
+}
+
