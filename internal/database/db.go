@@ -224,7 +224,7 @@ func migrateStoragePath(db *gorm.DB) error {
 
 func createSessionsTable(db *gorm.DB) error {
 	// Get the database type
-	dbType := db.Name()
+	dbType := db.Dialector.Name()
 
 	switch dbType {
 	case "postgres":
