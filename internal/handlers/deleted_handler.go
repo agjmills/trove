@@ -10,15 +10,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/maruel/natural"
+	"gorm.io/gorm"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/flash"
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/storage"
-	"github.com/go-chi/chi/v5"
-	"github.com/maruel/natural"
-	"gorm.io/gorm"
 )
 
 // DeletedHandler handles deleted items operations

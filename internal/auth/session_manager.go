@@ -3,11 +3,12 @@ package auth
 import (
 	"time"
 
-	"github.com/agjmills/trove/internal/config"
 	"github.com/alexedwards/scs/postgresstore"
 	"github.com/alexedwards/scs/sqlite3store"
 	"github.com/alexedwards/scs/v2"
 	"gorm.io/gorm"
+
+	"github.com/agjmills/trove/internal/config"
 )
 
 // NewSessionManager creates and configures an scs session manager

@@ -10,11 +10,12 @@ import (
 	"testing"
 
 	csrf "filippo.io/csrf/gorilla"
-	"github.com/agjmills/trove/internal/config"
-	"github.com/agjmills/trove/internal/database/models"
 	"github.com/alexedwards/scs/v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/agjmills/trove/internal/config"
+	"github.com/agjmills/trove/internal/database/models"
 )
 
 func setupTestAuthHandlerWithConfig(t *testing.T, cfg *config.Config) (*AuthHandler, *gorm.DB, *scs.SessionManager) {

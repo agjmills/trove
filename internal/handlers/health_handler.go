@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/agjmills/trove/internal/storage"
 	"gorm.io/gorm"
+
+	"github.com/agjmills/trove/internal/storage"
 )
 
 // HealthHandler handles health check requests

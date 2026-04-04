@@ -15,15 +15,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
+	"github.com/go-chi/chi/v5"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/handlers"
 	"github.com/agjmills/trove/internal/storage"
-	"github.com/alexedwards/scs/v2"
-	"github.com/go-chi/chi/v5"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 func init() {

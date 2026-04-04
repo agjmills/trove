@@ -15,15 +15,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/storage"
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type UploadHandler struct {
@@ -569,8 +570,8 @@ func (h *UploadHandler) CancelUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mark as cancelled
-	if err := h.db.Model(&session).Update("status", "cancelled").Error; err != nil {
+	// Mark as canceled
+	if err := h.db.Model(&session).Update("status", "canceled").Error; err != nil {
 		logger.Error("failed to update session status", "error", err, "upload_id", uploadID)
 		// Attempt cleanup asynchronously even on failure, but return error to client
 		go func() {
@@ -589,7 +590,7 @@ func (h *UploadHandler) CancelUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	logger.Info("upload cancelled", "upload_id", uploadID, "user_id", userID)
+	logger.Info("upload canceled", "upload_id", uploadID, "user_id", userID)
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -689,13 +690,13 @@ func (h *UploadHandler) CleanupExpiredSessions() error {
 		)
 	}
 
-	// Delete old completed/cancelled/expired sessions (older than configured retention period)
+	// Delete old completed/canceled/expired sessions (older than configured retention period)
 	retentionDays := h.cfg.UploadSessionRetentionDays
 	if retentionDays < 0 {
 		retentionDays = 7 // Default to 7 days if negative (not configured); 0 means delete immediately
 	}
 	cutoff := time.Now().AddDate(0, 0, -retentionDays)
-	result := h.db.Where("status IN ? AND updated_at < ?", []string{"completed", "cancelled", "expired"}, cutoff).
+	result := h.db.Where("status IN ? AND updated_at < ?", []string{"completed", "canceled", "expired"}, cutoff).
 		Delete(&models.UploadSession{})
 
 	if result.Error != nil {

@@ -4,9 +4,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/agjmills/trove/internal/database/models"
 	"github.com/alexedwards/scs/v2"
 	"gorm.io/gorm"
+
+	"github.com/agjmills/trove/internal/database/models"
 )
 
 type contextKey string

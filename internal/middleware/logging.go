@@ -4,9 +4,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5/middleware"
+
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/metrics"
-	"github.com/go-chi/chi/v5/middleware"
 )
 
 // responseWriter wraps http.ResponseWriter to capture status code

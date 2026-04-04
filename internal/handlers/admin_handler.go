@@ -7,13 +7,14 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
+	"gorm.io/gorm"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/storage"
-	"github.com/go-chi/chi/v5"
-	"gorm.io/gorm"
 )
 
 type AdminHandler struct {
@@ -362,7 +363,7 @@ func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 	// Delete actual files from storage in the background
 	// TODO: Consider passing an app-lifecycle context for graceful shutdown support
-	// instead of context.Background() so long-running deletions can be cancelled.
+	// instead of context.Background() so long-running deletions can be canceled.
 	if len(files) > 0 {
 		go func(filesToDelete []models.File, username string) {
 			logger.Info("Starting background file deletion", "user", username, "file_count", len(filesToDelete))

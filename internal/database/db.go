@@ -3,14 +3,15 @@ package database
 import (
 	"fmt"
 
-	"github.com/agjmills/trove/internal/config"
-	"github.com/agjmills/trove/internal/database/models"
-	"github.com/agjmills/trove/internal/logger"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
+
+	"github.com/agjmills/trove/internal/config"
+	"github.com/agjmills/trove/internal/database/models"
+	"github.com/agjmills/trove/internal/logger"
 )
 
 func Connect(cfg *config.Config) (*gorm.DB, error) {

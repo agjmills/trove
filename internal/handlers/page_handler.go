@@ -6,12 +6,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/maruel/natural"
+	"gorm.io/gorm"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/flash"
-	"github.com/maruel/natural"
-	"gorm.io/gorm"
 )
 
 type PageHandler struct {

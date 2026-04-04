@@ -11,13 +11,14 @@ import (
 	"testing"
 
 	csrf "filippo.io/csrf/gorilla"
-	"github.com/agjmills/trove/internal/auth"
-	"github.com/agjmills/trove/internal/config"
-	"github.com/agjmills/trove/internal/database/models"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/agjmills/trove/internal/auth"
+	"github.com/agjmills/trove/internal/config"
+	"github.com/agjmills/trove/internal/database/models"
 )
 
 // testApp encapsulates all dependencies for integration tests

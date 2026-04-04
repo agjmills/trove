@@ -6,11 +6,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/alexedwards/scs/v2"
+	"gorm.io/gorm"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
-	"github.com/alexedwards/scs/v2"
-	"gorm.io/gorm"
 )
 
 // isJSONRequest checks if the request expects JSON format.
