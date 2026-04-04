@@ -74,7 +74,7 @@ func Migrate(db *gorm.DB) error {
 }
 
 func migrateStoragePath(db *gorm.DB) error {
-	dbType := db.Name()
+	dbType := db.Dialector.Name()
 
 	// Check if files table exists
 	var tableCount int64
