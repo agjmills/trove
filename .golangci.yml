@@ -1,8 +1,9 @@
 version: "2"
 
 linters:
-  # In some v2 sub-versions, disable-all is the only accepted key here
-  disable-all: true
+  # In this version, global control is moved to the 'presets' key
+  presets:
+    - none
   enable:
     - errcheck
     - govet
@@ -17,8 +18,4 @@ formatters:
     - goimports
   settings:
     goimports:
-      # Ensure this remains an array/list
       local-prefixes: ["github.com/agjmills/trove"]
-
-# We are leaving 'run:' and 'linters-settings:' out entirely to 
-# avoid any "additional properties" errors.
