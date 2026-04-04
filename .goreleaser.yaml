@@ -1,0 +1,84 @@
+version: 2
+
+project_name: trove
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: trove
+    main: ./cmd/server
+    binary: trove
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+dockers_v2:
+  - id: trove
+    dockerfile: Dockerfile
+    images:
+      - ghcr.io/agjmills/trove
+    tags:
+      - "{{ .Tag }}"
+      - latest
+      - "{{ .Major }}"
+      - "{{ .Major }}.{{ .Minor }}"
+    labels:
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.version: "{{ .Tag }}"
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.source: https://github.com/agjmills/trove
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: MIT
+    platforms:
+      - linux/amd64
+      - linux/arm64
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^fix'
+      order: 1
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - '^chore'
+      - '^docs'
+      - '^test'
+
+release:
+  github:
+    owner: agjmills
+    name: trove
+  name_template: "{{ .Tag }}"
