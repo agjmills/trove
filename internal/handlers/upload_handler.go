@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -503,8 +504,13 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 
 	if txErr != nil {
 		logger.Error("failed to complete upload transaction", "error", txErr, "user_id", userID, "filename", session.Filename)
-		// Clean up uploaded file from storage since transaction failed
-		if err := h.storage.Delete(r.Context(), saveResult.Path); err != nil {
+
+		// Use a background context so the delete finishes even if the user disconnects
+		// 10 seconds is usually plenty for a storage deletion
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := h.storage.Delete(cleanupCtx, saveResult.Path); err != nil {
 			logger.Error("failed to delete orphaned file after transaction failure", "error", err, "path", saveResult.Path)
 		}
 		// Clean up temp directory
