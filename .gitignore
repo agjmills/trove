@@ -46,3 +46,4 @@ web/static/css/style.css
 # .idea/
 # .vscode/
 server
+dist/
