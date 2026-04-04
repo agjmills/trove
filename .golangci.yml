@@ -1,7 +1,13 @@
 version: "2"
 
+run:
+  # In v2, the version identifier must also be present in the run block
+  # to satisfy certain CI runners and local strict-mode validation.
+  version: "2"
+
 linters:
-  default: none
+  # 'default: none' is deprecated; use disable-all
+  disable-all: true
   enable:
     - errcheck
     - govet
@@ -9,12 +15,21 @@ linters:
     - staticcheck
     - unused
     - misspell
+  # In v2, settings for most linters stay here
+  settings:
+    # Most linters use this block now instead of a top-level linters-settings
+    misspell:
+      locale: US
 
 formatters:
+  # gofmt and goimports are NO LONGER linters in v2.
+  # They must be enabled in this specific block.
   enable:
     - gofmt
     - goimports
+  settings:
+    goimports:
+      local-prefixes: github.com/agjmills/trove
 
-formatters-settings:
-  goimports:
-    local-prefixes: github.com/agjmills/trove
+# IMPORTANT: Remove any top-level 'linters-settings' or 'formatters-settings'
+# as they will cause the "additional properties not allowed" error.
