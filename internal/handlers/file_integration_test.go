@@ -274,8 +274,8 @@ func TestUploadIntegration(t *testing.T) {
 	t.Run("upload without file fails", func(t *testing.T) {
 		var buf bytes.Buffer
 		writer := multipart.NewWriter(&buf)
-		writer.WriteField("folder", "/")
-		writer.Close()
+		_ = writer.WriteField("folder", "/") //nolint:errcheck
+		_ = writer.Close()                   //nolint:errcheck
 
 		req := httptest.NewRequest(http.MethodPost, "/upload", &buf)
 		req.Header.Set("Content-Type", writer.FormDataContentType())

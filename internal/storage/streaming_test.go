@@ -212,7 +212,7 @@ func TestMemoryBackend_Save_MultiChunk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open saved file: %v", err)
 	}
-	defer rc.Close()
+	defer rc.Close() //nolint:errcheck
 
 	readContent, err := io.ReadAll(rc)
 	if err != nil {
@@ -232,7 +232,7 @@ func TestDiskBackend_Save_MultiChunk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	// Create a 10MB file (larger than the 8MB copyBufferSize)
 	fileSize := 10 * 1024 * 1024
@@ -267,7 +267,7 @@ func TestDiskBackend_Save_MultiChunk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open saved file: %v", err)
 	}
-	defer rc.Close()
+	defer rc.Close() //nolint:errcheck
 
 	readContent, err := io.ReadAll(rc)
 	if err != nil {
@@ -335,7 +335,7 @@ func TestDiskBackend_Save_StreamingError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	// Create a reader that will fail after 100KB
 	testData := make([]byte, 1024*1024) // 1MB
@@ -391,7 +391,7 @@ func TestDiskBackend_Save_EmptyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	reader := bytes.NewReader([]byte{})
 	result, err := backend.Save(context.Background(), reader, SaveOptions{

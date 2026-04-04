@@ -20,11 +20,11 @@ func TestCSRFProtection(t *testing.T) {
 	t.Run("Cross-origin browser POST is rejected", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("success"))
+			_, _ = w.Write([]byte("success")) //nolint:errcheck
 		})
 
 		csrfKey := []byte("test-secret-key-32-bytes-long!!")
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		// Simulate a cross-origin browser request
 		req := httptest.NewRequest("POST", "http://example.com/test", strings.NewReader("data=test"))
@@ -43,11 +43,11 @@ func TestCSRFProtection(t *testing.T) {
 	t.Run("Same-origin browser POST is allowed", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("success"))
+			_, _ = w.Write([]byte("success")) //nolint:errcheck
 		})
 
 		csrfKey := []byte("test-secret-key-32-bytes-long!!")
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		// Simulate a same-origin browser request
 		req := httptest.NewRequest("POST", "http://example.com/test", strings.NewReader("data=test"))
@@ -66,11 +66,11 @@ func TestCSRFProtection(t *testing.T) {
 	t.Run("GET requests work without headers", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("success"))
+			_, _ = w.Write([]byte("success")) //nolint:errcheck
 		})
 
 		csrfKey := []byte("test-secret-key-32-bytes-long!!")
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("GET", "/test", nil)
 		w := httptest.NewRecorder()
@@ -90,7 +90,7 @@ func TestCSRFProtection(t *testing.T) {
 		})
 
 		csrfKey := []byte("test-secret-key-32-bytes-long!!")
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		// API request without browser headers
 		req := httptest.NewRequest("POST", "/test", strings.NewReader("data=test"))
@@ -117,12 +117,12 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("success"))
+		_, _ = w.Write([]byte("success")) //nolint:errcheck
 	})
 
 	t.Run("CLI tool without any browser headers", func(t *testing.T) {
 		// Simulates: curl -X POST http://localhost/api/endpoint -d "data=value"
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "/api/endpoint", strings.NewReader("data=value"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -138,7 +138,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	t.Run("API client with JSON content type", func(t *testing.T) {
 		// Simulates programmatic API access with JSON
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "/api/endpoint", strings.NewReader(`{"key":"value"}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -154,7 +154,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	t.Run("API client with custom User-Agent", func(t *testing.T) {
 		// Simulates API client libraries like requests (Python), axios, etc.
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "/api/endpoint", strings.NewReader("data=value"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -171,7 +171,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	t.Run("Webhook callback without browser headers", func(t *testing.T) {
 		// Simulates incoming webhook from external service
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "/webhooks/callback", strings.NewReader(`{"event":"test"}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -188,7 +188,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	t.Run("Mobile app API client", func(t *testing.T) {
 		// Simulates native mobile app making API requests
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "/api/sync", strings.NewReader(`{"data":"sync"}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -206,7 +206,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	t.Run("Server-to-server integration", func(t *testing.T) {
 		// Simulates backend service calling our API
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "/api/internal", strings.NewReader(`{"action":"sync"}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -223,7 +223,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	t.Run("Request with only Referer header (no Origin)", func(t *testing.T) {
 		// Some older clients only send Referer, not Origin
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "/api/endpoint", strings.NewReader("data=value"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -241,7 +241,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	t.Run("Request with mismatched Origin but no Sec-Fetch-Site", func(t *testing.T) {
 		// Origin header without Sec-Fetch-Site - ambiguous case
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "http://example.com/api", strings.NewReader("data=value"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -260,7 +260,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	t.Run("Request with matching Origin but no Sec-Fetch-Site", func(t *testing.T) {
 		// Origin matches, no Sec-Fetch-Site - should be allowed
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "http://example.com/api", strings.NewReader("data=value"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -277,7 +277,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	t.Run("Browser with Sec-Fetch-Site none (user-initiated navigation)", func(t *testing.T) {
 		// Browser navigating via bookmark or typing URL
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "/api/endpoint", strings.NewReader("data=value"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -296,7 +296,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 		// IMPORTANT: filippo.io/csrf is stricter than gorilla/csrf
 		// It rejects Sec-Fetch-Site: same-site requests (e.g., from subdomains)
 		// This is a behavioral difference that may affect cross-subdomain deployments
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "/api/endpoint", strings.NewReader("data=value"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -314,7 +314,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	t.Run("DELETE request from API client", func(t *testing.T) {
 		// DELETE requests should also work for non-browser clients
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("DELETE", "/api/resource/123", nil)
 		req.Header.Set("Content-Type", "application/json")
@@ -330,7 +330,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	t.Run("PUT request from API client", func(t *testing.T) {
 		// PUT requests should also work for non-browser clients
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("PUT", "/api/resource/123", strings.NewReader(`{"updated":"data"}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -346,7 +346,7 @@ func TestCSRFNonBrowserClients(t *testing.T) {
 
 	t.Run("PATCH request from API client", func(t *testing.T) {
 		// PATCH requests should also work for non-browser clients
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("PATCH", "/api/resource/123", strings.NewReader(`{"field":"value"}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -367,12 +367,12 @@ func TestCSRFBrowserBehavior(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("success"))
+		_, _ = w.Write([]byte("success")) //nolint:errcheck
 	})
 
 	t.Run("Cross-site form submission blocked", func(t *testing.T) {
 		// Simulates malicious cross-site form submission
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "http://victim.com/transfer", strings.NewReader("amount=1000&to=attacker"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -389,7 +389,7 @@ func TestCSRFBrowserBehavior(t *testing.T) {
 
 	t.Run("Cross-site XHR blocked", func(t *testing.T) {
 		// Simulates cross-origin XHR from malicious site
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "http://victim.com/api/action", strings.NewReader(`{"action":"malicious"}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -407,7 +407,7 @@ func TestCSRFBrowserBehavior(t *testing.T) {
 
 	t.Run("Embedded iframe cross-origin blocked", func(t *testing.T) {
 		// Simulates form submission from embedded iframe
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "http://victim.com/settings", strings.NewReader("setting=evil"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -424,7 +424,7 @@ func TestCSRFBrowserBehavior(t *testing.T) {
 
 	t.Run("Same-origin iframe allowed", func(t *testing.T) {
 		// Same-origin iframe submissions should work
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "http://example.com/settings", strings.NewReader("setting=value"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -441,7 +441,7 @@ func TestCSRFBrowserBehavior(t *testing.T) {
 
 	t.Run("AJAX from same origin allowed", func(t *testing.T) {
 		// Normal AJAX from same origin should work
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "http://example.com/api/action", strings.NewReader(`{"data":"test"}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -459,7 +459,7 @@ func TestCSRFBrowserBehavior(t *testing.T) {
 
 	t.Run("Form submission from same origin allowed", func(t *testing.T) {
 		// Normal form submission should work
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		req := httptest.NewRequest("POST", "http://example.com/form", strings.NewReader("field=value"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -489,7 +489,7 @@ func TestCSRFTokenBehavior(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		// POST without any CSRF token
 		req := httptest.NewRequest("POST", "/test", strings.NewReader("data=value"))
@@ -512,7 +512,7 @@ func TestCSRFTokenBehavior(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		protected := csrf.Protect(csrfKey, csrf.Secure(false))(handler)
+		protected := csrf.Protect(csrfKey)(handler)
 
 		// POST with completely invalid token
 		req := httptest.NewRequest("POST", "/test", strings.NewReader("csrf_token=INVALID_TOKEN_12345"))
@@ -534,7 +534,7 @@ func TestRateLimiting(t *testing.T) {
 	t.Run("Rate limiting blocks excessive requests", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("success"))
+			_, _ = w.Write([]byte("success")) //nolint:errcheck
 		})
 
 		// Create rate limiter: allow 5 requests (with burst), then throttle

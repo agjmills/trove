@@ -479,7 +479,7 @@ func TestPermanentlyDeleteFileIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal("File should exist in storage before permanent delete")
 		}
-		reader.Close()
+		_ = reader.Close() //nolint:errcheck
 
 		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/deleted/files/%d/delete", file.ID), user)
 

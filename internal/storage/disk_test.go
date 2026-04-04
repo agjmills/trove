@@ -24,7 +24,7 @@ func TestNewDiskBackend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDiskBackend failed: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	if backend == nil {
 		t.Fatal("NewDiskBackend returned nil backend")
@@ -44,7 +44,7 @@ func TestNewDiskBackend_CreatesNestedDirectories(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDiskBackend failed with nested path: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	if backend == nil {
 		t.Fatal("NewDiskBackend returned nil backend")
@@ -62,7 +62,7 @@ func TestDiskBackend_Save(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	testContent := []byte("Hello, Trove!")
 	reader := bytes.NewReader(testContent)
@@ -116,7 +116,7 @@ func TestDiskBackend_Save_NoExtension(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	testContent := []byte("No extension file")
 	reader := bytes.NewReader(testContent)
@@ -146,7 +146,7 @@ func TestDiskBackend_Save_LargeFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	// Create a 1MB file
 	testContent := make([]byte, 1024*1024)
@@ -187,7 +187,7 @@ func TestDiskBackend_Delete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	ctx := context.Background()
 
@@ -226,7 +226,7 @@ func TestDiskBackend_Delete_NonExistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	// Try to delete a file that doesn't exist - should not error (idempotent)
 	err = backend.Delete(context.Background(), "nonexistent.txt")
@@ -241,7 +241,7 @@ func TestDiskBackend_Stat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	ctx := context.Background()
 
@@ -286,7 +286,7 @@ func TestDiskBackend_Open(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	ctx := context.Background()
 
@@ -305,7 +305,7 @@ func TestDiskBackend_Open(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer rc.Close()
+	defer rc.Close() //nolint:errcheck
 
 	// Read content
 	content, err := io.ReadAll(rc)
@@ -324,7 +324,7 @@ func TestDiskBackend_Open_NonExistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	// Try to open non-existent file
 	_, err = backend.Open(context.Background(), "nonexistent.txt")
@@ -339,7 +339,7 @@ func TestDiskBackend_HealthCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	err = backend.HealthCheck(context.Background())
 	if err != nil {
@@ -353,7 +353,7 @@ func TestDiskBackend_ValidateAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	err = backend.ValidateAccess(context.Background())
 	if err != nil {
@@ -380,7 +380,7 @@ func TestDiskBackend_Save_MultipleConcurrent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	ctx := context.Background()
 
@@ -412,7 +412,7 @@ func TestDiskBackend_CompleteWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
-	defer backend.Close()
+	defer backend.Close() //nolint:errcheck
 
 	ctx := context.Background()
 
@@ -445,7 +445,7 @@ func TestDiskBackend_CompleteWorkflow(t *testing.T) {
 	}
 
 	readContent, err := io.ReadAll(rc)
-	rc.Close()
+	_ = rc.Close() //nolint:errcheck
 	if err != nil {
 		t.Fatalf("Failed to read file: %v", err)
 	}

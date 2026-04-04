@@ -32,12 +32,12 @@ func init() {
 	dir, _ := os.Getwd()
 	for dir != "/" {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			os.Chdir(dir)
+			_ = os.Chdir(dir) //nolint:errcheck
 			break
 		}
 		dir = filepath.Dir(dir)
 	}
-	handlers.LoadTemplates()
+	_ = handlers.LoadTemplates() //nolint:errcheck
 }
 
 // testIPCounter is used to generate unique IP addresses for tests to avoid rate limiting

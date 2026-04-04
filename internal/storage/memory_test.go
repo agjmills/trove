@@ -212,7 +212,7 @@ func TestMemoryBackend_Open(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer rc.Close()
+	defer rc.Close() //nolint:errcheck
 
 	// Read content
 	content, err := io.ReadAll(rc)
@@ -330,7 +330,7 @@ func TestMemoryBackend_CompleteWorkflow(t *testing.T) {
 	}
 
 	readContent, err := io.ReadAll(rc)
-	rc.Close()
+	_ = rc.Close() //nolint:errcheck
 	if err != nil {
 		t.Fatalf("Failed to read file: %v", err)
 	}

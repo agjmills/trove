@@ -96,7 +96,7 @@ func TestChangePassword_Success(t *testing.T) {
 	}
 
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response) //nolint:errcheck
 
 	if response["message"] != "Password changed successfully" {
 		t.Errorf("Expected success message, got: %s", response["message"])
