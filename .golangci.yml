@@ -1,9 +1,8 @@
 version: "2"
 
 linters:
-  # In this version, global control is moved to the 'presets' key
-  presets:
-    - none
+  # We've removed 'disable-all' and 'presets'. 
+  # v2 defaults to 'disable-all: true' when an 'enable' list is provided.
   enable:
     - errcheck
     - govet
