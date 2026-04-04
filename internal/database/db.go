@@ -74,7 +74,7 @@ func Migrate(db *gorm.DB) error {
 }
 
 func migrateStoragePath(db *gorm.DB) error {
-	dbType := db.Dialector.Name()
+	dbType := db.Dialector.Name() // nolint:staticcheck // QF1008: db.Name() is not available on gorm.DB
 
 	// Check if files table exists
 	var tableCount int64
@@ -224,7 +224,7 @@ func migrateStoragePath(db *gorm.DB) error {
 
 func createSessionsTable(db *gorm.DB) error {
 	// Get the database type
-	dbType := db.Dialector.Name()
+	dbType := db.Dialector.Name() // nolint:staticcheck // QF1008: db.Name() is not available on gorm.DB
 
 	switch dbType {
 	case "postgres":
