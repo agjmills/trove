@@ -140,15 +140,6 @@ func getEnvInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
-func getEnvInt64(key string, defaultValue int64) int64 {
-	if value := os.Getenv(key); value != "" {
-		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
-			return intVal
-		}
-	}
-	return defaultValue
-}
-
 func getEnvBool(key string, defaultValue bool) bool {
 	if value := os.Getenv(key); value != "" {
 		if boolVal, err := strconv.ParseBool(value); err == nil {
@@ -190,7 +181,7 @@ func parseSize(sizeStr string) (int64, error) {
 	}
 
 	// Parse size with unit
-	var multiplier int64 = 1
+	var multiplier int64
 	var numStr string
 
 	if strings.HasSuffix(sizeStr, "TB") || strings.HasSuffix(sizeStr, "T") {

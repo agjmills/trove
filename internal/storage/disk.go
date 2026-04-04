@@ -53,7 +53,7 @@ func (d *DiskBackend) Save(ctx context.Context, r io.Reader, opts SaveOptions) (
 	if err != nil {
 		return SaveResult{}, fmt.Errorf("failed to create file: %w", err)
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck
 
 	// Hash while writing using large buffer for better throughput
 	hasher := sha256.New()
@@ -62,7 +62,7 @@ func (d *DiskBackend) Save(ctx context.Context, r io.Reader, opts SaveOptions) (
 
 	size, err := io.CopyBuffer(writer, r, buf)
 	if err != nil {
-		d.root.Remove(filename) // Clean up on error
+		_ = d.root.Remove(filename) // Clean up on error
 		return SaveResult{}, fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -131,26 +131,26 @@ func (d *DiskBackend) ValidateAccess(ctx context.Context) error {
 		return fmt.Errorf("storage write test failed: %w", err)
 	}
 	if _, err := file.Write(testContent); err != nil {
-		file.Close()
-		d.root.Remove(testFilename)
+		_ = file.Close()
+		_ = d.root.Remove(testFilename)
 		return fmt.Errorf("storage write test failed: %w", err)
 	}
-	file.Close()
+	_ = file.Close()
 
 	// Test read
 	readFile, err := d.root.Open(testFilename)
 	if err != nil {
-		d.root.Remove(testFilename)
+		_ = d.root.Remove(testFilename)
 		return fmt.Errorf("storage read test failed: %w", err)
 	}
 	readContent, err := io.ReadAll(readFile)
-	readFile.Close()
+	_ = readFile.Close()
 	if err != nil {
-		d.root.Remove(testFilename)
+		_ = d.root.Remove(testFilename)
 		return fmt.Errorf("storage read test failed: %w", err)
 	}
 	if !bytes.Equal(readContent, testContent) {
-		d.root.Remove(testFilename)
+		_ = d.root.Remove(testFilename)
 		return fmt.Errorf("storage read test failed: content mismatch")
 	}
 

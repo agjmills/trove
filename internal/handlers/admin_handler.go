@@ -68,12 +68,14 @@ func (h *AdminHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render(w, "admin.html", map[string]any{
+	if err := render(w, "admin.html", map[string]any{
 		"Title":     "Admin Dashboard",
 		"User":      user,
 		"Stats":     stats,
 		"FullWidth": true,
-	})
+	}); err != nil {
+		logger.Error("render error", "error", err)
+	}
 }
 
 // ShowUsers displays the user management page
@@ -124,13 +126,15 @@ func (h *AdminHandler) ShowUsers(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	render(w, "admin_users.html", map[string]any{
+	if err := render(w, "admin_users.html", map[string]any{
 		"Title":        "User Management",
 		"User":         user,
 		"Users":        usersWithStats,
 		"FullWidth":    true,
 		"DefaultQuota": h.cfg.DefaultUserQuota,
-	})
+	}); err != nil {
+		logger.Error("render error", "error", err)
+	}
 }
 
 // CreateUserRequest holds the request data for creating a new user
@@ -209,7 +213,7 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if isJSON {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id":       newUser.ID,
 			"username": newUser.Username,
 			"email":    newUser.Email,

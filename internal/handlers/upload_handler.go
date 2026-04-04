@@ -171,7 +171,7 @@ func (h *UploadHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.db.Create(&session).Error; err != nil {
 		logger.Error("failed to create upload session", "error", err)
-		os.RemoveAll(tempDir) // Clean up temp dir
+		_ = os.RemoveAll(tempDir) // Clean up temp dir
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -185,7 +185,7 @@ func (h *UploadHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
 	)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(InitUploadResponse{
+	_ = json.NewEncoder(w).Encode(InitUploadResponse{
 		UploadID:       uploadID,
 		ChunksReceived: []int{},
 	})
@@ -261,12 +261,12 @@ func (h *UploadHandler) UploadChunk(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	defer chunkFile.Close()
+	defer chunkFile.Close() //nolint:errcheck
 
 	written, err := io.Copy(chunkFile, r.Body)
 	if err != nil {
 		logger.Error("failed to write chunk", "error", err)
-		os.Remove(chunkPath)
+		_ = os.Remove(chunkPath)
 		http.Error(w, "Failed to save chunk", http.StatusInternalServerError)
 		return
 	}
@@ -317,13 +317,13 @@ func (h *UploadHandler) UploadChunk(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		logger.Error("failed to update upload session", "error", err)
-		os.Remove(chunkPath)
+		_ = os.Remove(chunkPath)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"chunk":           chunkNum,
 		"received_chunks": len(chunksReceived),
 		"total_chunks":    session.TotalChunks,
@@ -395,7 +395,7 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	defer finalFile.Close()
+	defer finalFile.Close() //nolint:errcheck
 
 	// Calculate hash while assembling
 	hasher := sha256.New()
@@ -412,12 +412,12 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if _, err := io.Copy(multiWriter, chunkFile); err != nil {
-			chunkFile.Close()
+			_ = chunkFile.Close()
 			logger.Error("failed to copy chunk", "error", err, "chunk", chunkNum)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		chunkFile.Close()
+		_ = chunkFile.Close()
 	}
 
 	// Verify hash if provided
@@ -503,7 +503,9 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 	if txErr != nil {
 		logger.Error("failed to complete upload transaction", "error", txErr, "user_id", userID, "filename", session.Filename)
 		// Clean up uploaded file from storage since transaction failed
-		h.storage.Delete(r.Context(), saveResult.Path)
+		if err := h.storage.Delete(r.Context(), saveResult.Path); err != nil {
+			logger.Error("failed to delete orphaned file after transaction failure", "error", err, "path", saveResult.Path)
+		}
 		// Clean up temp directory
 		go func() {
 			if err := os.RemoveAll(session.TempDir); err != nil {
@@ -532,7 +534,7 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 	)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"file_id":  file.ID,
 		"filename": file.Filename,
 		"size":     file.FileSize,
@@ -627,7 +629,7 @@ func (h *UploadHandler) GetUploadStatus(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ChunkStatusResponse{
+	_ = json.NewEncoder(w).Encode(ChunkStatusResponse{
 		UploadID:       session.ID,
 		Status:         session.Status,
 		ReceivedChunks: session.ReceivedChunks,

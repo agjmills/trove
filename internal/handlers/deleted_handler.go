@@ -96,7 +96,7 @@ func (h *DeletedHandler) runCleanup() {
 
 	// Process users in batches to avoid loading all users into memory
 	const batchSize = 100
-	var lastID uint = 0
+	var lastID uint
 
 	for {
 		var users []models.User
@@ -333,7 +333,7 @@ func (h *DeletedHandler) ShowDeleted(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	render(w, "deleted.html", map[string]any{
+	if err := render(w, "deleted.html", map[string]any{
 		"Title":            "Deleted Items",
 		"User":             user,
 		"Files":            fileInfos,
@@ -346,7 +346,9 @@ func (h *DeletedHandler) ShowDeleted(w http.ResponseWriter, r *http.Request) {
 		"TotalDeletedSize": totalDeletedSize,
 		"RetentionDays":    retentionDays,
 		"FullWidth":        true,
-	})
+	}); err != nil {
+		logger.Error("render error", "error", err)
+	}
 }
 
 // extractFolderName gets the last component of a folder path

@@ -69,11 +69,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		if isJSON {
 			http.Error(w, "All fields are required", http.StatusBadRequest)
 		} else {
-			render(w, "register.html", map[string]any{
+			if err := render(w, "register.html", map[string]any{
 				"Title":              "Register",
 				"Error":              "All fields are required",
 				"EnableRegistration": h.cfg.EnableRegistration,
-			})
+			}); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
 		}
 		return
 	}
@@ -124,7 +126,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	if isJSON {
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id":       user.ID,
 			"username": user.Username,
 			"email":    user.Email,
@@ -153,11 +155,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		if isJSON {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		} else {
-			render(w, "login.html", map[string]any{
+			if err := render(w, "login.html", map[string]any{
 				"Title":              "Login",
 				"Error":              "Invalid credentials",
 				"EnableRegistration": h.cfg.EnableRegistration,
-			})
+			}); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
 		}
 		return
 	}
@@ -166,11 +170,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		if isJSON {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		} else {
-			render(w, "login.html", map[string]any{
+			if err := render(w, "login.html", map[string]any{
 				"Title":              "Login",
 				"Error":              "Invalid credentials",
 				"EnableRegistration": h.cfg.EnableRegistration,
-			})
+			}); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
 		}
 		return
 	}
@@ -185,7 +191,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	if isJSON {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id":       user.ID,
 			"username": user.Username,
 			"email":    user.Email,
@@ -205,7 +211,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	if isJSONRequest(r) {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Logged out"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Logged out"})
 	} else {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	}
@@ -220,10 +226,12 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render(w, "login.html", map[string]any{
+	if err := render(w, "login.html", map[string]any{
 		"Title":              "Login",
 		"EnableRegistration": h.cfg.EnableRegistration,
-	})
+	}); err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
 }
 
 func (h *AuthHandler) ShowRegister(w http.ResponseWriter, r *http.Request) {
@@ -238,10 +246,12 @@ func (h *AuthHandler) ShowRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render(w, "register.html", map[string]any{
+	if err := render(w, "register.html", map[string]any{
 		"Title":              "Register",
 		"EnableRegistration": h.cfg.EnableRegistration,
-	})
+	}); err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
 }
 
 func (h *AuthHandler) ShowSettings(w http.ResponseWriter, r *http.Request) {
@@ -251,11 +261,13 @@ func (h *AuthHandler) ShowSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render(w, "settings.html", map[string]any{
+	if err := render(w, "settings.html", map[string]any{
 		"Title":     "Settings",
 		"User":      user,
 		"FullWidth": true,
-	})
+	}); err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
 }
 
 type ChangePasswordRequest struct {
@@ -294,12 +306,14 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		if isJSON {
 			http.Error(w, "All fields are required", http.StatusBadRequest)
 		} else {
-			render(w, "settings.html", map[string]any{
+			if err := render(w, "settings.html", map[string]any{
 				"Title":     "Settings",
 				"User":      user,
 				"Error":     "All fields are required",
 				"FullWidth": true,
-			})
+			}); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
 		}
 		return
 	}
@@ -308,12 +322,14 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		if isJSON {
 			http.Error(w, "New passwords do not match", http.StatusBadRequest)
 		} else {
-			render(w, "settings.html", map[string]any{
+			if err := render(w, "settings.html", map[string]any{
 				"Title":     "Settings",
 				"User":      user,
 				"Error":     "New passwords do not match",
 				"FullWidth": true,
-			})
+			}); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
 		}
 		return
 	}
@@ -322,12 +338,14 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		if isJSON {
 			http.Error(w, "New password must be at least 8 characters", http.StatusBadRequest)
 		} else {
-			render(w, "settings.html", map[string]any{
+			if err := render(w, "settings.html", map[string]any{
 				"Title":     "Settings",
 				"User":      user,
 				"Error":     "New password must be at least 8 characters",
 				"FullWidth": true,
-			})
+			}); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
 		}
 		return
 	}
@@ -336,12 +354,14 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		if isJSON {
 			http.Error(w, "New password must be at most 72 characters", http.StatusBadRequest)
 		} else {
-			render(w, "settings.html", map[string]any{
+			if err := render(w, "settings.html", map[string]any{
 				"Title":     "Settings",
 				"User":      user,
 				"Error":     "New password must be at most 72 characters",
 				"FullWidth": true,
-			})
+			}); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
 		}
 		return
 	}
@@ -358,12 +378,14 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		if isJSON {
 			http.Error(w, "Current password is incorrect", http.StatusUnauthorized)
 		} else {
-			render(w, "settings.html", map[string]any{
+			if err := render(w, "settings.html", map[string]any{
 				"Title":     "Settings",
 				"User":      user,
 				"Error":     "Current password is incorrect",
 				"FullWidth": true,
-			})
+			}); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
 		}
 		return
 	}
@@ -383,13 +405,15 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	if isJSON {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Password changed successfully"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Password changed successfully"})
 	} else {
-		render(w, "settings.html", map[string]any{
+		if err := render(w, "settings.html", map[string]any{
 			"Title":     "Settings",
 			"User":      user,
 			"Success":   "Password changed successfully",
 			"FullWidth": true,
-		})
+		}); err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
 	}
 }
