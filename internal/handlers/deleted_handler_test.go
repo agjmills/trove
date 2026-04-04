@@ -10,13 +10,14 @@ import (
 	"time"
 
 	csrf "filippo.io/csrf/gorilla"
+	"github.com/go-chi/chi/v5"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/storage"
-	"github.com/go-chi/chi/v5"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 // deletedTestApp encapsulates all dependencies for deleted handler integration tests
@@ -479,7 +480,7 @@ func TestPermanentlyDeleteFileIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal("File should exist in storage before permanent delete")
 		}
-		reader.Close()
+		_ = reader.Close() //nolint:errcheck
 
 		req := app.authenticatedRequest(t, http.MethodPost, fmt.Sprintf("/deleted/files/%d/delete", file.ID), user)
 

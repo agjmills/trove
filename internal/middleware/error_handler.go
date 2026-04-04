@@ -41,24 +41,24 @@ func InternalErrorHandler(w http.ResponseWriter, r *http.Request) {
 func renderError(w http.ResponseWriter, page string, data map[string]any) {
 	if errorTemplates == nil {
 		// Fallback if templates aren't loaded
-		fmt.Fprintf(w, "Error: %s", data["Title"])
+		_, _ = fmt.Fprintf(w, "Error: %s", data["Title"])
 		return
 	}
 
 	tmpl, err := errorTemplates.Clone()
 	if err != nil {
-		fmt.Fprintf(w, "Error rendering template: %v", err)
+		_, _ = fmt.Fprintf(w, "Error rendering template: %v", err)
 		return
 	}
 
 	_, err = tmpl.ParseFiles(filepath.Join("web", "templates", page))
 	if err != nil {
-		fmt.Fprintf(w, "Error parsing template: %v", err)
+		_, _ = fmt.Fprintf(w, "Error parsing template: %v", err)
 		return
 	}
 
 	if err := tmpl.ExecuteTemplate(w, "layout.html", data); err != nil {
-		fmt.Fprintf(w, "Error executing template: %v", err)
+		_, _ = fmt.Fprintf(w, "Error executing template: %v", err)
 	}
 }
 

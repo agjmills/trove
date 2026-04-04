@@ -11,12 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agjmills/trove/internal/config"
-	"github.com/agjmills/trove/internal/database/models"
-	"github.com/agjmills/trove/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/agjmills/trove/internal/config"
+	"github.com/agjmills/trove/internal/database/models"
+	"github.com/agjmills/trove/internal/storage"
 )
 
 func setupUploadHandlerTest(t *testing.T) (*UploadHandler, *gorm.DB, *models.User) {
@@ -201,13 +202,13 @@ func TestCancelUpload(t *testing.T) {
 		t.Errorf("Expected status 204, got %d", w.Code)
 	}
 
-	// Verify session marked as cancelled
+	// Verify session marked as canceled
 	if err := db.Where("id = ?", session.ID).First(session).Error; err != nil {
 		t.Fatalf("Failed to reload session: %v", err)
 	}
 
-	if session.Status != "cancelled" {
-		t.Errorf("Expected status 'cancelled', got '%s'", session.Status)
+	if session.Status != "canceled" {
+		t.Errorf("Expected status 'canceled', got '%s'", session.Status)
 	}
 }
 

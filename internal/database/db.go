@@ -3,14 +3,15 @@ package database
 import (
 	"fmt"
 
-	"github.com/agjmills/trove/internal/config"
-	"github.com/agjmills/trove/internal/database/models"
-	"github.com/agjmills/trove/internal/logger"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
+
+	"github.com/agjmills/trove/internal/config"
+	"github.com/agjmills/trove/internal/database/models"
+	"github.com/agjmills/trove/internal/logger"
 )
 
 func Connect(cfg *config.Config) (*gorm.DB, error) {
@@ -73,7 +74,7 @@ func Migrate(db *gorm.DB) error {
 }
 
 func migrateStoragePath(db *gorm.DB) error {
-	dbType := db.Dialector.Name()
+	dbType := db.Dialector.Name() // nolint:staticcheck // QF1008: db.Name() is not available on gorm.DB
 
 	// Check if files table exists
 	var tableCount int64
@@ -223,7 +224,7 @@ func migrateStoragePath(db *gorm.DB) error {
 
 func createSessionsTable(db *gorm.DB) error {
 	// Get the database type
-	dbType := db.Dialector.Name()
+	dbType := db.Dialector.Name() // nolint:staticcheck // QF1008: db.Name() is not available on gorm.DB
 
 	switch dbType {
 	case "postgres":

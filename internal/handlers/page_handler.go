@@ -6,12 +6,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/maruel/natural"
+	"gorm.io/gorm"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/flash"
-	"github.com/maruel/natural"
-	"gorm.io/gorm"
 )
 
 type PageHandler struct {
@@ -103,7 +104,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 
 	// Add explicit folders
 	for _, f := range folders {
-		relativePath := f.FolderPath
+		var relativePath string
 		if currentFolder != "/" {
 			relativePath = strings.TrimPrefix(f.FolderPath, currentFolder+"/")
 		} else {
@@ -116,7 +117,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 
 	// Add implicit folders (only immediate children)
 	for _, sf := range implicitFolders {
-		relativePath := sf.LogicalPath
+		var relativePath string
 		if currentFolder != "/" {
 			relativePath = strings.TrimPrefix(sf.LogicalPath, currentFolder+"/")
 		} else {
@@ -229,7 +230,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 			(SELECT COUNT(*) FROM folders WHERE user_id = ? AND trashed_at IS NOT NULL AND deleted_at IS NULL) AS total
 	`, user.ID, user.ID).Scan(&deletedCount)
 
-	render(w, "files.html", map[string]any{
+	if err := render(w, "files.html", map[string]any{
 		"Title":         "Files",
 		"User":          user,
 		"Files":         files,
@@ -245,5 +246,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		"MaxUploadSize": h.cfg.MaxUploadSize,
 		"FailedUploads": failedUploads,
 		"DeletedCount":  deletedCount,
-	})
+	}); err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
 }

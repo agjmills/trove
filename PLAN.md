@@ -284,6 +284,9 @@ Tailwind CSS migration with dark mode, responsive design, system preference dete
 - [x] Security headers (X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
 - [x] Rate limiting on auth endpoints (5 attempts/15 min per IP with automatic cleanup)
 
+## Discoverability
+- [ ] Add README screenshots (file browser light/dark, upload in progress, admin panel)
+
 ## Performance Targets
 - [ ] Template caching in production
 - [ ] Static asset caching headers

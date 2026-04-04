@@ -1,0 +1,20 @@
+version: "2"
+
+linters:
+  # We've removed 'disable-all' and 'presets'. 
+  # v2 defaults to 'disable-all: true' when an 'enable' list is provided.
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes: ["github.com/agjmills/trove"]

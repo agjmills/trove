@@ -15,15 +15,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
+	"github.com/go-chi/chi/v5"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/handlers"
 	"github.com/agjmills/trove/internal/storage"
-	"github.com/alexedwards/scs/v2"
-	"github.com/go-chi/chi/v5"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 func init() {
@@ -32,12 +33,12 @@ func init() {
 	dir, _ := os.Getwd()
 	for dir != "/" {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			os.Chdir(dir)
+			_ = os.Chdir(dir) //nolint:errcheck
 			break
 		}
 		dir = filepath.Dir(dir)
 	}
-	handlers.LoadTemplates()
+	_ = handlers.LoadTemplates() //nolint:errcheck
 }
 
 // testIPCounter is used to generate unique IP addresses for tests to avoid rate limiting

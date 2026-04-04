@@ -9,12 +9,13 @@ import (
 	"testing"
 
 	csrf "filippo.io/csrf/gorilla"
-	"github.com/agjmills/trove/internal/auth"
-	"github.com/agjmills/trove/internal/config"
-	"github.com/agjmills/trove/internal/database/models"
 	"github.com/maruel/natural"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/agjmills/trove/internal/auth"
+	"github.com/agjmills/trove/internal/config"
+	"github.com/agjmills/trove/internal/database/models"
 )
 
 func setupTestPageHandler(t *testing.T) (*PageHandler, *gorm.DB) {

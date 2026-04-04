@@ -10,12 +10,13 @@ import (
 	"testing"
 
 	csrf "filippo.io/csrf/gorilla"
-	"github.com/agjmills/trove/internal/auth"
-	"github.com/agjmills/trove/internal/config"
-	"github.com/agjmills/trove/internal/database/models"
 	"github.com/alexedwards/scs/v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/agjmills/trove/internal/auth"
+	"github.com/agjmills/trove/internal/config"
+	"github.com/agjmills/trove/internal/database/models"
 )
 
 func setupTestAuthHandler(t *testing.T) (*AuthHandler, *gorm.DB, *scs.SessionManager) {
@@ -96,7 +97,7 @@ func TestChangePassword_Success(t *testing.T) {
 	}
 
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response) //nolint:errcheck
 
 	if response["message"] != "Password changed successfully" {
 		t.Errorf("Expected success message, got: %s", response["message"])

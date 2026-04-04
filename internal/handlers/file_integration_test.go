@@ -14,13 +14,14 @@ import (
 	"time"
 
 	csrf "filippo.io/csrf/gorilla"
+	"github.com/go-chi/chi/v5"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/storage"
-	"github.com/go-chi/chi/v5"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 // fileTestApp encapsulates all dependencies for file handler integration tests
@@ -274,8 +275,8 @@ func TestUploadIntegration(t *testing.T) {
 	t.Run("upload without file fails", func(t *testing.T) {
 		var buf bytes.Buffer
 		writer := multipart.NewWriter(&buf)
-		writer.WriteField("folder", "/")
-		writer.Close()
+		_ = writer.WriteField("folder", "/") //nolint:errcheck
+		_ = writer.Close()                   //nolint:errcheck
 
 		req := httptest.NewRequest(http.MethodPost, "/upload", &buf)
 		req.Header.Set("Content-Type", writer.FormDataContentType())

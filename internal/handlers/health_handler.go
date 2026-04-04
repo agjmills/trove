@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/agjmills/trove/internal/storage"
 	"gorm.io/gorm"
+
+	"github.com/agjmills/trove/internal/storage"
 )
 
 // HealthHandler handles health check requests
@@ -75,7 +76,7 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // checkDatabase verifies database connectivity

@@ -86,7 +86,7 @@ func (s *S3Backend) Save(ctx context.Context, r io.Reader, opts SaveOptions) (Sa
 			if err == nil {
 				contentLength = end
 				// Seek back to original position
-				seeker.Seek(current, io.SeekStart)
+				_, _ = seeker.Seek(current, io.SeekStart)
 			}
 		}
 	}
@@ -230,7 +230,7 @@ func (s *S3Backend) ValidateAccess(ctx context.Context) error {
 		return fmt.Errorf("S3 read access test failed: %w", err)
 	}
 	// Drain and close the response body to allow connection reuse
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
 		return fmt.Errorf("S3 read access test - failed to drain response body: %w", err)
 	}

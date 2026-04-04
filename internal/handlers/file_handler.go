@@ -21,14 +21,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/flash"
 	"github.com/agjmills/trove/internal/storage"
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 type uploadJob struct {
@@ -109,7 +110,7 @@ func (h *FileHandler) processUpload(job uploadJob) {
 	var file models.File
 	if err := h.db.First(&file, job.fileID).Error; err != nil {
 		log.Printf("Upload worker: failed to find file %d: %v", job.fileID, err)
-		os.Remove(job.tempPath)
+		_ = os.Remove(job.tempPath)
 		return
 	}
 
@@ -132,7 +133,7 @@ func (h *FileHandler) processUpload(job uploadJob) {
 		}
 
 		// Clean up temp file
-		os.Remove(job.tempPath)
+		_ = os.Remove(job.tempPath)
 		return
 	}
 
@@ -141,10 +142,10 @@ func (h *FileHandler) processUpload(job uploadJob) {
 	if err != nil {
 		log.Printf("Upload worker: failed to open temp file: %v", err)
 		h.markUploadFailed(file, "Failed to process uploaded file")
-		os.Remove(job.tempPath)
+		_ = os.Remove(job.tempPath)
 		return
 	}
-	defer tempFile.Close()
+	defer tempFile.Close() //nolint:errcheck
 
 	// Upload to storage backend
 	log.Printf("Upload worker: uploading file %d to storage backend", job.fileID)
@@ -156,7 +157,7 @@ func (h *FileHandler) processUpload(job uploadJob) {
 	if err != nil {
 		log.Printf("Upload worker: failed to upload file %d: %v", job.fileID, err)
 		h.markUploadFailed(file, "Storage upload failed")
-		os.Remove(job.tempPath)
+		_ = os.Remove(job.tempPath)
 		return
 	}
 
@@ -168,15 +169,17 @@ func (h *FileHandler) processUpload(job uploadJob) {
 	}).Error; err != nil {
 		log.Printf("Upload worker: failed to update file record: %v", err)
 		// Try to clean up the uploaded file
-		h.storage.Delete(ctx, result.Path)
-		os.Remove(job.tempPath)
+		if err := h.storage.Delete(ctx, result.Path); err != nil {
+			log.Printf("Upload worker: failed to delete orphaned file %s: %v", result.Path, err)
+		}
+		_ = os.Remove(job.tempPath)
 		return
 	}
 
 	log.Printf("Upload worker: successfully uploaded file %d as %s", job.fileID, result.Path)
 
 	// Clean up temp file
-	os.Remove(job.tempPath)
+	_ = os.Remove(job.tempPath)
 }
 
 // CleanupFailedUploads removes failed/pending upload records for a user and restores their storage quota.
@@ -357,7 +360,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	mr := multipart.NewReader(r.Body, boundary)
 
-	var folderPath string = "/"
+	folderPath := "/"
 	var fileProcessed bool
 	var originalFilename string
 	var hash string
@@ -368,7 +371,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	// Ensure temp file cleanup on all exit paths
 	defer func() {
 		if tempFilePath != "" {
-			os.Remove(tempFilePath)
+			_ = os.Remove(tempFilePath)
 		}
 	}()
 
@@ -403,13 +406,13 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 		case "file":
 			if fileProcessed {
-				part.Close()
+				_ = part.Close()
 				continue
 			}
 
 			originalFilename = part.FileName()
 			if originalFilename == "" {
-				part.Close()
+				_ = part.Close()
 				continue
 			}
 
@@ -423,7 +426,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			// Create temp file (use configured temp dir, or system default if empty)
 			tempFile, err := os.CreateTemp(h.cfg.TempDir, "trove-upload-*")
 			if err != nil {
-				part.Close()
+				_ = part.Close()
 				log.Printf("Failed to create temp file in %q: %v", h.cfg.TempDir, err)
 				http.Error(w, "Failed to create temp file", http.StatusInternalServerError)
 				return
@@ -435,8 +438,8 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			multiWriter := io.MultiWriter(tempFile, hasher)
 
 			written, err := io.Copy(multiWriter, part)
-			tempFile.Close()
-			part.Close()
+			_ = tempFile.Close()
+			_ = part.Close()
 
 			if err != nil {
 				var maxBytesErr *http.MaxBytesError
@@ -462,10 +465,10 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			continue
 
 		default:
-			io.Copy(io.Discard, part)
+			_, _ = io.Copy(io.Discard, part)
 		}
 
-		part.Close()
+		_ = part.Close()
 	}
 
 	if !fileProcessed {
@@ -499,7 +502,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		isDuplicate = true
 		log.Printf("Deduplication: hash %s exists, reusing %s (no upload needed)", hash[:16], storagePath)
 		// Can delete temp file immediately
-		defer os.Remove(tempFilePath)
+		defer func() { _ = os.Remove(tempFilePath) }()
 	} else {
 		// New file - will be uploaded in background
 		// Use a placeholder path that will be updated by the worker
@@ -549,7 +552,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			// Queue is full - mark as failed instead of deleting
 			h.markUploadFailed(fileRecord, "Upload queue is full. Please try again later.")
 			// Clean up temp file since no worker will process it
-			os.Remove(tempPathForDB)
+			_ = os.Remove(tempPathForDB)
 		}
 	}
 
@@ -618,7 +621,7 @@ func (h *FileHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build new folder path
-	newFolderPath := currentFolder
+	var newFolderPath string
 	if currentFolder == "/" {
 		newFolderPath = "/" + folderName
 	} else {
@@ -697,7 +700,7 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to open file", http.StatusInternalServerError)
 		return
 	}
-	defer reader.Close()
+	defer reader.Close() //nolint:errcheck
 
 	// Set headers - use Filename for display name
 	w.Header().Set("Content-Type", file.MimeType)
@@ -758,7 +761,7 @@ func (h *FileHandler) Preview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to open file", http.StatusInternalServerError)
 		return
 	}
-	defer reader.Close()
+	defer reader.Close() //nolint:errcheck
 
 	// Set headers for inline display
 	w.Header().Set("Content-Type", file.MimeType)
@@ -1086,7 +1089,7 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 
 	// Send initial connection event
-	fmt.Fprintf(w, "event: connected\ndata: {}\n\n")
+	_, _ = fmt.Fprintf(w, "event: connected\ndata: {}\n\n")
 	flusher.Flush()
 
 	// Track last known state to detect changes
@@ -1172,7 +1175,7 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 						continue
 					}
 
-					fmt.Fprintf(w, "event: status\ndata: %s\n\n", data)
+					_, _ = fmt.Fprintf(w, "event: status\ndata: %s\n\n", data)
 					flusher.Flush()
 				}
 			}
@@ -1198,7 +1201,7 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 								}
 								data, err := json.Marshal(event)
 								if err == nil {
-									fmt.Fprintf(w, "event: status\ndata: %s\n\n", data)
+									_, _ = fmt.Fprintf(w, "event: status\ndata: %s\n\n", data)
 									flusher.Flush()
 								}
 							}
@@ -1682,7 +1685,7 @@ func (h *FileHandler) DismissFailedUpload(w http.ResponseWriter, r *http.Request
 	if err := h.cleanupFailedUpload(file); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
 			"error":   "Failed to dismiss upload: " + err.Error(),
 		})
@@ -1692,5 +1695,5 @@ func (h *FileHandler) DismissFailedUpload(w http.ResponseWriter, r *http.Request
 	// Return success
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }

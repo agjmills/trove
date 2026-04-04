@@ -7,13 +7,14 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
+	"gorm.io/gorm"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/storage"
-	"github.com/go-chi/chi/v5"
-	"gorm.io/gorm"
 )
 
 type AdminHandler struct {
@@ -68,12 +69,14 @@ func (h *AdminHandler) ShowDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render(w, "admin.html", map[string]any{
+	if err := render(w, "admin.html", map[string]any{
 		"Title":     "Admin Dashboard",
 		"User":      user,
 		"Stats":     stats,
 		"FullWidth": true,
-	})
+	}); err != nil {
+		logger.Error("render error", "error", err)
+	}
 }
 
 // ShowUsers displays the user management page
@@ -124,13 +127,15 @@ func (h *AdminHandler) ShowUsers(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	render(w, "admin_users.html", map[string]any{
+	if err := render(w, "admin_users.html", map[string]any{
 		"Title":        "User Management",
 		"User":         user,
 		"Users":        usersWithStats,
 		"FullWidth":    true,
 		"DefaultQuota": h.cfg.DefaultUserQuota,
-	})
+	}); err != nil {
+		logger.Error("render error", "error", err)
+	}
 }
 
 // CreateUserRequest holds the request data for creating a new user
@@ -209,7 +214,7 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if isJSON {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id":       newUser.ID,
 			"username": newUser.Username,
 			"email":    newUser.Email,
@@ -358,7 +363,7 @@ func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 	// Delete actual files from storage in the background
 	// TODO: Consider passing an app-lifecycle context for graceful shutdown support
-	// instead of context.Background() so long-running deletions can be cancelled.
+	// instead of context.Background() so long-running deletions can be canceled.
 	if len(files) > 0 {
 		go func(filesToDelete []models.File, username string) {
 			logger.Info("Starting background file deletion", "user", username, "file_count", len(filesToDelete))

@@ -10,11 +10,12 @@ import (
 	"testing"
 
 	csrf "filippo.io/csrf/gorilla"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 func init() {
@@ -404,9 +405,10 @@ func TestShowFilesImplicitFolders(t *testing.T) {
 		// Currently returns 404 due to bug in folder existence check
 		// When fixed, should return 200
 		// See page_handler.go line 43 - uses folder_path instead of logical_path
-		if w.Code == http.StatusOK {
+		switch w.Code {
+		case http.StatusOK:
 			t.Log("Bug fixed: implicit folder navigation now works")
-		} else if w.Code == http.StatusNotFound {
+		case http.StatusNotFound:
 			t.Log("Known issue: implicit folder navigation returns 404")
 		}
 	})

@@ -5,9 +5,19 @@
 
 <h1 align="center">Trove</h1>
 
-Self-hosted file storage. Your personal Google Drive alternative.
+<p align="center">
+  Self-hosted file storage. Your personal Google Drive alternative.
+</p>
 
-**Simple. Fast. Extensible.**
+<p align="center">
+  <a href="https://github.com/agjmills/trove/actions/workflows/ci.yml"><img src="https://github.com/agjmills/trove/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/agjmills/trove" alt="License: MIT"></a>
+  <img src="https://img.shields.io/github/go-mod/go-version/agjmills/trove" alt="Go version">
+  <a href="https://github.com/agjmills/trove/releases"><img src="https://img.shields.io/github/v/release/agjmills/trove?include_prereleases" alt="Latest release"></a>
+  <a href="https://github.com/agjmills/trove/pkgs/container/trove"><img src="https://img.shields.io/badge/docker-ghcr.io-blue" alt="Docker"></a>
+</p>
+
+<p align="center"><strong>Simple. Fast. Extensible.</strong></p>
 
 ## Features
 
@@ -23,6 +33,20 @@ Self-hosted file storage. Your personal Google Drive alternative.
 - 🐳 Easy Docker deployment with multi-arch support
 - 🗄️ PostgreSQL or SQLite database options
 - 📊 Health checks and Prometheus metrics
+
+## Why Trove?
+
+Trove is for people who want straightforward self-hosted file storage without the overhead of a full cloud suite.
+
+| | Trove | Nextcloud | Seafile |
+|---|---|---|---|
+| **Setup complexity** | Single Docker container | Multi-container, heavy config | Moderate |
+| **Image size** | ~18 MB | ~1 GB+ | ~200 MB |
+| **Storage backends** | Disk, S3/R2/B2, MinIO | Disk, S3 (plugin) | Disk, S3 |
+| **Tech stack** | Go + SQLite/Postgres | PHP + MySQL | Python + MySQL |
+| **Focus** | File storage only | Full office suite | File sync + sharing |
+
+If you just want to store, organize, and share files — without a calendar, contacts app, or office suite — Trove is for you.
 
 ## Quick Start
 
