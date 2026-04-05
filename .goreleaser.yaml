@@ -38,26 +38,6 @@ archives:
 checksum:
   name_template: checksums.txt
 
-dockers_v2:
-  - id: trove
-    dockerfile: Dockerfile
-    images:
-      - ghcr.io/agjmills/trove
-    tags:
-      - "{{ .Tag }}"
-      - latest
-      - "{{ .Major }}"
-      - "{{ .Major }}.{{ .Minor }}"
-    labels:
-      org.opencontainers.image.title: "{{ .ProjectName }}"
-      org.opencontainers.image.version: "{{ .Tag }}"
-      org.opencontainers.image.created: "{{ .Date }}"
-      org.opencontainers.image.source: https://github.com/agjmills/trove
-      org.opencontainers.image.revision: "{{ .FullCommit }}"
-      org.opencontainers.image.licenses: MIT
-    platforms:
-      - linux/amd64
-      - linux/arm64
 
 changelog:
   use: github
