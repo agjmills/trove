@@ -133,6 +133,7 @@ func (h *AdminHandler) ShowUsers(w http.ResponseWriter, r *http.Request) {
 		"Users":        usersWithStats,
 		"FullWidth":    true,
 		"DefaultQuota": h.cfg.DefaultUserQuota,
+		"OIDCEnabled":  h.cfg.OIDCEnabled,
 	}); err != nil {
 		logger.Error("render error", "error", err)
 	}
