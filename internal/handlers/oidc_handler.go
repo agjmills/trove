@@ -136,8 +136,8 @@ func (h *OIDCHandler) findOrProvisionUser(claims oidc.Claims) (*models.User, err
 		}
 
 		// First OIDC login after admin switched identity_provider to "oidc":
-		// find by email, but only for accounts explicitly marked as OIDC.
-		if err := tx.Where("email = ? AND identity_provider = 'oidc' AND oidc_subject = ''", claims.Email).
+		// find by email (case-insensitive), but only for accounts explicitly marked as OIDC.
+		if err := tx.Where("LOWER(email) = LOWER(?) AND identity_provider = 'oidc' AND oidc_subject = ''", claims.Email).
 			First(&user).Error; err == nil {
 			user.OIDCSubject = claims.Subject
 			return h.syncAdminAndSave(tx, &user, claims)
