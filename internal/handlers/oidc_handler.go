@@ -52,6 +52,7 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Validate state to prevent CSRF
 	sessionState := h.sessionManager.GetString(r.Context(), "oidc_state")
 	if sessionState == "" || r.URL.Query().Get("state") != sessionState {
+		logger.Error("oidc callback state mismatch", "remote", r.RemoteAddr)
 		flash.Error(w, "Login failed: invalid state parameter.")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
@@ -70,6 +71,7 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Extract and verify the ID token
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
+		logger.Error("oidc callback missing id_token in token response")
 		flash.Error(w, "Authentication failed: no identity token in response.")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
@@ -85,6 +87,7 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Parse claims
 	var rawClaims map[string]any
 	if err := idToken.Claims(&rawClaims); err != nil {
+		logger.Error("oidc claims parsing failed", "error", err)
 		flash.Error(w, "Authentication failed: could not read identity claims.")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
@@ -92,6 +95,7 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	claims := h.provider.ExtractClaims(rawClaims)
 
 	if claims.Subject == "" || claims.Email == "" {
+		logger.Error("oidc required claims missing", "subject_present", claims.Subject != "", "email_present", claims.Email != "")
 		flash.Error(w, "Authentication failed: missing required claims.")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return

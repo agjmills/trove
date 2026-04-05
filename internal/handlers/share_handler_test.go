@@ -30,7 +30,7 @@ func (s *readableStorage) Open(ctx context.Context, path string) (io.ReadCloser,
 
 func setupShareTest(t *testing.T) (*ShareHandler, *gorm.DB, *models.User) {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
