@@ -60,6 +60,19 @@ type Config struct {
 	// If empty, no CORS headers are sent (same-origin only).
 	// Origins should include scheme (e.g., "https://example.com").
 	CORSAllowedOrigins []string
+
+	// OIDC / SSO configuration
+	OIDCEnabled      bool
+	OIDCIssuerURL    string
+	OIDCClientID     string
+	OIDCClientSecret string
+	OIDCRedirectURL  string   // e.g. "https://trove.example.com/auth/oidc/callback"
+	OIDCScopes       []string // defaults to ["openid", "email", "profile"]
+
+	// Claim mapping
+	OIDCUsernameClaim string // default: "preferred_username"
+	OIDCAdminClaim    string // group/role claim that grants admin (empty = disabled)
+	OIDCAdminValue    string // the value that grants admin (e.g. "trove-admins")
 }
 
 func Load() (*Config, error) {
@@ -96,6 +109,22 @@ func Load() (*Config, error) {
 		UploadSessionRetentionDays: getEnvInt("UPLOAD_SESSION_RETENTION_DAYS", 7),
 		TrustedProxyCIDRs:          getEnvStringSlice("TRUSTED_PROXY_CIDRS", nil),
 		CORSAllowedOrigins:         getEnvStringSlice("CORS_ALLOWED_ORIGINS", nil),
+		OIDCEnabled:                getEnvBool("OIDC_ENABLED", false),
+		OIDCIssuerURL:              getEnv("OIDC_ISSUER_URL", ""),
+		OIDCClientID:               getEnv("OIDC_CLIENT_ID", ""),
+		OIDCClientSecret:           getEnv("OIDC_CLIENT_SECRET", ""),
+		OIDCRedirectURL:            getEnv("OIDC_REDIRECT_URL", ""),
+		OIDCScopes:                 getEnvStringSlice("OIDC_SCOPES", []string{"openid", "email", "profile"}),
+		OIDCUsernameClaim:          getEnv("OIDC_USERNAME_CLAIM", "preferred_username"),
+		OIDCAdminClaim:             getEnv("OIDC_ADMIN_CLAIM", ""),
+		OIDCAdminValue:             getEnv("OIDC_ADMIN_VALUE", ""),
+	}
+
+	// Validate OIDC configuration
+	if cfg.OIDCEnabled {
+		if cfg.OIDCIssuerURL == "" || cfg.OIDCClientID == "" || cfg.OIDCClientSecret == "" || cfg.OIDCRedirectURL == "" {
+			return nil, fmt.Errorf("OIDC_ENABLED=true requires OIDC_ISSUER_URL, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, and OIDC_REDIRECT_URL")
+		}
 	}
 
 	// Validate deleted items configuration
