@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/agjmills/trove/compare/v0.7.2...v0.8.0) (2026-04-05)
+
+
+### Features
+
+* file sharing links ([#77](https://github.com/agjmills/trove/issues/77)) ([a53bdd5](https://github.com/agjmills/trove/commit/a53bdd5255518a4cf9efa135939831e403d72840))
+
 ## [0.7.2](https://github.com/agjmills/trove/compare/v0.7.1...v0.7.2) (2026-04-05)
 
 
