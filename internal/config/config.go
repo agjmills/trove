@@ -71,6 +71,7 @@ type Config struct {
 
 	// Claim mapping
 	OIDCUsernameClaim string // default: "preferred_username"
+	OIDCEmailClaim    string // default: "email"
 	OIDCAdminClaim    string // group/role claim that grants admin (empty = disabled)
 	OIDCAdminValue    string // the value that grants admin (e.g. "trove-admins")
 }
@@ -116,6 +117,7 @@ func Load() (*Config, error) {
 		OIDCRedirectURL:            getEnv("OIDC_REDIRECT_URL", ""),
 		OIDCScopes:                 getEnvStringSlice("OIDC_SCOPES", []string{"openid", "email", "profile"}),
 		OIDCUsernameClaim:          getEnv("OIDC_USERNAME_CLAIM", "preferred_username"),
+		OIDCEmailClaim:             getEnv("OIDC_EMAIL_CLAIM", "email"),
 		OIDCAdminClaim:             getEnv("OIDC_ADMIN_CLAIM", ""),
 		OIDCAdminValue:             getEnv("OIDC_ADMIN_VALUE", ""),
 	}
