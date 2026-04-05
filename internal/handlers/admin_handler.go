@@ -426,3 +426,53 @@ func (h *AdminHandler) ResetUserPassword(w http.ResponseWriter, r *http.Request)
 
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
+
+// UpdateUserIDP sets the identity_provider for a user (e.g. "internal" or "oidc").
+// Switching to "oidc" clears any stored oidc_subject so the link is re-established on next login.
+// Switching back to "internal" also clears oidc_subject.
+func (h *AdminHandler) UpdateUserIDP(w http.ResponseWriter, r *http.Request) {
+	userID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+	idp := r.FormValue("identity_provider")
+	if idp != "internal" && idp != "oidc" {
+		http.Error(w, "Invalid identity provider", http.StatusBadRequest)
+		return
+	}
+
+	var user models.User
+	if err := h.db.First(&user, userID).Error; err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	// Prevent locking yourself out
+	currentUser := auth.GetUser(r)
+	if currentUser.ID == user.ID && idp == "oidc" && user.IdentityProvider == "internal" {
+		http.Error(w, "Cannot switch your own account to OIDC", http.StatusBadRequest)
+		return
+	}
+
+	updates := map[string]any{
+		"identity_provider": idp,
+		"oidc_subject":      "", // always clear; re-linked on next OIDC login
+	}
+	if idp == "internal" {
+		updates["password_hash"] = "" // preserve safety: admin must reset password separately
+	}
+
+	if err := h.db.Model(&user).Updates(updates).Error; err != nil {
+		logger.Error("failed to update user IDP", "error", err, "user_id", userID)
+		http.Error(w, "Failed to update user", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}

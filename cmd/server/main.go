@@ -19,6 +19,7 @@ import (
 	"github.com/agjmills/trove/internal/handlers"
 	"github.com/agjmills/trove/internal/logger"
 	internalMiddleware "github.com/agjmills/trove/internal/middleware"
+	"github.com/agjmills/trove/internal/oidc"
 	"github.com/agjmills/trove/internal/routes"
 	"github.com/agjmills/trove/internal/storage"
 )
@@ -79,8 +80,17 @@ func main() {
 	r.Use(internalMiddleware.RecoverMiddleware)
 	r.Use(internalMiddleware.SecurityHeaders)
 
+	var oidcProvider *oidc.Provider
+	if cfg.OIDCEnabled {
+		oidcProvider, err = oidc.New(context.Background(), cfg)
+		if err != nil {
+			log.Fatalf("Failed to initialize OIDC provider: %v", err)
+		}
+		logger.Info("OIDC provider initialised", "issuer", cfg.OIDCIssuerURL)
+	}
+
 	versionInfo := fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date)
-	fileHandler, deletedHandler := routes.Setup(r, db, cfg, storageService, sessionManager, versionInfo)
+	fileHandler, deletedHandler := routes.Setup(r, db, cfg, storageService, sessionManager, oidcProvider, versionInfo)
 
 	// Start upload session cleanup worker
 	uploadCleanupTicker := time.NewTicker(1 * time.Hour)
