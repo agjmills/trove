@@ -30,6 +30,7 @@
 - 🗑️ Deleted items with configurable retention (per-user settings)
 - 🎨 Tailwind CSS with responsive dark mode (system preference aware)
 - 🔒 Secure by default (CSRF protection, bcrypt, rate limiting)
+- 🔗 File sharing links with optional expiry and use limits
 - 🔑 OIDC/SSO support (Authentik, Authelia, Keycloak, etc.)
 - 🐳 Easy Docker deployment with multi-arch support
 - 🗄️ PostgreSQL or SQLite database options
@@ -384,12 +385,39 @@ Development uses human-readable text format.
 | `POST` | `/folder/create` | Create folder |
 | `POST` | `/folder/delete/{name}` | Delete empty folder |
 
+### Sharing
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/files/{id}/share` | Create a share link |
+| `POST` | `/share/{token}/revoke` | Revoke a share link |
+| `GET` | `/s/{token}` | Download via share link (public) |
+
 ### System
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
 | `GET` | `/metrics` | Prometheus metrics |
+
+## File Sharing
+
+Share links let you hand a direct download URL to anyone — no account required on their end.
+
+Open any file's detail page and expand **Create share link**. You can optionally set:
+
+- **Expiry date** — the link stops working after the end of that day (UTC)
+- **Max uses** — the link stops working after N downloads
+
+The share URL looks like `https://your-trove/s/<token>`. Copy it from the Sharing section with one click.
+
+To revoke a link before it expires or runs out of uses, hit **Revoke** next to it. Revoking is instant and permanent.
+
+**Security notes:**
+- Tokens are 32-byte cryptographically random values — they cannot be guessed
+- Expired, exhausted, and revoked links all return 404 — no information leakage
+- Only the file owner can create or revoke share links for their files
+- Use count is incremented atomically — concurrent requests cannot bypass a max-uses limit
 
 ## Security
 
@@ -414,9 +442,9 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
 - ✅ Production-ready Docker images (~18MB)
 - ✅ Deleted items with configurable retention
 - ✅ OIDC/SSO authentication
+- ✅ File sharing links
 
 **Planned:**
-- File sharing links
 - Version history
 - Thumbnail generation
 - Bulk operations
