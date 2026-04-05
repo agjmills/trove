@@ -16,8 +16,8 @@ type User struct {
 	StorageUsed          int64          `gorm:"not null;default:0" json:"storage_used"`
 	IsAdmin              bool           `gorm:"not null;default:false" json:"is_admin"`
 	DeletedRetentionDays *int           `gorm:"column:trash_retention_days;default:null" json:"deleted_retention_days,omitempty"` // Per-user deleted items retention (nil = use system default)
-	IdentityProvider     string         `gorm:"not null;size:50;default:'internal'" json:"identity_provider"` // "internal" or "oidc"
-	OIDCSubject          string         `gorm:"size:255;index" json:"-"`                                      // OIDC "sub" claim; set on first OIDC login
+	IdentityProvider     string         `gorm:"not null;size:50;default:'internal'" json:"identity_provider"`                     // "internal" or "oidc"
+	OIDCSubject          string         `gorm:"size:255;index" json:"-"`                                                          // OIDC "sub" claim; set on first OIDC login
 	CreatedAt            time.Time      `json:"created_at"`
 	UpdatedAt            time.Time      `json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `gorm:"index" json:"-"`
