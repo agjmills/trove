@@ -3,7 +3,6 @@ package oidc
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -21,12 +20,9 @@ type Provider struct {
 // New performs OIDC discovery against the issuer and returns an initialised Provider.
 // It makes a network request; call once at startup and fail fast on error.
 func New(ctx context.Context, cfg *config.Config) (*Provider, error) {
-	// Trim trailing slash — some providers (e.g. Authentik) are strict about the issuer URL.
-	issuer := strings.TrimRight(cfg.OIDCIssuerURL, "/")
-
-	provider, err := gooidc.NewProvider(ctx, issuer)
+	provider, err := gooidc.NewProvider(ctx, cfg.OIDCIssuerURL)
 	if err != nil {
-		return nil, fmt.Errorf("oidc discovery failed for issuer %q: %w", issuer, err)
+		return nil, fmt.Errorf("oidc discovery failed for issuer %q: %w", cfg.OIDCIssuerURL, err)
 	}
 
 	oauth2Cfg := oauth2.Config{
