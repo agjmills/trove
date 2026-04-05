@@ -75,8 +75,8 @@ type ShareLink struct {
 	CreatedAt time.Time      `json:"created_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
-	File File `gorm:"foreignKey:FileID" json:"-"`
-	User User `gorm:"foreignKey:UserID" json:"-"`
+	File File `gorm:"foreignKey:FileID;constraint:OnDelete:CASCADE" json:"-"`
+	User User `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
 }
 
 // UploadSession tracks state for resumable chunked uploads

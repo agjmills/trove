@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,6 +16,8 @@ import (
 
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/database/models"
+	"github.com/agjmills/trove/internal/flash"
+	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/storage"
 )
 
@@ -101,6 +102,7 @@ func (h *ShareHandler) CreateShareLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	flash.Success(w, "Share link created.")
 	http.Redirect(w, r, "/files/"+strconv.FormatUint(fileID, 10), http.StatusSeeOther)
 }
 
@@ -183,6 +185,6 @@ func (h *ShareHandler) AccessShareLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := io.Copy(w, reader); err != nil {
-		log.Printf("Warning: error streaming shared file %s: %v", link.File.StoragePath, err)
+		logger.Error("error streaming shared file", "path", link.File.StoragePath, "error", err)
 	}
 }
