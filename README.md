@@ -54,22 +54,75 @@ If you just want to store, organize, and share files — without a calendar, con
 
 **Prerequisites:** Docker and Docker Compose
 
-```bash
-git clone https://github.com/agjmills/trove.git
-cd trove
-cp .env.example .env
-make setup
+Create a `docker-compose.yml`:
+
+```yaml
+services:
+  app:
+    image: ghcr.io/agjmills/trove:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - /tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=trove
+      - POSTGRES_USER=trove
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trove"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
 ```
 
-Trove is now running at `http://localhost:8080`
-
-**Using pre-built images:**
+Create a `.env`:
 
 ```bash
-docker pull ghcr.io/agjmills/trove:latest
+ENV=production
+SESSION_SECRET=        # openssl rand -base64 32
+DB_PASSWORD=           # choose a strong password
+DEFAULT_USER_QUOTA=10G
+MAX_UPLOAD_SIZE=500M
+
+# Required when running behind a reverse proxy (Traefik, Nginx, Caddy, etc.)
+# Set to your proxy's Docker network CIDR — check with: docker network inspect <network>
+TRUSTED_PROXY_CIDRS=172.18.0.0/16
 ```
+
+Then:
+
+```bash
+docker compose up -d
+```
+
+Trove will be available at `http://localhost:8080`. The first account you register becomes admin — go to `/register` to set it up.
 
 Multi-arch images available for `linux/amd64` and `linux/arm64`.
+
+> For reverse proxy setup (Traefik, Nginx, Caddy), OIDC, S3 storage, and troubleshooting, see **[INSTALL.md](INSTALL.md)**.
+
+## First-time Setup
+
+1. Deploy and go to `/register` — the first account becomes admin automatically
+2. Set `ENABLE_REGISTRATION=false` in `.env` and restart to lock down signups
+3. Add other users via the admin panel, or let them log in via OIDC
+
+If you're using OIDC only with `ENABLE_REGISTRATION=false`, the first OIDC login on a fresh database auto-provisions an admin account — you won't get locked out.
+
+> The admin panel prevents you from switching your *own* account to OIDC while logged in, to stop you accidentally locking yourself out. Another admin can do it, or you can set the `identity_provider` column directly in the database.
 
 ## Storage Backends
 
@@ -116,104 +169,6 @@ AWS_ACCESS_KEY_ID=minioadmin
 AWS_SECRET_ACCESS_KEY=minioadmin
 ```
 
-**Local development with rustfs:**
-
-```bash
-# Start rustfs (S3-compatible storage)
-docker compose --profile s3 up rustfs -d
-
-# Create the bucket
-AWS_ACCESS_KEY_ID=rustfsadmin AWS_SECRET_ACCESS_KEY=rustfsadmin \
-  aws --endpoint-url http://localhost:9000 s3 mb s3://trove
-
-# Run Trove with S3 backend
-STORAGE_BACKEND=s3 \
-S3_BUCKET=trove \
-S3_USE_PATH_STYLE=true \
-AWS_ENDPOINT_URL=http://localhost:9000 \
-AWS_ACCESS_KEY_ID=rustfsadmin \
-AWS_SECRET_ACCESS_KEY=rustfsadmin \
-go run ./cmd/server
-```
-
-### In-Memory (Testing)
-
-Stores files in memory. Useful for integration tests. Data is lost on restart. Best used in conjunction with sqlite in memory mode for metadata.
-
-```bash
-STORAGE_BACKEND=memory
-```
-
-## Architecture
-
-### File Storage Model
-
-Trove separates physical storage from logical organization:
-
-| Field | Purpose | Example |
-|-------|---------|---------|
-| `StoragePath` | Physical location (UUID-based) | `a48f0152-cbcb-4483.bin` |
-| `LogicalPath` | UI folder hierarchy | `/photos/2024` |
-| `Filename` | Display name (editable) | `vacation.jpg` |
-| `OriginalFilename` | Original upload name (immutable) | `IMG_1234.jpg` |
-
-This design enables:
-- **Backend portability**: Move between disk/S3 without changing file references
-- **Safe storage**: UUID paths prevent path traversal attacks
-- **Flexible organization**: Rename and move files without touching physical storage
-
-### Deduplication
-
-Files are content-addressed by SHA-256 hash. The upload flow ensures duplicates never touch the storage backend:
-
-```
-Client → Temp file (computing SHA-256) → Check DB → Storage (if new)
-```
-
-1. Upload streams to local temp file while computing hash
-2. Database checked for existing file with same hash
-3. **If duplicate**: temp file discarded, new DB record points to existing storage path
-4. **If new**: temp file uploaded to storage backend
-5. Storage quota only charged once per unique file
-
-When deleting files, the physical file is only removed when all references are deleted.
-
-**Note:** Uploads require a writable temp directory. Configure `TEMP_DIR` for containerized deployments (see Configuration).
-
-## Development
-
-```bash
-make dev      # Start with hot-reload
-make test     # Run tests
-make shell    # Container shell
-make psql     # Database console
-```
-
-**Running locally without Docker:**
-
-```bash
-# SQLite (simplest)
-DB_TYPE=sqlite DB_PATH=./data/trove.db go run ./cmd/server
-
-# In-memory database (ephemeral)
-DB_TYPE=sqlite DB_PATH=:memory: go run ./cmd/server
-```
-
-## First-time Setup
-
-The first account registered becomes admin, no seeding required. Just deploy, go to `/register`, and create your account.
-
-If you're running OIDC-only (`ENABLE_REGISTRATION=false`), the first OIDC login on an empty database auto-provisions an admin account. Either way, a fresh install won't lock you out.
-
-**Typical production flow:**
-
-1. Deploy with `ENABLE_REGISTRATION=true` (the default)
-2. Register your admin account at `/register`
-3. Set `ENABLE_REGISTRATION=false` to lock signups down
-4. Add other users via the admin panel, or let them log in via OIDC and flip their IDP in the Users page
-
-> **Note:** The admin panel prevents you from switching your *own* account to OIDC while logged in — just to stop you accidentally locking yourself out. Another admin can switch your account, and OIDC-provisioned accounts can be admins just fine.
-
 ## OIDC / SSO
 
 Trove supports OIDC for single sign-on with Authentik, Authelia, Keycloak, or any other OIDC-compatible provider.
@@ -226,34 +181,36 @@ OIDC_CLIENT_SECRET=your-client-secret
 OIDC_REDIRECT_URL=https://trove.example.com/auth/oidc/callback
 ```
 
-New users are auto-provisioned on first OIDC login. For existing accounts, an admin switches them from `Internal` to `OIDC` via the Users page — they log in once, the subject gets linked, and local password auth is disabled for that account.
+New users are auto-provisioned on first OIDC login. To migrate an existing local account to OIDC:
+
+1. In the admin panel go to **Users** and find the account
+2. Switch their identity provider from `Internal` to `OIDC`
+3. They log in via OIDC — their subject gets linked and local password auth is disabled for that account
 
 | Variable | Default | Description |
 |---|---|---|
 | `OIDC_ENABLED` | `false` | Enable OIDC |
-| `OIDC_ISSUER_URL` | | Provider discovery URL |
+| `OIDC_ISSUER_URL` | | Provider discovery URL (include trailing slash for Authentik) |
 | `OIDC_CLIENT_ID` | | Client ID |
 | `OIDC_CLIENT_SECRET` | | Client secret |
-| `OIDC_REDIRECT_URL` | | Callback URL (`/auth/oidc/callback`) |
+| `OIDC_REDIRECT_URL` | | Callback URL (`https://your-trove/auth/oidc/callback`) |
 | `OIDC_SCOPES` | `openid email profile` | Scopes to request |
 | `OIDC_USERNAME_CLAIM` | `preferred_username` | Claim to use as username |
 | `OIDC_EMAIL_CLAIM` | `email` | Claim to use as email |
 | `OIDC_ADMIN_CLAIM` | | Claim that controls admin status |
-| `OIDC_ADMIN_VALUE` | | Value that grants admin (e.g. `trove-admins`) |
+| `OIDC_ADMIN_VALUE` | | Value that grants admin (e.g. `admins`) |
 
 `OIDC_ADMIN_CLAIM` handles string, array (Authentik/Keycloak groups), and boolean claim shapes automatically.
 
 ## Configuration
 
-Edit `.env` for your setup:
-
 ```bash
 # Server
 TROVE_PORT=8080
-ENV=development                        # or production
+ENV=production                         # development or production
 
 # Database
-DB_TYPE=postgres                       # or sqlite
+DB_TYPE=postgres                       # postgres or sqlite
 DB_HOST=postgres
 DB_NAME=trove
 DB_USER=trove
@@ -264,68 +221,33 @@ STORAGE_BACKEND=disk                   # disk, s3, or memory
 STORAGE_PATH=./data/files              # for disk backend
 TEMP_DIR=/tmp                          # temp directory for uploads
 
-# S3 (if STORAGE_BACKEND=s3) - uses native AWS SDK variables
-S3_BUCKET=trove                        # required
+# S3 (if STORAGE_BACKEND=s3)
+S3_BUCKET=trove
 S3_USE_PATH_STYLE=false                # true for MinIO/rustfs
 # AWS_REGION=us-east-1
 # AWS_ACCESS_KEY_ID=...
 # AWS_SECRET_ACCESS_KEY=...
-# AWS_ENDPOINT_URL=http://localhost:9000  # for S3-compatible services
+# AWS_ENDPOINT_URL=http://localhost:9000
 
 # Limits
-DEFAULT_USER_QUOTA=10G                 # Per-user storage limit
-MAX_UPLOAD_SIZE=500M                   # Max file size per upload
+DEFAULT_USER_QUOTA=10G
+MAX_UPLOAD_SIZE=500M
 
 # Security
-SESSION_SECRET=change-in-production
+SESSION_SECRET=change-in-production    # openssl rand -base64 32
 CSRF_ENABLED=true
+
+# Reverse proxy — set to your proxy's Docker network CIDR
+# Production mode requires this when running behind a proxy
+# Find it with: docker network inspect <network_name> | grep Subnet
+TRUSTED_PROXY_CIDRS=172.18.0.0/16
 ```
 
-See `.env.example` for all options.
+See `.env.example` for all options and [INSTALL.md](INSTALL.md) for detailed deployment guides including reverse proxy setup for Traefik, Nginx, and Caddy.
 
-## Production
+## Development
 
-```bash
-# 1. Setup
-cp .env.example .env
-cp docker-compose.example.yml docker-compose.prod.yml
-
-# 2. Configure
-# Edit .env with production values (strong SESSION_SECRET, etc.)
-
-# 3. Deploy
-docker compose -f docker-compose.prod.yml up -d
-
-# 4. Monitor
-docker compose -f docker-compose.prod.yml logs -f
-```
-
-**Recommended:** Run behind a reverse proxy (Caddy/Nginx) for HTTPS.
-
-### Docker Volumes
-
-For production Docker deployments, ensure writable volumes for:
-
-```yaml
-services:
-  app:
-    volumes:
-      - trove-data:/app/data          # Database and files (disk backend)
-      - trove-temp:/tmp               # Temp directory for uploads
-    environment:
-      - TEMP_DIR=/tmp
-```
-
-### Security Best Practices
-
-- Use a strong `SESSION_SECRET` (generate with `openssl rand -base64 32`)
-- Restrict `/metrics` endpoint access via firewall or reverse proxy auth
-- **Enable HTTPS in production:** Set `ENV=production` for strict CSRF validation
-  - Behind reverse proxy with TLS termination: Ensure `X-Forwarded-Proto` header is forwarded
-- Keep database credentials secure
-- Regularly update to latest version
-
-See [INSTALL.md](INSTALL.md) for detailed deployment options.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, architecture notes, and how to submit changes.
 
 ## Observability
 
@@ -425,7 +347,7 @@ For security-related documentation including CSRF protection details and migrati
 
 ## Contributing
 
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Roadmap
 

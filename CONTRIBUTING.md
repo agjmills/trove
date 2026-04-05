@@ -28,6 +28,64 @@ make dev
 
 The app will be available at `http://localhost:8080` with hot-reload enabled.
 
+**Running locally without Docker:**
+
+```bash
+# SQLite (simplest)
+DB_TYPE=sqlite DB_PATH=./data/trove.db go run ./cmd/server
+
+# In-memory database (ephemeral, useful for quick testing)
+DB_TYPE=sqlite DB_PATH=:memory: go run ./cmd/server
+```
+
+### Makefile targets
+
+```bash
+make dev            # Start with hot-reload
+make test           # Run tests
+make test-coverage  # Run tests with coverage report
+make fmt            # Format code
+make build-css      # Rebuild Tailwind CSS
+make shell          # Container shell
+make psql           # Database console
+```
+
+## Architecture
+
+### File Storage Model
+
+Trove separates physical storage from logical organization:
+
+| Field | Purpose | Example |
+|-------|---------|---------|
+| `StoragePath` | Physical location (UUID-based) | `a48f0152-cbcb-4483.bin` |
+| `LogicalPath` | UI folder hierarchy | `/photos/2024` |
+| `Filename` | Display name (editable) | `vacation.jpg` |
+| `OriginalFilename` | Original upload name (immutable) | `IMG_1234.jpg` |
+
+This design enables:
+- **Backend portability**: Move between disk/S3 without changing file references
+- **Safe storage**: UUID paths prevent path traversal attacks
+- **Flexible organization**: Rename and move files without touching physical storage
+
+### Deduplication
+
+Files are content-addressed by SHA-256 hash. The upload flow ensures duplicates never touch the storage backend:
+
+```
+Client → Temp file (computing SHA-256) → Check DB → Storage (if new)
+```
+
+1. Upload streams to local temp file while computing hash
+2. Database checked for existing file with same hash
+3. **If duplicate**: temp file discarded, new DB record points to existing storage path
+4. **If new**: temp file uploaded to storage backend
+5. Storage quota only charged once per unique file
+
+When deleting files, the physical file is only removed when all references are deleted.
+
+**Note:** Uploads require a writable temp directory. Configure `TEMP_DIR` for containerised deployments.
+
 ## Making Changes
 
 ### Code Style
