@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/agjmills/trove/compare/v0.7.1...v0.7.2) (2026-04-05)
+
+
+### Bug Fixes
+
+* inject version info into docker image via build args ([#75](https://github.com/agjmills/trove/issues/75)) ([d5d72b3](https://github.com/agjmills/trove/commit/d5d72b37562808a299d69b7000350fa9bd4e8638))
+
 ## [0.7.1](https://github.com/agjmills/trove/compare/v0.7.0...v0.7.1) (2026-04-05)
 
 
