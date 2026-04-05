@@ -148,6 +148,12 @@ func (h *ShareHandler) AccessShareLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ensure the file hasn't been trashed or hard-deleted before consuming a use
+	if link.File.ID == 0 || link.File.SoftDeletedAt != nil {
+		http.NotFound(w, r)
+		return
+	}
+
 	// Check max uses and increment atomically
 	if link.MaxUses != nil {
 		updated := h.db.Model(&link).
@@ -159,12 +165,6 @@ func (h *ShareHandler) AccessShareLink(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		h.db.Model(&link).Update("uses", gorm.Expr("uses + 1")) //nolint:errcheck
-	}
-
-	// Ensure the file hasn't been trashed or hard-deleted
-	if link.File.ID == 0 || link.File.SoftDeletedAt != nil {
-		http.NotFound(w, r)
-		return
 	}
 
 	reader, err := h.storage.Open(r.Context(), link.File.StoragePath)

@@ -12,6 +12,7 @@ import (
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
+	"github.com/agjmills/trove/internal/flash"
 )
 
 // isJSONRequest checks if the request expects JSON format.
@@ -231,6 +232,7 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 		"Title":              "Login",
 		"EnableRegistration": h.cfg.EnableRegistration,
 		"OIDCEnabled":        h.cfg.OIDCEnabled,
+		"Flash":              flash.Get(w, r),
 	}); err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
