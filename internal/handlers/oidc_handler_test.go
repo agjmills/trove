@@ -167,6 +167,37 @@ func TestFindOrProvisionUser_LinksOnFirstOIDCLogin(t *testing.T) {
 	}
 }
 
+func TestFindOrProvisionUser_LinksOnFirstOIDCLogin_CaseInsensitiveEmail(t *testing.T) {
+	// Authentik may return a differently-cased email than what is stored.
+	h, db := setupOIDCHandler(t)
+
+	pre := &models.User{
+		Username:         "bob",
+		Email:            "bob@example.com",
+		IdentityProvider: "oidc",
+		OIDCSubject:      "",
+	}
+	db.Create(pre)
+
+	// IdP returns uppercased email
+	user, err := h.findOrProvisionUser(makeClaims("sub-new", "BOB@EXAMPLE.COM", "bob", false))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if user.ID != pre.ID {
+		t.Errorf("expected existing user ID %d, got new user ID %d", pre.ID, user.ID)
+	}
+	if user.OIDCSubject != "sub-new" {
+		t.Errorf("OIDCSubject not stored: got %q", user.OIDCSubject)
+	}
+
+	var count int64
+	db.Model(&models.User{}).Count(&count)
+	if count != 1 {
+		t.Errorf("expected 1 user, got %d", count)
+	}
+}
+
 func TestFindOrProvisionUser_InternalUserEmailBlocksOIDCProvision(t *testing.T) {
 	// An internal user owns carol@example.com. An OIDC login for the same email
 	// must NOT silently link to the internal account, and cannot auto-provision
