@@ -30,6 +30,7 @@
 - 🗑️ Deleted items with configurable retention (per-user settings)
 - 🎨 Tailwind CSS with responsive dark mode (system preference aware)
 - 🔒 Secure by default (CSRF protection, bcrypt, rate limiting)
+- 🔑 OIDC/SSO support (Authentik, Authelia, Keycloak, etc.)
 - 🐳 Easy Docker deployment with multi-arch support
 - 🗄️ PostgreSQL or SQLite database options
 - 📊 Health checks and Prometheus metrics
@@ -196,6 +197,50 @@ DB_TYPE=sqlite DB_PATH=./data/trove.db go run ./cmd/server
 # In-memory database (ephemeral)
 DB_TYPE=sqlite DB_PATH=:memory: go run ./cmd/server
 ```
+
+## First-time Setup
+
+The first account registered becomes admin, no seeding required. Just deploy, go to `/register`, and create your account.
+
+If you're running OIDC-only (`ENABLE_REGISTRATION=false`), the first OIDC login on an empty database auto-provisions an admin account. Either way, a fresh install won't lock you out.
+
+**Typical production flow:**
+
+1. Deploy with `ENABLE_REGISTRATION=true` (the default)
+2. Register your admin account at `/register`
+3. Set `ENABLE_REGISTRATION=false` to lock signups down
+4. Add other users via the admin panel, or let them log in via OIDC and flip their IDP in the Users page
+
+> **Note:** The admin panel prevents you from switching your *own* account to OIDC while logged in — just to stop you accidentally locking yourself out. Another admin can switch your account, and OIDC-provisioned accounts can be admins just fine.
+
+## OIDC / SSO
+
+Trove supports OIDC for single sign-on with Authentik, Authelia, Keycloak, or any other OIDC-compatible provider.
+
+```bash
+OIDC_ENABLED=true
+OIDC_ISSUER_URL=https://auth.example.com/application/o/trove/
+OIDC_CLIENT_ID=your-client-id
+OIDC_CLIENT_SECRET=your-client-secret
+OIDC_REDIRECT_URL=https://trove.example.com/auth/oidc/callback
+```
+
+New users are auto-provisioned on first OIDC login. For existing accounts, an admin switches them from `Internal` to `OIDC` via the Users page — they log in once, the subject gets linked, and local password auth is disabled for that account.
+
+| Variable | Default | Description |
+|---|---|---|
+| `OIDC_ENABLED` | `false` | Enable OIDC |
+| `OIDC_ISSUER_URL` | | Provider discovery URL |
+| `OIDC_CLIENT_ID` | | Client ID |
+| `OIDC_CLIENT_SECRET` | | Client secret |
+| `OIDC_REDIRECT_URL` | | Callback URL (`/auth/oidc/callback`) |
+| `OIDC_SCOPES` | `openid email profile` | Scopes to request |
+| `OIDC_USERNAME_CLAIM` | `preferred_username` | Claim to use as username |
+| `OIDC_EMAIL_CLAIM` | `email` | Claim to use as email |
+| `OIDC_ADMIN_CLAIM` | | Claim that controls admin status |
+| `OIDC_ADMIN_VALUE` | | Value that grants admin (e.g. `trove-admins`) |
+
+`OIDC_ADMIN_CLAIM` handles string, array (Authentik/Keycloak groups), and boolean claim shapes automatically.
 
 ## Configuration
 
@@ -368,6 +413,7 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
 - ✅ Tailwind CSS with responsive dark mode
 - ✅ Production-ready Docker images (~18MB)
 - ✅ Deleted items with configurable retention
+- ✅ OIDC/SSO authentication
 
 **Planned:**
 - File sharing links

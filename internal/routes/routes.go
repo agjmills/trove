@@ -19,6 +19,7 @@ import (
 	"github.com/agjmills/trove/internal/handlers"
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/middleware"
+	"github.com/agjmills/trove/internal/oidc"
 	"github.com/agjmills/trove/internal/storage"
 )
 
@@ -137,7 +138,7 @@ func getClientIP(r *http.Request, trustedCIDRs []*net.IPNet) string {
 // These endpoints rely on session-based authentication and SameSite cookie policy.
 //
 // Returns the file handler and deleted handler for graceful shutdown support.
-func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, version string) (*handlers.FileHandler, *handlers.DeletedHandler) {
+func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, oidcProvider *oidc.Provider, version string) (*handlers.FileHandler, *handlers.DeletedHandler) {
 	authHandler := handlers.NewAuthHandler(db, cfg, sessionManager)
 	pageHandler := handlers.NewPageHandler(db, cfg)
 	fileHandler := handlers.NewFileHandler(db, cfg, storageService)
@@ -278,6 +279,16 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Get("/api/uploads/{id}/status", uploadHandler.GetUploadStatus)
 	})
 
+	// OIDC routes — no CSRF middleware; state parameter provides equivalent protection.
+	if cfg.OIDCEnabled && oidcProvider != nil {
+		oidcHandler := handlers.NewOIDCHandler(db, cfg, sessionManager, oidcProvider)
+		r.Group(func(r chi.Router) {
+			r.Use(sessionManager.LoadAndSave)
+			r.Get("/auth/oidc/login", oidcHandler.InitiateLogin)
+			r.Get("/auth/oidc/callback", oidcHandler.Callback)
+		})
+	}
+
 	// Admin routes - require admin privileges
 	r.Group(func(r chi.Router) {
 		r.Use(sessionManager.LoadAndSave)
@@ -291,6 +302,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Post("/admin/users/{id}/quota", adminHandler.UpdateUserQuota)
 		r.Post("/admin/users/{id}/delete", adminHandler.DeleteUser)
 		r.Post("/admin/users/{id}/reset-password", adminHandler.ResetUserPassword)
+		r.Post("/admin/users/{id}/idp", adminHandler.UpdateUserIDP)
 		r.Post("/admin/deleted/empty-all", deletedHandler.AdminEmptyAllDeleted)
 	})
 

@@ -212,6 +212,17 @@
 										</svg>
 									</button>
 
+									<!-- Identity Provider -->
+									{{if $.OIDCEnabled}}
+									<form method="POST" action="/admin/users/{{.ID}}/idp" class="inline">
+										<select name="identity_provider" onchange="this.form.submit()" title="Identity Provider"
+											class="text-xs border border-gray-200 dark:border-gray-600 rounded px-1 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500">
+											<option value="internal" {{if eq .IdentityProvider "internal"}}selected{{end}}>Internal</option>
+											<option value="oidc" {{if eq .IdentityProvider "oidc"}}selected{{end}}>OIDC</option>
+										</select>
+									</form>
+									{{end}}
+
 									<!-- Delete User -->
 									{{if ne .ID $.User.ID}}
 									<form method="POST" action="/admin/users/{{.ID}}/delete" id="delete-form-{{.ID}}" class="inline">
@@ -325,6 +336,17 @@
 							<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
 						</svg>
 					</button>
+
+					<!-- Identity Provider (mobile) -->
+					{{if $.OIDCEnabled}}
+					<form method="POST" action="/admin/users/{{.ID}}/idp" class="inline">
+						<select name="identity_provider" onchange="this.form.submit()" title="Identity Provider"
+							class="text-xs border border-gray-200 dark:border-gray-600 rounded px-1 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500">
+							<option value="internal" {{if eq .IdentityProvider "internal"}}selected{{end}}>Internal</option>
+							<option value="oidc" {{if eq .IdentityProvider "oidc"}}selected{{end}}>OIDC</option>
+						</select>
+					</form>
+					{{end}}
 
 					<!-- Delete User -->
 					{{if ne .ID $.User.ID}}

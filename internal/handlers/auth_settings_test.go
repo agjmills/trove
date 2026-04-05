@@ -258,3 +258,62 @@ func TestChangePassword_Unauthenticated(t *testing.T) {
 		t.Errorf("Expected status 401, got %d", w.Code)
 	}
 }
+
+func TestChangePassword_OIDCUserForbidden_JSON(t *testing.T) {
+	handler, db, _ := setupTestAuthHandler(t)
+
+	oidcUser := &models.User{
+		Username:         "oidcuser",
+		Email:            "oidc@example.com",
+		IdentityProvider: "oidc",
+		StorageQuota:     1024 * 1024 * 100,
+	}
+	if err := db.Create(oidcUser).Error; err != nil {
+		t.Fatalf("create oidc user: %v", err)
+	}
+
+	body, _ := json.Marshal(ChangePasswordRequest{
+		CurrentPassword: "anything",
+		NewPassword:     "newpassword456",
+		ConfirmPassword: "newpassword456",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/settings/change-password", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = csrf.UnsafeSkipCheck(req)
+	req = withUser(req, oidcUser)
+
+	w := httptest.NewRecorder()
+	handler.ChangePassword(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for OIDC user, got %d", w.Code)
+	}
+}
+
+func TestChangePassword_OIDCUserForbidden_Form(t *testing.T) {
+	handler, db, sm := setupTestAuthHandler(t)
+
+	oidcUser := &models.User{
+		Username:         "oidcform",
+		Email:            "oidcform@example.com",
+		IdentityProvider: "oidc",
+		StorageQuota:     1024 * 1024 * 100,
+	}
+	if err := db.Create(oidcUser).Error; err != nil {
+		t.Fatalf("create oidc user: %v", err)
+	}
+
+	body := "current_password=anything&new_password=newpassword456&confirm_password=newpassword456"
+	req := httptest.NewRequest(http.MethodPost, "/settings/change-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = csrf.UnsafeSkipCheck(req)
+	req = withUser(req, oidcUser)
+
+	w := httptest.NewRecorder()
+	sm.LoadAndSave(http.HandlerFunc(handler.ChangePassword)).ServeHTTP(w, req)
+
+	// ChangePassword renders the settings page (200) with an error, not a success redirect
+	if w.Code == http.StatusSeeOther {
+		t.Error("OIDC user should not get a success redirect on ChangePassword")
+	}
+}

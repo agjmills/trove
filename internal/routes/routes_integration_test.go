@@ -89,7 +89,7 @@ func newRouteTestApp(t *testing.T) *routeTestApp {
 	memStorage := storage.NewMemoryBackend()
 
 	router := chi.NewRouter()
-	fileHandler, deletedHandler := Setup(router, db, cfg, memStorage, sessionManager, "test-version")
+	fileHandler, deletedHandler := Setup(router, db, cfg, memStorage, sessionManager, nil, "test-version")
 
 	// Ensure cleanup
 	t.Cleanup(func() {
@@ -378,7 +378,7 @@ func TestRegistrationDisabled(t *testing.T) {
 
 	// Re-setup routes with new config
 	router := chi.NewRouter()
-	fileHandler, deletedHandler := Setup(router, app.db, app.cfg, app.storage, app.sessionManager, "test-version")
+	fileHandler, deletedHandler := Setup(router, app.db, app.cfg, app.storage, app.sessionManager, nil, "test-version")
 	t.Cleanup(func() {
 		fileHandler.Shutdown()
 		deletedHandler.Shutdown()
@@ -585,7 +585,7 @@ func TestCSRFProtection(t *testing.T) {
 	memStorage := storage.NewMemoryBackend()
 
 	router := chi.NewRouter()
-	fileHandler, deletedHandler := Setup(router, db, cfg, memStorage, sessionManager, "test-version")
+	fileHandler, deletedHandler := Setup(router, db, cfg, memStorage, sessionManager, nil, "test-version")
 	t.Cleanup(func() {
 		fileHandler.Shutdown()
 		deletedHandler.Shutdown()

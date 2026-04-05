@@ -230,6 +230,7 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 	if err := render(w, "login.html", map[string]any{
 		"Title":              "Login",
 		"EnableRegistration": h.cfg.EnableRegistration,
+		"OIDCEnabled":        h.cfg.OIDCEnabled,
 	}); err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
@@ -263,9 +264,10 @@ func (h *AuthHandler) ShowSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := render(w, "settings.html", map[string]any{
-		"Title":     "Settings",
-		"User":      user,
-		"FullWidth": true,
+		"Title":      "Settings",
+		"User":       user,
+		"FullWidth":  true,
+		"IsOIDCUser": user.IdentityProvider == "oidc",
 	}); err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
@@ -285,6 +287,24 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		} else {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
+		}
+		return
+	}
+
+	// OIDC users have no password; block the endpoint entirely.
+	if user.IdentityProvider == "oidc" {
+		if isJSON {
+			http.Error(w, "Password changes are not available for SSO accounts", http.StatusForbidden)
+		} else {
+			if err := render(w, "settings.html", map[string]any{
+				"Title":      "Settings",
+				"User":       user,
+				"FullWidth":  true,
+				"IsOIDCUser": true,
+				"Error":      "Password changes are not available for SSO accounts.",
+			}); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
 		}
 		return
 	}
