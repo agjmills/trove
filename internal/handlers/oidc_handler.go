@@ -10,6 +10,7 @@ import (
 
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
+	"github.com/agjmills/trove/internal/flash"
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/oidc"
 )
@@ -51,7 +52,8 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Validate state to prevent CSRF
 	sessionState := h.sessionManager.GetString(r.Context(), "oidc_state")
 	if sessionState == "" || r.URL.Query().Get("state") != sessionState {
-		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
+		flash.Error(w, "Login failed: invalid state parameter.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	h.sessionManager.Remove(r.Context(), "oidc_state")
@@ -60,33 +62,38 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	token, err := h.provider.OAuth2Config.Exchange(r.Context(), r.URL.Query().Get("code"))
 	if err != nil {
 		logger.Error("oidc token exchange failed", "error", err)
-		http.Error(w, "Authentication failed", http.StatusUnauthorized)
+		flash.Error(w, "Authentication failed. Please try again.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
 	// Extract and verify the ID token
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
-		http.Error(w, "No id_token in response", http.StatusUnauthorized)
+		flash.Error(w, "Authentication failed: no identity token in response.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	idToken, err := h.provider.Verifier.Verify(r.Context(), rawIDToken)
 	if err != nil {
 		logger.Error("oidc id_token verification failed", "error", err)
-		http.Error(w, "Token verification failed", http.StatusUnauthorized)
+		flash.Error(w, "Authentication failed: token verification error.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
 	// Parse claims
 	var rawClaims map[string]any
 	if err := idToken.Claims(&rawClaims); err != nil {
-		http.Error(w, "Failed to parse token claims", http.StatusInternalServerError)
+		flash.Error(w, "Authentication failed: could not read identity claims.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	claims := h.provider.ExtractClaims(rawClaims)
 
 	if claims.Subject == "" || claims.Email == "" {
-		http.Error(w, "Missing required claims (sub, email)", http.StatusUnauthorized)
+		flash.Error(w, "Authentication failed: missing required claims.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
@@ -94,13 +101,15 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	user, err := h.findOrProvisionUser(claims)
 	if err != nil {
 		logger.Error("oidc user provisioning failed", "error", err, "subject", claims.Subject)
-		http.Error(w, "Failed to provision user account", http.StatusInternalServerError)
+		flash.Error(w, "Failed to provision user account. Please contact an administrator.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
 	// Establish session
 	if err := h.sessionManager.RenewToken(r.Context()); err != nil {
-		http.Error(w, "Failed to create session", http.StatusInternalServerError)
+		flash.Error(w, "Failed to create session. Please try again.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	h.sessionManager.Put(r.Context(), "user_id", int(user.ID))
