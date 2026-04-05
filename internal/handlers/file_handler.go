@@ -865,6 +865,10 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 		isText = true
 	}
 
+	// Fetch active share links for this file
+	var shareLinks []models.ShareLink
+	h.db.Where("file_id = ? AND user_id = ?", file.ID, user.ID).Find(&shareLinks)
+
 	// Render template
 	data := map[string]interface{}{
 		"Title":      file.Filename,
@@ -878,6 +882,7 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 		"IsAudio":    isAudio,
 		"IsText":     isText,
 		"FullWidth":  true,
+		"ShareLinks": shareLinks,
 	}
 
 	if err := render(w, "file_view.html", data); err != nil {

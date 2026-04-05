@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"time"
 )
 
 // FormatBytes formats a byte count into human-readable units (B, KB, MB, etc.).
@@ -95,6 +96,19 @@ func JsStr(s string) template.JS {
 	return template.JS(b)
 }
 
+// DerefInt dereferences an *int pointer. Returns 0 if nil.
+func DerefInt(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+// Today returns the current date formatted as YYYY-MM-DD (UTC).
+func Today() string {
+	return time.Now().UTC().Format("2006-01-02")
+}
+
 // FuncMap returns a template.FuncMap with all the standard template helpers.
 func FuncMap() template.FuncMap {
 	return template.FuncMap{
@@ -107,5 +121,7 @@ func FuncMap() template.FuncMap {
 		"mulFloat":          MulFloat,
 		"sanitizeID":        SanitizeID,
 		"jsStr":             JsStr,
+		"deref":             DerefInt,
+		"today":             Today,
 	}
 }
