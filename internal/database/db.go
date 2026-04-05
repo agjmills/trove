@@ -59,6 +59,7 @@ func Migrate(db *gorm.DB) error {
 		&models.Folder{},
 		&models.File{},
 		&models.UploadSession{},
+		&models.ShareLink{},
 	)
 	if err != nil {
 		return fmt.Errorf("migration failed: %w", err)
