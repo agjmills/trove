@@ -146,6 +146,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	healthHandler := handlers.NewHealthHandler(db, storageService, version)
 	adminHandler := handlers.NewAdminHandler(db, cfg, storageService)
 	deletedHandler := handlers.NewDeletedHandler(db, cfg, storageService)
+	shareHandler := handlers.NewShareHandler(db, storageService)
 
 	// Create rate limiter for auth endpoints
 	// Allow 5 login/register attempts per 15 minutes per IP
@@ -180,6 +181,9 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 
 	r.Get("/health", healthHandler.Health)
 	r.Handle("/metrics", promhttp.Handler())
+
+	// Public share link access — no authentication required
+	r.Get("/s/{token}", shareHandler.AccessShareLink)
 
 	fileServer := http.FileServer(http.Dir("web/static"))
 	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
@@ -235,6 +239,8 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Post("/move/{id}", fileHandler.MoveFile)
 		r.Post("/folders/delete/{name}", fileHandler.DeleteFolder)
 		r.Post("/files/{id}/dismiss", fileHandler.DismissFailedUpload)
+		r.Post("/files/{id}/share", shareHandler.CreateShareLink)
+		r.Post("/share/{token}/revoke", shareHandler.RevokeShareLink)
 	})
 
 	// SSE endpoint for file upload status - no CSRF needed (GET request, read-only)
