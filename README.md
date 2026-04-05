@@ -202,7 +202,7 @@ DB_TYPE=sqlite DB_PATH=:memory: go run ./cmd/server
 
 The first account registered becomes admin, no seeding required. Just deploy, go to `/register`, and create your account.
 
-If you're running OIDC-only (registration disabled), the first OIDC login on an empty database auto-provisions an admin account instead. Either way, you won't get locked out on a fresh install.
+If you're running OIDC-only (`ENABLE_REGISTRATION=false`), the first OIDC login on an empty database auto-provisions an admin account. Either way, a fresh install won't lock you out.
 
 **Typical production flow:**
 
@@ -210,6 +210,8 @@ If you're running OIDC-only (registration disabled), the first OIDC login on an 
 2. Register your admin account at `/register`
 3. Set `ENABLE_REGISTRATION=false` to lock signups down
 4. Add other users via the admin panel, or let them log in via OIDC and flip their IDP in the Users page
+
+> **Note:** The admin panel prevents you from switching your *own* account to OIDC while logged in — just to stop you accidentally locking yourself out. Another admin can switch your account, and OIDC-provisioned accounts can be admins just fine.
 
 ## OIDC / SSO
 
