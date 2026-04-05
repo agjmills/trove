@@ -867,7 +867,7 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch active share links for this file
 	var shareLinks []models.ShareLink
-	h.db.Where("file_id = ? AND user_id = ?", file.ID, user.ID).Find(&shareLinks)
+	h.db.Where("file_id = ? AND user_id = ? AND (expires_at IS NULL OR expires_at > ?)", file.ID, user.ID, time.Now()).Find(&shareLinks)
 
 	// Render template
 	data := map[string]interface{}{
