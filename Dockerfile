@@ -28,6 +28,10 @@ RUN ./tailwindcss \
 # Stage 2: Build Go binary
 FROM golang:1.25-alpine AS builder
 
+ARG VERSION=dev
+ARG COMMIT=none
+ARG BUILD_DATE=unknown
+
 RUN apk add --no-cache git ca-certificates tzdata
 
 WORKDIR /build
@@ -38,7 +42,7 @@ RUN go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w" \
+    -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}" \
     -o trove \
     ./cmd/server
 

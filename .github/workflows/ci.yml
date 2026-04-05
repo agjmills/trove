@@ -82,5 +82,9 @@ jobs:
           context: .
           push: false
           tags: ghcr.io/agjmills/trove:ci
+          build-args: |
+            VERSION=ci
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
