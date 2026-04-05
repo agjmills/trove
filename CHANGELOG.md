@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/agjmills/trove/compare/v0.8.0...v0.8.1) (2026-04-05)
+
+
+### Bug Fixes
+
+* **oidc:** don't trim trailing slash from issuer URL ([#79](https://github.com/agjmills/trove/issues/79)) ([dfee7ec](https://github.com/agjmills/trove/commit/dfee7ec3a9067e75b5480afbb183af36fb94df9c))
+* **shares:** address coderabbit review feedback ([#80](https://github.com/agjmills/trove/issues/80)) ([2c8f86d](https://github.com/agjmills/trove/commit/2c8f86d17989dc237bd953a48bd6422fb24e8c8c))
+
 ## [0.8.0](https://github.com/agjmills/trove/compare/v0.7.2...v0.8.0) (2026-04-05)
 
 
