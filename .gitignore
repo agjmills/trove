@@ -46,5 +46,7 @@ web/static/css/style.css
 # .idea/
 # .vscode/
 server
+dist/
 .playwright-mcp/
 shareable.txt
+browser-upload-test.txt
