@@ -335,3 +335,34 @@ Tailwind CSS migration with dark mode, responsive design, system preference dete
 - ✅ Added comprehensive health checks and Prometheus metrics
 - ✅ Refactored session management to use alexedwards/scs
 - ✅ 8MB copy buffer for improved throughput (aligned with S3 multipart parts)
+- ✅ Implemented password-protected file share links
+  - Optional bcrypt-hashed password on share links
+  - Session-based unlock flow (enter password once per session)
+  - Password badge on share management page
+- ✅ Implemented folder sharing with optional password protection
+  - FolderShareLink model with token, password_hash, expiry, max_uses
+  - Recursive file listing (includes files in subfolders)
+  - Same session-based unlock as file shares
+  - "Share" option in folder dropdown menu
+- ✅ Implemented file search with tag support
+  - Nav search box (desktop + mobile) at GET /search
+  - Tags input on upload (comma-separated), stored on File record
+  - Tags carried through both traditional and chunked upload paths
+  - Search queries filename, original filename, folder path, and tags
+  - Tags displayed as pill badges on file detail and search results
+
+### WebDAV 🔲
+- [ ] Add `golang.org/x/net/webdav` dependency
+- [ ] Implement `webdav.FileSystem` interface backed by DB + storage
+  - [ ] `Stat` — query DB for file/folder metadata → `fs.FileInfo`
+  - [ ] `OpenFile` (read) — stream from storage backend, buffer to temp for seekability
+  - [ ] `OpenFile` (write/PUT) — buffer to temp, compute hash, deduplicate, save to storage
+  - [ ] `Mkdir` — insert into folders table
+  - [ ] `RemoveAll` — soft-delete (set `trashed_at`)
+  - [ ] `Rename` — update `logical_path`/`filename` in DB (no storage move required)
+- [ ] HTTP Basic Auth middleware — verify against bcrypt, reject OIDC-only users
+- [ ] In-memory lock system (`webdav.NewMemLS()`)
+- [ ] Add `WEBDAV_ENABLED` config flag (default false)
+- [ ] Mount at `/dav/*` in routes.go
+- [ ] Unit tests for all FileSystem operations
+- [ ] Update README.md and docs/webdav.md
