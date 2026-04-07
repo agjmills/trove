@@ -80,6 +80,22 @@ type ShareLink struct {
 	User User `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
 }
 
+// FolderShareLink represents a public share link for a folder (all files within it, recursively)
+type FolderShareLink struct {
+	ID           uint           `gorm:"primaryKey" json:"id"`
+	Token        string         `gorm:"uniqueIndex;not null;size:64" json:"token"`
+	FolderPath   string         `gorm:"not null;size:1024" json:"folder_path"`
+	UserID       uint           `gorm:"not null;index" json:"user_id"`
+	PasswordHash *string        `gorm:"size:255" json:"-"`
+	ExpiresAt    *time.Time     `gorm:"index" json:"expires_at,omitempty"`
+	MaxUses      *int           `json:"max_uses,omitempty"`
+	Uses         int            `gorm:"not null;default:0" json:"uses"`
+	CreatedAt    time.Time      `json:"created_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+
+	User User `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+}
+
 // UploadSession tracks state for resumable chunked uploads
 type UploadSession struct {
 	ID             string         `gorm:"primaryKey;size:36" json:"id"` // UUID
