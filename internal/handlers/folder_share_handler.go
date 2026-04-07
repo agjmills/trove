@@ -80,8 +80,8 @@ func (h *FolderShareHandler) folderFiles(link *models.FolderShareLink) ([]models
 	err := h.db.
 		Where("user_id = ? AND trashed_at IS NULL AND upload_status = 'completed' AND (logical_path = ? OR logical_path LIKE ?)",
 			link.UserID, link.FolderPath, prefix+"%").
-		Order("logical_path, filename").
 		Find(&files).Error
+	sortFilesByPathAndFilenameNaturally(files)
 	return files, err
 }
 

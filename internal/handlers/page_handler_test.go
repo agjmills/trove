@@ -148,10 +148,7 @@ func TestNaturalSortOrder(t *testing.T) {
 		"file3.txt",
 	}
 
-	// Sort using the same logic as page_handler.go
-	sort.Slice(filenames, func(i, j int) bool {
-		return natural.Less(strings.ToLower(filenames[i]), strings.ToLower(filenames[j]))
-	})
+	sortStringsNaturally(filenames)
 
 	expected := []string{
 		"file1.txt",
@@ -177,10 +174,7 @@ func TestNaturalSortFolders(t *testing.T) {
 		"chapter3",
 	}
 
-	// Sort using the same logic as page_handler.go
-	sort.Slice(folders, func(i, j int) bool {
-		return natural.Less(strings.ToLower(folders[i]), strings.ToLower(folders[j]))
-	})
+	sortStringsNaturally(folders)
 
 	// Natural sort with case-insensitive: 1, 2, 3, 10 (numerically)
 	expected := []string{
@@ -193,6 +187,50 @@ func TestNaturalSortFolders(t *testing.T) {
 	for i, name := range folders {
 		if name != expected[i] {
 			t.Errorf("Position %d: expected %s, got %s", i, expected[i], name)
+		}
+	}
+}
+
+func TestSortFilesByFilenameNaturallyUsesCurrentFilename(t *testing.T) {
+	files := []models.File{
+		{ID: 1, Filename: "bear.txt", OriginalFilename: "bear.txt"},
+		{ID: 2, Filename: "ant.txt", OriginalFilename: "cat.txt"},
+		{ID: 3, Filename: "aardvark.txt", OriginalFilename: "aardvark.txt"},
+	}
+
+	sortFilesByFilenameNaturally(files)
+
+	expected := []string{"aardvark.txt", "ant.txt", "bear.txt"}
+	for i, file := range files {
+		if file.Filename != expected[i] {
+			t.Errorf("Position %d: expected %s, got %s", i, expected[i], file.Filename)
+		}
+	}
+}
+
+func TestSortFilesByPathAndFilenameNaturally(t *testing.T) {
+	files := []models.File{
+		{ID: 1, LogicalPath: "/season10", Filename: "episode10.mkv"},
+		{ID: 2, LogicalPath: "/season2", Filename: "episode2.mkv"},
+		{ID: 3, LogicalPath: "/season2", Filename: "episode10.mkv"},
+		{ID: 4, LogicalPath: "/season2", Filename: "episode1.mkv"},
+	}
+
+	sortFilesByPathAndFilenameNaturally(files)
+
+	expected := []struct {
+		path string
+		name string
+	}{
+		{"/season2", "episode1.mkv"},
+		{"/season2", "episode2.mkv"},
+		{"/season2", "episode10.mkv"},
+		{"/season10", "episode10.mkv"},
+	}
+
+	for i, file := range files {
+		if file.LogicalPath != expected[i].path || file.Filename != expected[i].name {
+			t.Errorf("Position %d: expected %s/%s, got %s/%s", i, expected[i].path, expected[i].name, file.LogicalPath, file.Filename)
 		}
 	}
 }

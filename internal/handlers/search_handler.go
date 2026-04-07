@@ -38,7 +38,8 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 			AND (LOWER(filename) LIKE ? OR LOWER(original_filename) LIKE ? OR LOWER(logical_path) LIKE ?
 			     OR LOWER(CAST(tags AS TEXT)) LIKE ?)`,
 			user.ID, pattern, pattern, pattern, pattern,
-		).Order("logical_path, filename").Find(&results)
+		).Find(&results)
+		sortFilesByPathAndFilenameNaturally(results)
 	}
 
 	if err := render(w, "search.html", map[string]any{

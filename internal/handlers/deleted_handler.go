@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/maruel/natural"
 	"gorm.io/gorm"
 
 	"github.com/agjmills/trove/internal/auth"
@@ -233,14 +231,10 @@ func (h *DeletedHandler) ShowDeleted(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Sort files naturally by filename
-	sort.Slice(allFiles, func(i, j int) bool {
-		return natural.Less(strings.ToLower(allFiles[i].Filename), strings.ToLower(allFiles[j].Filename))
-	})
+	sortFilesByFilenameNaturally(allFiles)
 
 	// Sort folders naturally
-	sort.Slice(allFolders, func(i, j int) bool {
-		return natural.Less(strings.ToLower(allFolders[i].FolderPath), strings.ToLower(allFolders[j].FolderPath))
-	})
+	sortFoldersByPathNaturally(allFolders)
 
 	// Pagination for files
 	totalFiles := len(allFiles)
