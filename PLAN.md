@@ -351,38 +351,6 @@ Tailwind CSS migration with dark mode, responsive design, system preference dete
   - Search queries filename, original filename, folder path, and tags
   - Tags displayed as pill badges on file detail and search results
 
-### WebDAV 🔲
-- [ ] Add `golang.org/x/net/webdav` dependency
-- [ ] Implement `webdav.FileSystem` interface backed by DB + storage
-  - [ ] `Stat` — query DB for file/folder metadata → `fs.FileInfo`
-  - [ ] `OpenFile` (read) — stream from storage backend, buffer to temp for seekability
-  - [ ] `OpenFile` (write/PUT) — buffer to temp, compute hash, deduplicate, save to storage
-  - [ ] `Mkdir` — insert into folders table
-  - [ ] `RemoveAll` — soft-delete (set `trashed_at`)
-  - [ ] `Rename` — update `logical_path`/`filename` in DB (no storage move required)
-- [ ] HTTP Basic Auth middleware — verify against bcrypt, reject OIDC-only users
-- [ ] In-memory lock system (`webdav.NewMemLS()`)
-- [ ] Add `WEBDAV_ENABLED` config flag (default false)
-- [ ] Mount at `/dav/*` in routes.go
-- [ ] Unit tests for all FileSystem operations
-- [ ] Update README.md and docs/webdav.md
-
-### WebDAV 🔲
-- [ ] Add `golang.org/x/net/webdav` dependency
-- [ ] Implement `webdav.FileSystem` interface backed by DB + storage
-  - [ ] `Stat` — query DB for file/folder metadata → `fs.FileInfo`
-  - [ ] `OpenFile` (read) — stream from storage backend, buffer to temp for seekability (S3 doesn't support Seek)
-  - [ ] `OpenFile` (write/PUT) — buffer to temp, compute SHA-256, deduplicate, save to storage
-  - [ ] `Mkdir` — insert into folders table
-  - [ ] `RemoveAll` — soft-delete (set `trashed_at`)
-  - [ ] `Rename` — update `logical_path`/`filename` in DB (no storage move required)
-- [ ] HTTP Basic Auth middleware — verify against bcrypt, reject OIDC-only users with clear error
-- [ ] In-memory lock system (`webdav.NewMemLS()`)
-- [ ] Add `WEBDAV_ENABLED` config flag (default false)
-- [ ] Mount at `/dav/*` in routes.go
-- [ ] Unit tests for all FileSystem operations
-- [ ] Update README.md
-
 ### ZIP Download 🔲
 
 **Memory concern:** folders can contain large already-compressed files (video, high-res images). Buffering the ZIP in memory is not viable.
