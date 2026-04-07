@@ -48,5 +48,6 @@ web/static/css/style.css
 server
 dist/
 .playwright-mcp/
+site/public/
 shareable.txt
 browser-upload-test.txt
