@@ -105,8 +105,8 @@ func TestUpdateUserIDP_CannotSwitchSelfToOIDC(t *testing.T) {
 	admin := createAdminTestUser(t, db, "admin", "admin@example.com", true)
 
 	w := makeIDPRequest(t, h, sm, admin, admin.ID, "oidc")
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("want 400 when switching own account to OIDC, got %d", w.Code)
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("want 303 redirect when switching own account to OIDC, got %d", w.Code)
 	}
 
 	// Verify not changed

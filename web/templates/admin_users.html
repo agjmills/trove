@@ -215,7 +215,7 @@
 									<!-- Identity Provider -->
 									{{if $.OIDCEnabled}}
 									<form method="POST" action="/admin/users/{{.ID}}/idp" class="inline">
-										<select name="identity_provider" onchange="this.form.submit()" title="Identity Provider"
+										<select name="identity_provider" onchange="handleIDPChange(this, '{{.Username}}', '{{.IdentityProvider}}')" title="Identity Provider"
 											class="text-xs border border-gray-200 dark:border-gray-600 rounded px-1 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500">
 											<option value="internal" {{if eq .IdentityProvider "internal"}}selected{{end}}>Internal</option>
 											<option value="oidc" {{if eq .IdentityProvider "oidc"}}selected{{end}}>OIDC</option>
@@ -340,7 +340,7 @@
 					<!-- Identity Provider (mobile) -->
 					{{if $.OIDCEnabled}}
 					<form method="POST" action="/admin/users/{{.ID}}/idp" class="inline">
-						<select name="identity_provider" onchange="this.form.submit()" title="Identity Provider"
+						<select name="identity_provider" onchange="handleIDPChange(this, '{{.Username}}', '{{.IdentityProvider}}')" title="Identity Provider"
 							class="text-xs border border-gray-200 dark:border-gray-600 rounded px-1 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500">
 							<option value="internal" {{if eq .IdentityProvider "internal"}}selected{{end}}>Internal</option>
 							<option value="oidc" {{if eq .IdentityProvider "oidc"}}selected{{end}}>OIDC</option>
@@ -554,6 +554,22 @@
 		} else if (modalId === 'reset-password-modal') {
 			document.getElementById('new_password').value = '';
 		}
+	}
+
+	// IDP change handler — warns before switching OIDC → internal (user loses password access)
+	function handleIDPChange(select, username, previousIDP) {
+		const newIDP = select.value;
+		if (previousIDP === 'oidc' && newIDP === 'internal') {
+			const confirmed = confirm(
+				'Switch "' + username + '" to internal authentication?\n\n' +
+				'Their password will be cleared. An admin must reset their password before they can log in again.'
+			);
+			if (!confirmed) {
+				select.value = previousIDP;
+				return;
+			}
+		}
+		select.form.submit();
 	}
 
 	// Close modals on Escape key and trap focus with Tab
