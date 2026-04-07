@@ -40,6 +40,72 @@ func generateToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
+// consumeUse atomically increments the use counter, respecting MaxUses.
+// Returns false if the limit has already been reached.
+func (h *ShareHandler) consumeUse(link *models.ShareLink) bool {
+	if link.MaxUses != nil {
+		result := h.db.Model(link).
+			Where("uses < ?", *link.MaxUses).
+			Update("uses", gorm.Expr("uses + 1"))
+		return result.Error == nil && result.RowsAffected > 0
+	}
+	h.db.Model(link).Update("uses", gorm.Expr("uses + 1")) //nolint:errcheck
+	return true
+}
+
+// streamFile writes the file contents to the response with appropriate headers.
+func (h *ShareHandler) streamFile(w http.ResponseWriter, r *http.Request, file models.File) {
+	reader, err := h.storage.Open(r.Context(), file.StoragePath)
+	if err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	defer reader.Close() //nolint:errcheck
+
+	safeFilename := strings.ReplaceAll(file.Filename, `"`, `\"`)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`,
+		safeFilename, url.PathEscape(file.Filename)))
+	w.Header().Set("Content-Type", file.MimeType)
+	if file.FileSize > 0 {
+		w.Header().Set("Content-Length", strconv.FormatInt(file.FileSize, 10))
+	}
+
+	if _, err := io.Copy(w, reader); err != nil {
+		logger.Error("error streaming shared file", "path", file.StoragePath, "error", err)
+	}
+}
+
+// showPasswordForm renders the password entry page for a protected share link.
+func (h *ShareHandler) showPasswordForm(w http.ResponseWriter, token, filename, errMsg string) {
+	if err := render(w, "share_password.html", map[string]any{
+		"Title":    "Protected Link",
+		"Token":    token,
+		"Filename": filename,
+		"Error":    errMsg,
+	}); err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// lookupValidLink fetches and validates a share link by token.
+// Writes a 404 response and returns nil if the token is invalid, expired, or the file is gone.
+func (h *ShareHandler) lookupValidLink(w http.ResponseWriter, token string) *models.ShareLink {
+	var link models.ShareLink
+	if err := h.db.Preload("File").Where("token = ?", token).First(&link).Error; err != nil {
+		http.Error(w, "404 page not found", http.StatusNotFound)
+		return nil
+	}
+	if link.ExpiresAt != nil && time.Now().After(*link.ExpiresAt) {
+		http.Error(w, "404 page not found", http.StatusNotFound)
+		return nil
+	}
+	if link.File.ID == 0 || link.File.SoftDeletedAt != nil {
+		http.Error(w, "404 page not found", http.StatusNotFound)
+		return nil
+	}
+	return &link
+}
+
 // CreateShareLink handles POST /files/{id}/share.
 // Creates a new share link for a file owned by the authenticated user.
 func (h *ShareHandler) CreateShareLink(w http.ResponseWriter, r *http.Request) {
@@ -84,6 +150,16 @@ func (h *ShareHandler) CreateShareLink(w http.ResponseWriter, r *http.Request) {
 		maxUses = &n
 	}
 
+	var passwordHash *string
+	if v := r.FormValue("password"); v != "" {
+		h, err := auth.HashPassword(v, 10)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		passwordHash = &h
+	}
+
 	token, err := generateToken()
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -91,11 +167,12 @@ func (h *ShareHandler) CreateShareLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	link := models.ShareLink{
-		Token:     token,
-		FileID:    uint(fileID),
-		UserID:    user.ID,
-		ExpiresAt: expiresAt,
-		MaxUses:   maxUses,
+		Token:        token,
+		FileID:       uint(fileID),
+		UserID:       user.ID,
+		ExpiresAt:    expiresAt,
+		MaxUses:      maxUses,
+		PasswordHash: passwordHash,
 	}
 	if err := h.db.Create(&link).Error; err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -134,57 +211,53 @@ func (h *ShareHandler) RevokeShareLink(w http.ResponseWriter, r *http.Request) {
 // AccessShareLink handles GET /s/{token}.
 // Public endpoint — no authentication required.
 // Returns 404 for expired, exhausted, revoked, or non-existent tokens (no enumeration).
+// If the link is password-protected, renders a password entry form instead of serving the file.
 func (h *ShareHandler) AccessShareLink(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
+	link := h.lookupValidLink(w, token)
+	if link == nil {
+		return
+	}
 
-	var link models.ShareLink
-	err := h.db.Preload("File").Where("token = ?", token).First(&link).Error
-	if err != nil {
+	// Password-protected: show form, do not consume a use yet.
+	if link.PasswordHash != nil {
+		h.showPasswordForm(w, token, link.File.Filename, "")
+		return
+	}
+
+	if !h.consumeUse(link) {
 		http.NotFound(w, r)
 		return
 	}
 
-	// Check expiry
-	if link.ExpiresAt != nil && time.Now().After(*link.ExpiresAt) {
+	h.streamFile(w, r, link.File)
+}
+
+// VerifySharePassword handles POST /s/{token}.
+// Validates the submitted password and, if correct, streams the file.
+func (h *ShareHandler) VerifySharePassword(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	link := h.lookupValidLink(w, token)
+	if link == nil {
+		return
+	}
+
+	// No password required — redirect to GET which will serve directly.
+	if link.PasswordHash == nil {
+		http.Redirect(w, r, "/s/"+token, http.StatusSeeOther)
+		return
+	}
+
+	password := r.FormValue("password")
+	if !auth.VerifyPassword(*link.PasswordHash, password) {
+		h.showPasswordForm(w, token, link.File.Filename, "Incorrect password. Please try again.")
+		return
+	}
+
+	if !h.consumeUse(link) {
 		http.NotFound(w, r)
 		return
 	}
 
-	// Ensure the file hasn't been trashed or hard-deleted before consuming a use
-	if link.File.ID == 0 || link.File.SoftDeletedAt != nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	// Check max uses and increment atomically
-	if link.MaxUses != nil {
-		updated := h.db.Model(&link).
-			Where("uses < ?", *link.MaxUses).
-			Update("uses", gorm.Expr("uses + 1"))
-		if updated.Error != nil || updated.RowsAffected == 0 {
-			http.NotFound(w, r)
-			return
-		}
-	} else {
-		h.db.Model(&link).Update("uses", gorm.Expr("uses + 1")) //nolint:errcheck
-	}
-
-	reader, err := h.storage.Open(r.Context(), link.File.StoragePath)
-	if err != nil {
-		http.Error(w, "File not found", http.StatusNotFound)
-		return
-	}
-	defer reader.Close() //nolint:errcheck
-
-	safeFilename := strings.ReplaceAll(link.File.Filename, `"`, `\"`)
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`,
-		safeFilename, url.PathEscape(link.File.Filename)))
-	w.Header().Set("Content-Type", link.File.MimeType)
-	if link.File.FileSize > 0 {
-		w.Header().Set("Content-Length", strconv.FormatInt(link.File.FileSize, 10))
-	}
-
-	if _, err := io.Copy(w, reader); err != nil {
-		logger.Error("error streaming shared file", "path", link.File.StoragePath, "error", err)
-	}
+	h.streamFile(w, r, link.File)
 }
