@@ -132,6 +132,7 @@ func (h *AdminHandler) ShowUsers(w http.ResponseWriter, r *http.Request) {
 		"Title":        "User Management",
 		"User":         user,
 		"Users":        usersWithStats,
+		"Flash":        flash.Get(w, r),
 		"FullWidth":    true,
 		"DefaultQuota": h.cfg.DefaultUserQuota,
 		"OIDCEnabled":  h.cfg.OIDCEnabled,
@@ -457,7 +458,7 @@ func (h *AdminHandler) UpdateUserIDP(w http.ResponseWriter, r *http.Request) {
 
 	// Prevent locking yourself out
 	currentUser := auth.GetUser(r)
-	if currentUser.ID == user.ID && idp == "oidc" && user.IdentityProvider == "internal" {
+	if currentUser != nil && currentUser.ID == user.ID && idp == "oidc" && user.IdentityProvider == "internal" {
 		flash.Error(w, "Cannot switch your own account to OIDC.")
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 		return
