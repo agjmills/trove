@@ -1,0 +1,30 @@
+baseURL = "https://agjmills.github.io/trove/"
+languageCode = "en-us"
+title = "Trove"
+theme = "hextra"
+
+[params]
+  description = "Self-hosted file storage. Your personal Google Drive alternative."
+
+[params.navbar]
+  displayTitle = true
+  displayLogo = true
+
+[params.logo]
+  path = "images/logo.svg"
+  dark = "images/logo.svg"
+  width = 28
+  height = 28
+
+[params.footer]
+  displayCopyright = false
+  displayPoweredBy = false
+
+[params.search]
+  enable = true
+
+[markup.goldmark.renderer]
+  unsafe = true
+
+[markup.highlight]
+  noClasses = false
