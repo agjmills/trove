@@ -15,6 +15,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/database/models"
 )
 
@@ -193,6 +194,11 @@ func TestCreateShareLink_Unauthenticated(t *testing.T) {
 
 func createShareLink(t *testing.T, db *gorm.DB, fileID, userID uint, expiresAt *time.Time, maxUses *int) *models.ShareLink {
 	t.Helper()
+	return createShareLinkWithPassword(t, db, fileID, userID, expiresAt, maxUses, "")
+}
+
+func createShareLinkWithPassword(t *testing.T, db *gorm.DB, fileID, userID uint, expiresAt *time.Time, maxUses *int, password string) *models.ShareLink {
+	t.Helper()
 	token, err := generateToken()
 	if err != nil {
 		t.Fatalf("generateToken: %v", err)
@@ -204,8 +210,28 @@ func createShareLink(t *testing.T, db *gorm.DB, fileID, userID uint, expiresAt *
 		ExpiresAt: expiresAt,
 		MaxUses:   maxUses,
 	}
+	if password != "" {
+		h, err := auth.HashPassword(password, 4) // bcrypt.MinCost for test speed
+		if err != nil {
+			t.Fatalf("HashPassword: %v", err)
+		}
+		link.PasswordHash = &h
+	}
 	db.Create(link)
 	return link
+}
+
+func makeVerifyRequest(t *testing.T, h *ShareHandler, token, password string) *httptest.ResponseRecorder {
+	t.Helper()
+	body := "password=" + password
+	req := httptest.NewRequest(http.MethodPost, "/s/"+token, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("token", token)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+	h.VerifySharePassword(w, req)
+	return w
 }
 
 func makeAccessRequest(t *testing.T, h *ShareHandler, token string) *httptest.ResponseRecorder {
@@ -330,5 +356,116 @@ func TestRevokeShareLink_WrongOwner(t *testing.T) {
 	w2 := makeAccessRequest(t, h, link.Token)
 	if w2.Code != http.StatusOK {
 		t.Errorf("link should still be valid, got %d", w2.Code)
+	}
+}
+
+// --- Password-protected share links ---
+
+func TestCreateShareLink_WithPassword(t *testing.T) {
+	h, db, user := setupShareTest(t)
+	file := createTestFile(t, db, user.ID)
+
+	w := makeShareRequest(t, h, user, fmt.Sprint(file.ID), "password=secret123")
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("want 303, got %d", w.Code)
+	}
+
+	var link models.ShareLink
+	db.Where("file_id = ?", file.ID).First(&link)
+	if link.PasswordHash == nil {
+		t.Fatal("PasswordHash should be set")
+	}
+	if auth.VerifyPassword(*link.PasswordHash, "secret123") == false {
+		t.Error("PasswordHash should verify against the submitted password")
+	}
+}
+
+func TestAccessShareLink_PasswordProtected_ShowsForm(t *testing.T) {
+	h, db, user := setupShareTest(t)
+	file := createTestFile(t, db, user.ID)
+	link := createShareLinkWithPassword(t, db, file.ID, user.ID, nil, nil, "secret")
+
+	w := makeAccessRequest(t, h, link.Token)
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200 (password form), got %d", w.Code)
+	}
+	// Should return HTML, not the file contents
+	if w.Body.String() == "hello" {
+		t.Error("should not serve file without password")
+	}
+	// Uses counter should NOT be incremented
+	var updated models.ShareLink
+	db.First(&updated, link.ID)
+	if updated.Uses != 0 {
+		t.Errorf("uses should not be incremented for GET on protected link, got %d", updated.Uses)
+	}
+}
+
+func TestVerifySharePassword_WrongPassword(t *testing.T) {
+	h, db, user := setupShareTest(t)
+	file := createTestFile(t, db, user.ID)
+	link := createShareLinkWithPassword(t, db, file.ID, user.ID, nil, nil, "correct")
+
+	w := makeVerifyRequest(t, h, link.Token, "wrong")
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200 (form with error), got %d", w.Code)
+	}
+	if w.Body.String() == "hello" {
+		t.Error("should not serve file with wrong password")
+	}
+	var updated models.ShareLink
+	db.First(&updated, link.ID)
+	if updated.Uses != 0 {
+		t.Errorf("uses should not increment on wrong password, got %d", updated.Uses)
+	}
+}
+
+func TestVerifySharePassword_CorrectPassword(t *testing.T) {
+	h, db, user := setupShareTest(t)
+	file := createTestFile(t, db, user.ID)
+	link := createShareLinkWithPassword(t, db, file.ID, user.ID, nil, nil, "correct")
+
+	w := makeVerifyRequest(t, h, link.Token, "correct")
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200 (file), got %d: %s", w.Code, w.Body.String())
+	}
+	if w.Body.String() != "hello" {
+		t.Errorf("want file contents, got %q", w.Body.String())
+	}
+	var updated models.ShareLink
+	db.First(&updated, link.ID)
+	if updated.Uses != 1 {
+		t.Errorf("want uses=1 after correct password, got %d", updated.Uses)
+	}
+}
+
+func TestVerifySharePassword_MaxUsesRespected(t *testing.T) {
+	h, db, user := setupShareTest(t)
+	file := createTestFile(t, db, user.ID)
+	maxUses := 1
+	link := createShareLinkWithPassword(t, db, file.ID, user.ID, nil, &maxUses, "pw")
+
+	// First correct attempt should succeed
+	w := makeVerifyRequest(t, h, link.Token, "pw")
+	if w.Code != http.StatusOK || w.Body.String() != "hello" {
+		t.Fatalf("first access should succeed, got %d %q", w.Code, w.Body.String())
+	}
+
+	// Second attempt should be blocked even with correct password
+	w2 := makeVerifyRequest(t, h, link.Token, "pw")
+	if w2.Code != http.StatusNotFound {
+		t.Errorf("want 404 after max uses exhausted, got %d", w2.Code)
+	}
+}
+
+func TestVerifySharePassword_NoPasswordRedirects(t *testing.T) {
+	h, db, user := setupShareTest(t)
+	file := createTestFile(t, db, user.ID)
+	link := createShareLink(t, db, file.ID, user.ID, nil, nil)
+
+	// POST to a non-password link should redirect to GET
+	w := makeVerifyRequest(t, h, link.Token, "")
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("want 303 redirect for non-password link, got %d", w.Code)
 	}
 }

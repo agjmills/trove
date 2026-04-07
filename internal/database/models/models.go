@@ -65,15 +65,16 @@ type File struct {
 
 // ShareLink represents a public download link for a file
 type ShareLink struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	Token     string         `gorm:"uniqueIndex;not null;size:64" json:"token"`
-	FileID    uint           `gorm:"not null;index" json:"file_id"`
-	UserID    uint           `gorm:"not null;index" json:"user_id"`
-	ExpiresAt *time.Time     `gorm:"index" json:"expires_at,omitempty"` // nil = never expires
-	MaxUses   *int           `json:"max_uses,omitempty"`                // nil = unlimited
-	Uses      int            `gorm:"not null;default:0" json:"uses"`
-	CreatedAt time.Time      `json:"created_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	ID           uint           `gorm:"primaryKey" json:"id"`
+	Token        string         `gorm:"uniqueIndex;not null;size:64" json:"token"`
+	FileID       uint           `gorm:"not null;index" json:"file_id"`
+	UserID       uint           `gorm:"not null;index" json:"user_id"`
+	PasswordHash *string        `gorm:"size:255" json:"-"`                 // nil = no password
+	ExpiresAt    *time.Time     `gorm:"index" json:"expires_at,omitempty"` // nil = never expires
+	MaxUses      *int           `json:"max_uses,omitempty"`                // nil = unlimited
+	Uses         int            `gorm:"not null;default:0" json:"uses"`
+	CreatedAt    time.Time      `json:"created_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 
 	File File `gorm:"foreignKey:FileID;constraint:OnDelete:CASCADE" json:"-"`
 	User User `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`

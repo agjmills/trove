@@ -184,6 +184,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 
 	// Public share link access — no authentication required
 	r.Get("/s/{token}", shareHandler.AccessShareLink)
+	r.Post("/s/{token}", shareHandler.VerifySharePassword)
 
 	fileServer := http.FileServer(http.Dir("web/static"))
 	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
