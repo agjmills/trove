@@ -22,11 +22,6 @@
 						<img src="/preview/{{.File.ID}}" alt="{{.File.Filename}}" class="max-w-full max-h-[600px] object-contain rounded">
 					{{else if .IsPDF}}
 						<iframe src="/preview/{{.File.ID}}" class="w-full h-[600px] rounded border-0"></iframe>
-					{{else if .IsVideo}}
-						<video controls class="max-w-full max-h-[600px] rounded">
-							<source src="/preview/{{.File.ID}}" type="{{.File.MimeType}}">
-							Your browser does not support the video tag.
-						</video>
 					{{else if .IsAudio}}
 						<audio controls class="w-full max-w-2xl">
 							<source src="/preview/{{.File.ID}}" type="{{.File.MimeType}}">
