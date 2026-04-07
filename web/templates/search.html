@@ -43,12 +43,12 @@
 				</thead>
 				<tbody class="divide-y divide-gray-100 dark:divide-gray-700">
 					{{range .Results}}
-					<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onclick="window.location='/files/{{.ID}}'">
+					<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
 						<td class="p-3">
-							<span class="font-medium text-gray-900 dark:text-gray-100">{{.Filename}}</span>
+							<a href="/files/{{.ID}}" class="font-medium text-gray-900 dark:text-gray-100 hover:underline">{{.Filename}}</a>
 						</td>
 						<td class="p-3 text-gray-500 dark:text-gray-400 max-sm:hidden">
-							<a href="/files?folder={{.LogicalPath}}" class="hover:underline" onclick="event.stopPropagation()">
+							<a href="/files?folder={{.LogicalPath}}" class="hover:underline">
 								{{if eq .LogicalPath "/"}}/ (Root){{else}}{{.LogicalPath}}{{end}}
 							</a>
 						</td>
@@ -64,7 +64,7 @@
 							{{end}}
 						</td>
 						<td class="p-3 text-right">
-							<a href="/download/{{.ID}}" class="text-blue-600 dark:text-blue-400 hover:underline text-xs font-medium" onclick="event.stopPropagation()">Download</a>
+							<a href="/download/{{.ID}}" class="text-blue-600 dark:text-blue-400 hover:underline text-xs font-medium">Download</a>
 						</td>
 					</tr>
 					{{end}}

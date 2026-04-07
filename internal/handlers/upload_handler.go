@@ -135,6 +135,25 @@ func (h *UploadHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Normalize tags: strip whitespace, drop empties, enforce limits
+	if len(req.Tags) > 50 {
+		http.Error(w, "Too many tags (max 50)", http.StatusBadRequest)
+		return
+	}
+	normalizedTags := req.Tags[:0]
+	for _, tag := range req.Tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if len(tag) > 64 {
+			http.Error(w, "Tag too long (max 64 characters)", http.StatusBadRequest)
+			return
+		}
+		normalizedTags = append(normalizedTags, tag)
+	}
+	req.Tags = normalizedTags
+
 	// Check user quota
 	if user.StorageUsed+req.TotalSize > user.StorageQuota {
 		http.Error(w, "Storage quota exceeded", http.StatusForbidden)

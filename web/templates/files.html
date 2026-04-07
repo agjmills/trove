@@ -178,7 +178,6 @@
 		<!-- Hidden upload form -->
 		<form method="POST" action="/upload" enctype="multipart/form-data" id="upload-form" class="hidden">
 			<input type="hidden" name="folder" value="{{.CurrentFolder}}">
-			<input type="hidden" name="tags" id="upload-tags-hidden">
 			<input type="file" name="file" id="file-input">
 		</form>
 
@@ -1234,14 +1233,12 @@
 
 	// Traditional upload for small files
 	function uploadFileTraditional(file, folder, tags) {
-		// Copy tags into hidden form field for multipart submission
-		const hiddenTags = document.getElementById('upload-tags-hidden');
-		if (hiddenTags) hiddenTags.value = (tags || []).join(',');
-
 		const formData = new FormData();
 		formData.append('file', file);
 		formData.append('folder', folder);
-		formData.append('tags', (tags || []).join(','));
+		if (tags && tags.length > 0) {
+			formData.append('tags', tags.join(','));
+		}
 
 		// Mark upload as active for beforeunload warning
 		isUploading = true;
