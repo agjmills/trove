@@ -1,2 +1,0 @@
-[      18ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o @ http://192.168.0.3:5014/folders/view?path=/shared-docs:0
-[   15480ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o @ http://192.168.0.3:5014/folders/view?path=%2Fshared-docs:0
