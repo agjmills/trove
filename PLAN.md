@@ -366,3 +366,84 @@ Tailwind CSS migration with dark mode, responsive design, system preference dete
 - [ ] Mount at `/dav/*` in routes.go
 - [ ] Unit tests for all FileSystem operations
 - [ ] Update README.md and docs/webdav.md
+
+### WebDAV 🔲
+- [ ] Add `golang.org/x/net/webdav` dependency
+- [ ] Implement `webdav.FileSystem` interface backed by DB + storage
+  - [ ] `Stat` — query DB for file/folder metadata → `fs.FileInfo`
+  - [ ] `OpenFile` (read) — stream from storage backend, buffer to temp for seekability (S3 doesn't support Seek)
+  - [ ] `OpenFile` (write/PUT) — buffer to temp, compute SHA-256, deduplicate, save to storage
+  - [ ] `Mkdir` — insert into folders table
+  - [ ] `RemoveAll` — soft-delete (set `trashed_at`)
+  - [ ] `Rename` — update `logical_path`/`filename` in DB (no storage move required)
+- [ ] HTTP Basic Auth middleware — verify against bcrypt, reject OIDC-only users with clear error
+- [ ] In-memory lock system (`webdav.NewMemLS()`)
+- [ ] Add `WEBDAV_ENABLED` config flag (default false)
+- [ ] Mount at `/dav/*` in routes.go
+- [ ] Unit tests for all FileSystem operations
+- [ ] Update README.md
+
+### ZIP Download 🔲
+
+**Memory concern:** folders can contain large already-compressed files (video, high-res images). Buffering the ZIP in memory is not viable.
+
+**Approach — streaming ZIP:**
+- Write directly to `http.ResponseWriter` using `archive/zip`
+- Stream each file from storage into the ZIP writer one at a time — peak memory is one file's read buffer (~8MB), not the full archive
+- Use `zip.Store` (no compression) for already-compressed MIME types (video/*, image/jpeg, image/png, audio/*) — avoids CPU burn with no size benefit
+- Use `zip.Deflate` only for uncompressed types (text/*, application/json, etc.)
+- No `Content-Length` header (streaming; browser shows indeterminate progress) — acceptable tradeoff
+- For `zip.Store`, `Content-Length` IS calculable upfront (sum of file sizes + fixed per-file ZIP overhead) — implement this as a follow-up if needed
+- Set `Content-Disposition: attachment; filename="<folder-name>.zip"`
+
+**Scope:**
+- [ ] `GET /folders/download?path=/some/folder` — authenticated, zips entire folder tree
+- [ ] `GET /f/{token}/download` — public ZIP download for folder share links
+- [ ] "Download as ZIP" button on folder view and folder share view pages
+- [ ] Recursive file listing (reuse `folderFiles` from folder share handler)
+- [ ] Per-file MIME type check to choose Store vs Deflate
+- [ ] Respect user ownership — cannot ZIP another user's folder
+- [ ] Tests covering empty folder, nested folders, large file count
+
+### Bulk Operations 🔲
+- [ ] Multi-select UI on files page (checkboxes appear on hover/long-press)
+- [ ] Bulk delete — soft-delete all selected files
+- [ ] Bulk move — move selected files to a chosen folder
+- [ ] Bulk download — download selected files as a ZIP (reuses ZIP download logic)
+- [ ] Select-all within current folder
+- [ ] Keyboard shortcut: `Ctrl+A` to select all, `Delete` to bulk delete
+
+### Retention Policies 🔲
+- [ ] Per-folder retention setting — auto-delete files older than N days
+- [ ] UI to set/clear retention on a folder (folder options menu)
+- [ ] Background job (piggyback on existing cleanup ticker) — query files where `created_at < now - retention` and `logical_path` matches
+- [ ] Retention stored in `folders` table as nullable `retain_days int`
+- [ ] Applies recursively to subfolders unless overridden
+- [ ] Useful for: temporary upload folders, screenshot drops, log archiving
+
+### REST API 🔲
+
+Current API is web-UI-shaped (form POSTs, HTML redirects). A proper JSON API enables automation, CLI tools, and third-party integrations.
+
+- [ ] Authentication — API key model: `AppPasswords` table (user_id, name, token_hash, scopes, last_used_at, created_at)
+  - Also unblocks WebDAV for OIDC users
+  - Tokens are bearer tokens: `Authorization: Bearer trove_<random>`
+  - Scopes: `read`, `write`, `delete`, `share`
+- [ ] `GET /api/v1/files` — list files in a folder (JSON, paginated)
+- [ ] `POST /api/v1/files` — upload file (multipart, returns file JSON)
+- [ ] `GET /api/v1/files/{id}` — file metadata
+- [ ] `DELETE /api/v1/files/{id}` — delete file
+- [ ] `GET /api/v1/files/{id}/download` — download file content
+- [ ] `GET /api/v1/folders` — list folders
+- [ ] `POST /api/v1/folders` — create folder
+- [ ] `DELETE /api/v1/folders` — delete folder
+- [ ] Admin UI to create/revoke app passwords (Settings page)
+- [ ] OpenAPI spec (`/api/v1/openapi.json`)
+
+### Audit Log 🔲
+- [ ] `audit_events` table: `id`, `user_id`, `action`, `resource_type`, `resource_id`, `metadata jsonb`, `ip_address`, `created_at`
+- [ ] Actions to log: `file.upload`, `file.download`, `file.delete`, `file.share_create`, `file.share_access`, `folder.share_create`, `folder.share_access`, `user.login`, `user.login_failed`, `user.logout`
+- [ ] Middleware hook — log after successful handler completion
+- [ ] Admin UI — paginated audit log table with filter by user/action/date
+- [ ] Retention — configurable max age for audit events (default 90 days), pruned by background job
+- [ ] No PII beyond username and IP — no file content logged
