@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.0](https://github.com/agjmills/trove/compare/v0.8.1...v0.9.0) (2026-04-07)
+
+
+### Features
+
+* **search:** file search with tag support ([#90](https://github.com/agjmills/trove/issues/90)) ([a8c7041](https://github.com/agjmills/trove/commit/a8c70418e80a39202cdda7a5e3a72a43f0e7b96e))
+* **shares:** folder sharing with optional password protection ([#88](https://github.com/agjmills/trove/issues/88)) ([28bc962](https://github.com/agjmills/trove/commit/28bc962f520f18de6e6bfc8e92f6a31efaae10f1))
+* **shares:** password-protected share links ([#86](https://github.com/agjmills/trove/issues/86)) ([9d3d618](https://github.com/agjmills/trove/commit/9d3d618484487c60aeac3c2c95c005bd969cd7bd))
+
+
+### Bug Fixes
+
+* **admin:** improve IDP change UX ([#85](https://github.com/agjmills/trove/issues/85)) ([23fb120](https://github.com/agjmills/trove/commit/23fb120c130e9dd002bbc3fb8662bdc926b53b50))
+* **preview:** remove video preview ([#89](https://github.com/agjmills/trove/issues/89)) ([3ff8090](https://github.com/agjmills/trove/commit/3ff80908340cdfe9a14346ebf9bf98a4032f3eb2))
+
 ## [0.8.1](https://github.com/agjmills/trove/compare/v0.8.0...v0.8.1) (2026-04-05)
 
 
