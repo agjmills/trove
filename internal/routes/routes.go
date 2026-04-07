@@ -141,6 +141,7 @@ func getClientIP(r *http.Request, trustedCIDRs []*net.IPNet) string {
 func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage.StorageBackend, sessionManager *scs.SessionManager, oidcProvider *oidc.Provider, version string) (*handlers.FileHandler, *handlers.DeletedHandler) {
 	authHandler := handlers.NewAuthHandler(db, cfg, sessionManager)
 	pageHandler := handlers.NewPageHandler(db, cfg)
+	searchHandler := handlers.NewSearchHandler(db, cfg)
 	fileHandler := handlers.NewFileHandler(db, cfg, storageService)
 	uploadHandler := handlers.NewUploadHandler(db, cfg, storageService)
 	healthHandler := handlers.NewHealthHandler(db, storageService, version)
@@ -231,6 +232,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Use(auth.RequireAuth(db, sessionManager))
 		r.Use(csrfMiddleware)
 		r.Get("/files", pageHandler.ShowFiles)
+		r.Get("/search", searchHandler.Search)
 		r.Get("/files/{id}", fileHandler.ViewFile)
 		r.Get("/deleted", deletedHandler.ShowDeleted)
 		r.Post("/deleted/empty", deletedHandler.EmptyDeleted)

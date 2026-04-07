@@ -21,7 +21,7 @@ class ChunkedUploadManager {
 	 * @returns {Promise<string>} uploadId
 	 */
 	async startUpload(file, options = {}) {
-		const { folder = '/', onProgress, onComplete, onError, onCancel } = options;
+		const { folder = '/', tags = [], onProgress, onComplete, onError, onCancel } = options;
 
 		// Calculate chunks
 		const totalChunks = Math.ceil(file.size / this.chunkSize);
@@ -47,6 +47,7 @@ class ChunkedUploadManager {
 				logical_path: folder,
 				mime_type: file.type || 'application/octet-stream',
 				hash: fileHash,
+				tags: tags.length > 0 ? tags : undefined,
 			}),
 		});
 
@@ -62,6 +63,7 @@ class ChunkedUploadManager {
 			uploadId: upload_id,
 			file,
 			folder,
+			tags,
 			totalChunks,
 			uploadedChunks: new Set(chunks_received || []),
 			isPaused: false,

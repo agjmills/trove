@@ -1,0 +1,86 @@
+{{define "content"}}
+<div class="min-h-[calc(100vh-80px)] bg-gray-50 dark:bg-gray-900 py-8">
+	<div class="max-w-4xl mx-auto px-4">
+
+		<!-- Search box -->
+		<form method="GET" action="/search" class="mb-8">
+			<div class="flex gap-3">
+				<input
+					type="search"
+					name="q"
+					value="{{.Query}}"
+					placeholder="Search by filename, folder, or tag…"
+					autofocus
+					class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 text-sm"
+				>
+				<button type="submit" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-500 transition-colors text-sm font-medium">
+					Search
+				</button>
+			</div>
+		</form>
+
+		{{if .Query}}
+		<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+			{{if .Results}}
+				{{len .Results}} result{{if ne (len .Results) 1}}s{{end}} for <strong class="text-gray-700 dark:text-gray-200">{{.Query}}</strong>
+			{{else}}
+				No results for <strong class="text-gray-700 dark:text-gray-200">{{.Query}}</strong>
+			{{end}}
+		</p>
+		{{end}}
+
+		{{if .Results}}
+		<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+			<table class="w-full text-sm">
+				<thead class="bg-gray-50 dark:bg-gray-700/50">
+					<tr>
+						<th class="text-left p-3 font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">Name</th>
+						<th class="text-left p-3 font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600 max-sm:hidden">Location</th>
+						<th class="text-left p-3 font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600 max-sm:hidden">Size</th>
+						<th class="text-left p-3 font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600 max-md:hidden">Tags</th>
+						<th class="p-3 border-b border-gray-200 dark:border-gray-600"></th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+					{{range .Results}}
+					<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+						<td class="p-3">
+							<a href="/files/{{.ID}}" class="font-medium text-gray-900 dark:text-gray-100 hover:underline">{{.Filename}}</a>
+						</td>
+						<td class="p-3 text-gray-500 dark:text-gray-400 max-sm:hidden">
+							<a href="/files?folder={{.LogicalPath}}" class="hover:underline">
+								{{if eq .LogicalPath "/"}}/ (Root){{else}}{{.LogicalPath}}{{end}}
+							</a>
+						</td>
+						<td class="p-3 text-gray-500 dark:text-gray-400 max-sm:hidden">{{formatBytes .FileSize}}</td>
+						<td class="p-3 max-md:hidden">
+							{{$tags := .Tags.Data}}
+							{{if $tags}}
+							<div class="flex flex-wrap gap-1">
+								{{range $tags}}
+								<span class="px-2 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">{{.}}</span>
+								{{end}}
+							</div>
+							{{end}}
+						</td>
+						<td class="p-3 text-right">
+							<a href="/download/{{.ID}}" class="text-blue-600 dark:text-blue-400 hover:underline text-xs font-medium">Download</a>
+						</td>
+					</tr>
+					{{end}}
+				</tbody>
+			</table>
+		</div>
+		{{else if .Query}}
+		<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">
+			<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-4 text-gray-300 dark:text-gray-600">
+				<circle cx="11" cy="11" r="8"></circle>
+				<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+			</svg>
+			<p class="text-gray-500 dark:text-gray-400">No files match your search.</p>
+		</div>
+		{{end}}
+
+	</div>
+</div>
+{{end}}

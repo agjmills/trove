@@ -18,6 +18,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -44,13 +45,14 @@ func NewUploadHandler(db *gorm.DB, cfg *config.Config, storage storage.StorageBa
 
 // InitUploadRequest represents the request to initialize a chunked upload
 type InitUploadRequest struct {
-	Filename    string `json:"filename"`
-	TotalSize   int64  `json:"total_size"`
-	ChunkSize   int64  `json:"chunk_size"`
-	TotalChunks int    `json:"total_chunks"`
-	LogicalPath string `json:"logical_path"`
-	MimeType    string `json:"mime_type"`
-	Hash        string `json:"hash,omitempty"` // Optional client-side hash for verification
+	Filename    string   `json:"filename"`
+	TotalSize   int64    `json:"total_size"`
+	ChunkSize   int64    `json:"chunk_size"`
+	TotalChunks int      `json:"total_chunks"`
+	LogicalPath string   `json:"logical_path"`
+	MimeType    string   `json:"mime_type"`
+	Hash        string   `json:"hash,omitempty"` // Optional client-side hash for verification
+	Tags        []string `json:"tags,omitempty"`
 }
 
 // InitUploadResponse represents the response after initializing an upload
@@ -133,6 +135,25 @@ func (h *UploadHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Normalize tags: strip whitespace, drop empties, enforce limits
+	if len(req.Tags) > 50 {
+		http.Error(w, "Too many tags (max 50)", http.StatusBadRequest)
+		return
+	}
+	normalizedTags := req.Tags[:0]
+	for _, tag := range req.Tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if len(tag) > 64 {
+			http.Error(w, "Tag too long (max 64 characters)", http.StatusBadRequest)
+			return
+		}
+		normalizedTags = append(normalizedTags, tag)
+	}
+	req.Tags = normalizedTags
+
 	// Check user quota
 	if user.StorageUsed+req.TotalSize > user.StorageQuota {
 		http.Error(w, "Storage quota exceeded", http.StatusForbidden)
@@ -167,6 +188,7 @@ func (h *UploadHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
 		Status:         "active",
 		Hash:           req.Hash,
 		MimeType:       req.MimeType,
+		Tags:           datatypes.NewJSONType(req.Tags),
 		TempDir:        tempDir,
 		ExpiresAt:      time.Now().Add(h.cfg.UploadSessionTimeout),
 	}
@@ -483,6 +505,7 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 		MimeType:         session.MimeType,
 		Hash:             calculatedHash,
 		UploadStatus:     "completed",
+		Tags:             session.Tags,
 	}
 
 	// Use a transaction to atomically create file record and update storage_used
