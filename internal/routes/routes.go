@@ -147,6 +147,7 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	adminHandler := handlers.NewAdminHandler(db, cfg, storageService)
 	deletedHandler := handlers.NewDeletedHandler(db, cfg, storageService)
 	shareHandler := handlers.NewShareHandler(db, storageService)
+	folderShareHandler := handlers.NewFolderShareHandler(db, storageService, sessionManager)
 
 	// Create rate limiter for auth endpoints
 	// Allow 5 login/register attempts per 15 minutes per IP
@@ -185,6 +186,14 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 	// Public share link access — no authentication required
 	r.Get("/s/{token}", shareHandler.AccessShareLink)
 	r.Post("/s/{token}", shareHandler.VerifySharePassword)
+
+	// Public folder share access — session needed for password-protected unlock flow
+	r.Group(func(r chi.Router) {
+		r.Use(sessionManager.LoadAndSave)
+		r.Get("/f/{token}", folderShareHandler.AccessFolderShareLink)
+		r.Post("/f/{token}", folderShareHandler.VerifyFolderSharePassword)
+		r.Get("/f/{token}/files/{id}", folderShareHandler.DownloadSharedFolderFile)
+	})
 
 	fileServer := http.FileServer(http.Dir("web/static"))
 	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
@@ -242,6 +251,9 @@ func Setup(r chi.Router, db *gorm.DB, cfg *config.Config, storageService storage
 		r.Post("/files/{id}/dismiss", fileHandler.DismissFailedUpload)
 		r.Post("/files/{id}/share", shareHandler.CreateShareLink)
 		r.Post("/share/{token}/revoke", shareHandler.RevokeShareLink)
+		r.Get("/folders/view", folderShareHandler.ShowFolderShareManagement)
+		r.Post("/folders/share", folderShareHandler.CreateFolderShareLink)
+		r.Post("/f/{token}/revoke", folderShareHandler.RevokeFolderShareLink)
 	})
 
 	// SSE endpoint for file upload status - no CSRF needed (GET request, read-only)
