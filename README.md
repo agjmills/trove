@@ -30,8 +30,11 @@
 - 🗑️ Deleted items with configurable retention (per-user settings)
 - 🎨 Tailwind CSS with responsive dark mode (system preference aware)
 - 🔒 Secure by default (CSRF protection, bcrypt, rate limiting)
-- 🔗 File sharing links with optional expiry and use limits
+- 🔗 File sharing links with optional expiry, use limits, and password protection
+- 📂 Folder sharing links with the same controls
+- 🔍 Full-text file search with tag support
 - 🔑 OIDC/SSO support (Authentik, Authelia, Keycloak, etc.)
+- 🖧 WebDAV endpoint — mount as a network drive in Finder, Explorer, Nautilus, rclone
 - 🐳 Easy Docker deployment with multi-arch support
 - 🗄️ PostgreSQL or SQLite database options
 - 📊 Health checks and Prometheus metrics
@@ -341,6 +344,31 @@ To revoke a link before it expires or runs out of uses, hit **Revoke** next to i
 - Only the file owner can create or revoke share links for their files
 - Use count is incremented atomically — concurrent requests cannot bypass a max-uses limit
 
+## WebDAV
+
+Trove exposes a WebDAV endpoint at `/dav/` when enabled, allowing any WebDAV-compatible client to mount your files as a network drive — no browser required.
+
+Enable it with:
+```bash
+WEBDAV_ENABLED=true
+```
+
+Then connect from any client using your Trove username and password:
+
+| Client | URL |
+|--------|-----|
+| macOS Finder (`⌘K`) | `http://your-trove/dav/` |
+| Windows Explorer | `\\your-trove\dav\` |
+| Linux / davfs2 | `http://your-trove/dav/` |
+| rclone | `type = webdav`, `url = http://your-trove/dav/` |
+| Cyberduck / Mountain Duck | WebDAV (HTTP) → path `/dav/` |
+
+> **Security note:** Basic Auth over plain HTTP sends credentials in the clear. Always put Trove behind HTTPS in production.
+
+> **OIDC users:** WebDAV requires a local password. OIDC-only accounts cannot use WebDAV in the current release.
+
+For full client setup instructions see [docs/webdav.md](docs/webdav.md).
+
 ## Security
 
 For security-related documentation including CSRF protection details and migration notes, see [SECURITY.md](SECURITY.md).
@@ -367,10 +395,11 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 - ✅ File sharing links
 
 **Planned:**
+- WebDAV endpoint (`/dav/`) — mount as a network drive
+- App-specific passwords (for OIDC users and automation)
+- Bulk operations (multi-select delete/move/download)
+- ZIP download for folders
 - Version history
-- Thumbnail generation
-- Bulk operations
-- REST API with authentication
 
 ## License
 
