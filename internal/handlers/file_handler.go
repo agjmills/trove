@@ -835,7 +835,6 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 	canPreview := false
 	isImage := false
 	isPDF := false
-	isVideo := false
 	isAudio := false
 	isText := false
 
@@ -849,9 +848,6 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 	} else if mimeType == "application/pdf" {
 		canPreview = true
 		isPDF = true
-	} else if strings.HasPrefix(mimeType, "video/") {
-		canPreview = true
-		isVideo = true
 	} else if strings.HasPrefix(mimeType, "audio/") {
 		canPreview = true
 		isAudio = true
@@ -878,7 +874,6 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 		"CanPreview": canPreview,
 		"IsImage":    isImage,
 		"IsPDF":      isPDF,
-		"IsVideo":    isVideo,
 		"IsAudio":    isAudio,
 		"IsText":     isText,
 		"FullWidth":  true,
