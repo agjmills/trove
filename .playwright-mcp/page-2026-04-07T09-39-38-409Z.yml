@@ -1,0 +1,57 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e4]:
+      - link "Trove" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e7]:
+        - link "Files" [ref=e8] [cursor=pointer]:
+          - /url: /files
+          - img [ref=e9]
+          - text: Files
+        - link "Deleted" [ref=e11] [cursor=pointer]:
+          - /url: /deleted
+          - img [ref=e12]
+          - text: Deleted
+        - link "Admin" [ref=e14] [cursor=pointer]:
+          - /url: /admin
+          - img [ref=e15]
+          - text: Admin
+        - link "Settings" [ref=e17] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e18]
+          - text: Settings
+        - generic [ref=e22]: admin
+        - button "Logout" [ref=e24]:
+          - img [ref=e25]
+          - text: Logout
+  - generic [ref=e28]:
+    - img [ref=e29]
+    - generic [ref=e31]: Folder share link created.
+    - button [ref=e32] [cursor=pointer]:
+      - img [ref=e33]
+  - main [ref=e35]:
+    - main [ref=e37]:
+      - generic [ref=e38]:
+        - link [ref=e39] [cursor=pointer]:
+          - /url: /files?folder=%2fshared-docs
+          - img [ref=e40]
+        - generic [ref=e42]:
+          - img [ref=e43]
+          - heading "shared-docs" [level=1] [ref=e45]
+      - generic [ref=e46]:
+        - heading "Sharing" [level=3] [ref=e47]
+        - generic [ref=e49]:
+          - generic [ref=e50]:
+            - generic [ref=e51]:
+              - textbox [ref=e52]: /f/J-aMMCH5duCKEBkcKLymeHiaiYc4rPM-hDRjd9OAqD4
+              - button "Copy link" [ref=e53]:
+                - img [ref=e54]
+            - generic [ref=e57]:
+              - generic [ref=e58]: No expiry
+              - generic [ref=e59]: 0 uses
+              - generic [ref=e60]: Created Apr 7, 2026
+          - button "Revoke" [ref=e62]
+        - group [ref=e63]:
+          - generic "Create share link" [ref=e64] [cursor=pointer]:
+            - img [ref=e65]
+            - text: Create share link

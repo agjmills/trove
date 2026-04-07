@@ -1,0 +1,30 @@
+- generic [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e4]:
+      - link "Trove" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e7]:
+        - link "Login" [ref=e8] [cursor=pointer]:
+          - /url: /login
+        - link "Register" [ref=e9] [cursor=pointer]:
+          - /url: /register
+  - generic [ref=e10]:
+    - img [ref=e11]
+    - generic [ref=e13]: Invalid credentials
+    - button [ref=e14] [cursor=pointer]:
+      - img [ref=e15]
+  - main [ref=e17]:
+    - generic [ref=e18]:
+      - heading "Login" [level=1] [ref=e19]
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]: Username
+          - textbox "Username" [active] [ref=e23]
+        - generic [ref=e24]:
+          - generic [ref=e25]: Password
+          - textbox "Password" [ref=e26]
+        - button "Login" [ref=e27]
+      - paragraph [ref=e28]:
+        - text: Don't have an account?
+        - link "Register" [ref=e29] [cursor=pointer]:
+          - /url: /register

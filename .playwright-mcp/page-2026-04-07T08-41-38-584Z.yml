@@ -1,0 +1,41 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e4]:
+      - link "Trove" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e7]:
+        - link "Files" [ref=e8] [cursor=pointer]:
+          - /url: /files
+          - img [ref=e9]
+          - text: Files
+        - link "Deleted" [ref=e11] [cursor=pointer]:
+          - /url: /deleted
+          - img [ref=e12]
+          - text: Deleted
+        - link "Settings" [ref=e14] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e15]
+          - text: Settings
+        - generic [ref=e19]: admin
+        - button "Logout" [ref=e21]:
+          - img [ref=e22]
+          - text: Logout
+  - main [ref=e25]:
+    - main [ref=e27]:
+      - generic [ref=e28]:
+        - heading "Your Files" [level=1] [ref=e29]
+        - generic "Storage quota shown may be approximate. Server performs authoritative validation on uploads." [ref=e30]:
+          - generic [ref=e31]:
+            - generic [ref=e32]: "Storage:"
+            - generic [ref=e33]: 0 B / 10.0 GB
+            - generic [ref=e34]: ~
+      - generic [ref=e35]:
+        - strong [ref=e38]: Home
+        - generic [ref=e39]:
+          - button "Upload File" [ref=e40]:
+            - img [ref=e41]
+            - text: Upload File
+          - button "New Folder" [ref=e44]:
+            - img [ref=e45]
+            - text: New Folder
+      - paragraph [ref=e47]: No files in this folder yet.

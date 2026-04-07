@@ -1,0 +1,86 @@
+- generic [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e4]:
+      - link "Trove" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e7]:
+        - link "Files" [ref=e8] [cursor=pointer]:
+          - /url: /files
+          - img [ref=e9]
+          - text: Files
+        - link "Deleted" [ref=e11] [cursor=pointer]:
+          - /url: /deleted
+          - img [ref=e12]
+          - text: Deleted
+        - link "Admin" [ref=e14] [cursor=pointer]:
+          - /url: /admin
+          - img [ref=e15]
+          - text: Admin
+        - link "Settings" [ref=e17] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e18]
+          - text: Settings
+        - generic [ref=e22]: admin
+        - button "Logout" [ref=e24]:
+          - img [ref=e25]
+          - text: Logout
+  - main [ref=e38]:
+    - main [ref=e40]:
+      - generic [ref=e41]:
+        - heading "Your Files" [level=1] [ref=e42]
+        - generic "Storage quota shown may be approximate. Server performs authoritative validation on uploads." [ref=e43]:
+          - generic [ref=e44]:
+            - generic [ref=e45]: "Storage:"
+            - generic [ref=e46]: 56 B / 10.0 GB
+            - generic [ref=e47]: ~
+      - generic [ref=e48]:
+        - strong [ref=e51]: Home
+        - generic [ref=e52]:
+          - button "Upload File" [ref=e53]:
+            - img [ref=e54]
+            - text: Upload File
+          - button "New Folder" [ref=e57]:
+            - img [ref=e58]
+            - text: New Folder
+      - generic [ref=e60]:
+        - heading "Folders" [level=2] [ref=e61]
+        - generic [ref=e63]:
+          - link "shared-docs" [ref=e64] [cursor=pointer]:
+            - /url: /files?folder=/shared-docs
+            - img [ref=e65]
+            - generic [ref=e67]: shared-docs
+          - generic [ref=e68]:
+            - button "Folder options" [active] [ref=e69]:
+              - img [ref=e70]
+            - generic [ref=e98]:
+              - button "Rename" [ref=e99]:
+                - img [ref=e100]
+                - text: Rename
+              - button "Move" [ref=e103]:
+                - img [ref=e104]
+                - text: Move
+              - link "Share" [ref=e106] [cursor=pointer]:
+                - /url: /folders/view?path=/shared-docs
+                - img [ref=e107]
+                - text: Share
+              - button "Delete" [ref=e115]:
+                - img [ref=e116]
+                - text: Delete
+      - generic [ref=e74]:
+        - heading "Files" [level=2] [ref=e75]
+        - table [ref=e77]:
+          - rowgroup [ref=e78]:
+            - row "Name Size Uploaded" [ref=e79]:
+              - columnheader "Name" [ref=e80]
+              - columnheader "Size" [ref=e81]
+              - columnheader "Uploaded" [ref=e82]
+              - columnheader [ref=e83]
+          - rowgroup [ref=e84]:
+            - row "shareable (1).txt 28 B 2026-04-07 08:57 File options" [ref=e85] [cursor=pointer]:
+              - cell "shareable (1).txt" [ref=e86]:
+                - generic "shareable (1).txt" [ref=e88]
+              - cell "28 B" [ref=e89]
+              - cell "2026-04-07 08:57" [ref=e90]
+              - cell "File options" [ref=e91]:
+                - button "File options" [ref=e93]:
+                  - img [ref=e94]

@@ -108,9 +108,10 @@ type UploadSession struct {
 	ReceivedChunks int            `gorm:"not null;default:0" json:"received_chunks"`
 	ChunksReceived datatypes.JSON `gorm:"type:json" json:"chunks_received"`             // Array of chunk numbers received
 	Status         string         `gorm:"size:20;default:'active';index" json:"status"` // active, completed, canceled, expired
-	Hash           string         `gorm:"size:64" json:"hash,omitempty"`                // Expected hash for verification (optional)
-	MimeType       string         `gorm:"size:100" json:"mime_type"`
-	TempDir        string         `gorm:"size:1024" json:"temp_dir"` // Temporary directory for chunks
+	Hash           string                       `gorm:"size:64" json:"hash,omitempty"`   // Expected hash for verification (optional)
+	MimeType       string                       `gorm:"size:100" json:"mime_type"`
+	Tags           datatypes.JSONType[[]string] `json:"tags"`                            // Tags to apply to the completed file
+	TempDir        string                       `gorm:"size:1024" json:"temp_dir"`       // Temporary directory for chunks
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	ExpiresAt      time.Time      `gorm:"index" json:"expires_at"` // When this session should be cleaned up

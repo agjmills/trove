@@ -1,0 +1,4 @@
+[      16ms] TypeError: Cannot read properties of null (reading 'value')
+    at dismissFailedUpload (http://192.168.0.3:5014/files:742:58)
+    at http://192.168.0.3:5014/files:1438:3
+    at http://192.168.0.3:5014/files:1440:4

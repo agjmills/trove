@@ -1,0 +1,66 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e4]:
+      - link "Trove" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e7]:
+        - link "Files" [ref=e8] [cursor=pointer]:
+          - /url: /files
+          - img [ref=e9]
+          - text: Files
+        - link "Deleted" [ref=e11] [cursor=pointer]:
+          - /url: /deleted
+          - img [ref=e12]
+          - text: Deleted
+        - link "Admin" [ref=e14] [cursor=pointer]:
+          - /url: /admin
+          - img [ref=e15]
+          - text: Admin
+        - link "Settings" [ref=e17] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e18]
+          - text: Settings
+        - generic [ref=e22]: admin
+        - button "Logout" [ref=e24]:
+          - img [ref=e25]
+          - text: Logout
+  - generic:
+    - generic [ref=e28]:
+      - img [ref=e30]
+      - generic [ref=e34]:
+        - generic [ref=e35]: "Upload failed: shareable.txt"
+        - generic [ref=e36]: Check server logs for details.
+      - button [ref=e37] [cursor=pointer]:
+        - img
+    - generic [ref=e38]:
+      - img [ref=e39]
+      - generic [ref=e41]: Folder created successfully.
+      - button [ref=e42] [cursor=pointer]:
+        - img [ref=e43]
+  - main [ref=e45]:
+    - main [ref=e47]:
+      - generic [ref=e48]:
+        - heading "Your Files" [level=1] [ref=e49]
+        - generic "Storage quota shown may be approximate. Server performs authoritative validation on uploads." [ref=e50]:
+          - generic [ref=e51]:
+            - generic [ref=e52]: "Storage:"
+            - generic [ref=e53]: 56 B / 10.0 GB
+            - generic [ref=e54]: ~
+      - generic [ref=e55]:
+        - generic [ref=e56]:
+          - link "Go to parent folder" [ref=e57] [cursor=pointer]:
+            - /url: /files
+            - img [ref=e58]
+          - generic [ref=e60]:
+            - link "Home" [ref=e61] [cursor=pointer]:
+              - /url: /files?folder=%2f
+            - text: /
+            - strong [ref=e62]: shared-docs
+        - generic [ref=e63]:
+          - button "Upload File" [ref=e64]:
+            - img [ref=e65]
+            - text: Upload File
+          - button "New Folder" [ref=e68]:
+            - img [ref=e69]
+            - text: New Folder
+      - paragraph [ref=e71]: No files in this folder yet.

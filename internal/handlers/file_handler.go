@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"github.com/agjmills/trove/internal/auth"
@@ -361,6 +362,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	mr := multipart.NewReader(r.Body, boundary)
 
 	folderPath := "/"
+	var tagsRaw string
 	var fileProcessed bool
 	var originalFilename string
 	var hash string
@@ -403,6 +405,10 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			} else {
 				folderPath = sanitizeFolderPath(string(data))
 			}
+
+		case "tags":
+			data, _ := io.ReadAll(io.LimitReader(part, 4096))
+			tagsRaw = strings.TrimSpace(string(data))
 
 		case "file":
 			if fileProcessed {
@@ -515,6 +521,14 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		tempFilePath = "" // Clear so defer doesn't delete it
 	}
 
+	// Parse comma-separated tags
+	var parsedTags []string
+	for _, t := range strings.Split(tagsRaw, ",") {
+		if s := strings.TrimSpace(t); s != "" {
+			parsedTags = append(parsedTags, s)
+		}
+	}
+
 	// Create database record immediately
 	fileRecord := models.File{
 		UserID:           user.ID,
@@ -527,6 +541,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		Hash:             hash,
 		UploadStatus:     uploadStatus,
 		TempPath:         tempPathForDB,
+		Tags:             datatypes.NewJSONType(parsedTags),
 	}
 
 	if err := h.db.Create(&fileRecord).Error; err != nil {

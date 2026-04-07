@@ -1,0 +1,5 @@
+[      15ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://192.168.0.3:5014/login:0
+[   57659ms] TypeError: Cannot read properties of null (reading 'value')
+    at dismissFailedUpload (http://192.168.0.3:5014/files:727:58)
+    at updateFileStatus (http://192.168.0.3:5014/files:535:4)
+    at EventSource.<anonymous> (http://192.168.0.3:5014/files:516:4)

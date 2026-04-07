@@ -1,0 +1,6 @@
+[      17ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o @ http://192.168.0.3:5014/folders/view?path=/shared-docs:0
+[  140086ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://192.168.0.3:5014/login:0
+[  156826ms] TypeError: Cannot read properties of null (reading 'value')
+    at dismissFailedUpload (http://192.168.0.3:5014/files:811:58)
+    at http://192.168.0.3:5014/files:1521:3
+    at http://192.168.0.3:5014/files:1523:4

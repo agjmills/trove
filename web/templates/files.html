@@ -174,9 +174,13 @@
 			</div>
 		</div>
 
+		<!-- Tags input for upload -->
+		<input type="text" id="tags-input" placeholder="Tags (optional, comma-separated)" class="hidden sm:block px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-56" aria-label="Tags">
+
 		<!-- Hidden upload form -->
 		<form method="POST" action="/upload" enctype="multipart/form-data" id="upload-form" class="hidden">
 			<input type="hidden" name="folder" value="{{.CurrentFolder}}">
+			<input type="hidden" name="tags" id="upload-tags-hidden">
 			<input type="file" name="file" id="file-input">
 		</form>
 
@@ -1151,19 +1155,23 @@
 		}
 
 		const folder = uploadForm.querySelector('input[name="folder"]').value;
+		const tagsInput = document.getElementById('tags-input');
+		const tags = tagsInput
+			? tagsInput.value.split(',').map(t => t.trim()).filter(t => t.length > 0)
+			: [];
 
 		// Determine if we should use chunked upload (for files > 10MB)
 		const useChunkedUpload = file.size > 10 * 1024 * 1024;
 
 		if (useChunkedUpload) {
-			uploadFileChunked(file, folder);
+			uploadFileChunked(file, folder, tags);
 		} else {
-			uploadFileTraditional(file, folder);
+			uploadFileTraditional(file, folder, tags);
 		}
 	}
 
 	// Chunked upload for large files (resumable)
-	function uploadFileChunked(file, folder) {
+	function uploadFileChunked(file, folder, tags) {
 		isUploading = true;
 		uploadStartTime = Date.now();
 		uploadBytesStart = 0;
@@ -1182,6 +1190,7 @@
 
 		chunkedUploadManager.startUpload(file, {
 			folder,
+			tags,
 			onProgress: (progress) => {
 				currentUploadId = progress.uploadId;
 				const percentage = progress.percentage;
@@ -1226,10 +1235,15 @@
 	}
 
 	// Traditional upload for small files
-	function uploadFileTraditional(file, folder) {
+	function uploadFileTraditional(file, folder, tags) {
+		// Copy tags into hidden form field for multipart submission
+		const hiddenTags = document.getElementById('upload-tags-hidden');
+		if (hiddenTags) hiddenTags.value = (tags || []).join(',');
+
 		const formData = new FormData();
 		formData.append('file', file);
 		formData.append('folder', folder);
+		formData.append('tags', (tags || []).join(','));
 
 		// Mark upload as active for beforeunload warning
 		isUploading = true;

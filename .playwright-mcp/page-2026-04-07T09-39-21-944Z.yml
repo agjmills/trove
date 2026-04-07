@@ -1,0 +1,41 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e4]:
+      - link "Trove" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e7]:
+        - link "Files" [ref=e8] [cursor=pointer]:
+          - /url: /files
+          - img [ref=e9]
+          - text: Files
+        - link "Deleted" [ref=e11] [cursor=pointer]:
+          - /url: /deleted
+          - img [ref=e12]
+          - text: Deleted
+        - link "Admin" [ref=e14] [cursor=pointer]:
+          - /url: /admin
+          - img [ref=e15]
+          - text: Admin
+        - link "Settings" [ref=e17] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e18]
+          - text: Settings
+        - generic [ref=e22]: admin
+        - button "Logout" [ref=e24]:
+          - img [ref=e25]
+          - text: Logout
+  - main [ref=e28]:
+    - main [ref=e30]:
+      - generic [ref=e31]:
+        - link [ref=e32] [cursor=pointer]:
+          - /url: /files?folder=%2fshared-docs
+          - img [ref=e33]
+        - generic [ref=e35]:
+          - img [ref=e36]
+          - heading "shared-docs" [level=1] [ref=e38]
+      - generic [ref=e39]:
+        - heading "Sharing" [level=3] [ref=e40]
+        - group [ref=e41]:
+          - generic "Create share link" [ref=e42] [cursor=pointer]:
+            - img [ref=e43]
+            - text: Create share link
