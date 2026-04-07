@@ -389,4 +389,3 @@ func (h *FolderShareHandler) DownloadSharedFolderFile(w http.ResponseWriter, r *
 		logger.Error("error streaming shared folder file", "path", file.StoragePath, "error", err)
 	}
 }
-
