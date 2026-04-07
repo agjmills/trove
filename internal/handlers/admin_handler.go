@@ -13,6 +13,7 @@ import (
 	"github.com/agjmills/trove/internal/auth"
 	"github.com/agjmills/trove/internal/config"
 	"github.com/agjmills/trove/internal/database/models"
+	"github.com/agjmills/trove/internal/flash"
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/storage"
 )
@@ -457,7 +458,8 @@ func (h *AdminHandler) UpdateUserIDP(w http.ResponseWriter, r *http.Request) {
 	// Prevent locking yourself out
 	currentUser := auth.GetUser(r)
 	if currentUser.ID == user.ID && idp == "oidc" && user.IdentityProvider == "internal" {
-		http.Error(w, "Cannot switch your own account to OIDC", http.StatusBadRequest)
+		flash.Error(w, "Cannot switch your own account to OIDC.")
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 		return
 	}
 
