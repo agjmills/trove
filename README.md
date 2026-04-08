@@ -115,7 +115,7 @@ Trove will be available at `http://localhost:8080`. The first account you regist
 
 Multi-arch images available for `linux/amd64` and `linux/arm64`.
 
-> For reverse proxy setup (Traefik, Nginx, Caddy), OIDC, S3 storage, and troubleshooting, see **[INSTALL.md](INSTALL.md)**.
+> For reverse proxy setup (Traefik, Nginx, Caddy), OIDC, S3 storage, and troubleshooting, see the **[install guide](https://agjmills.github.io/trove/docs/install/)**.
 
 ## First-time Setup
 
@@ -246,7 +246,7 @@ CSRF_ENABLED=true
 TRUSTED_PROXY_CIDRS=172.18.0.0/16
 ```
 
-See `.env.example` for all options and [INSTALL.md](INSTALL.md) for detailed deployment guides including reverse proxy setup for Traefik, Nginx, and Caddy.
+See `.env.example` for all options and the [install guide](https://agjmills.github.io/trove/docs/install/) for detailed deployment guides including reverse proxy setup for Traefik, Nginx, and Caddy.
 
 ## Development
 
