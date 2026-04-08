@@ -13,7 +13,7 @@ mkdir -p trove-data
 docker run -d \
   --name trove \
   -p 8080:8080 \
-  -v trove-data:/app/data \
+  -v ./trove-data:/app/data \
   -v /tmp \
   -e SESSION_SECRET="$(openssl rand -base64 32)" \
   -e DB_TYPE=sqlite \
@@ -256,6 +256,6 @@ OIDC_ADMIN_VALUE=trove-admins
 |---|---|---|
 | Session cookies | Not `Secure` (HTTP ok) | `Secure` (HTTPS required) |
 | CSRF origin check | Disabled | Enabled |
-| Error detail | Full stack traces | Minimal messages |
+| Error detail | Full-stack traces | Minimal messages |
 
 For local development without a reverse proxy, use `ENV=development`.
