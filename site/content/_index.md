@@ -3,61 +3,63 @@ title: Trove
 layout: hextra-home
 ---
 
-{{< hextra/hero-badge >}}
-  <span>Open Source</span>
-  {{< icon name="arrow-circle-right" attributes="height=14" >}}
-{{< /hextra/hero-badge >}}
-
-<div class="hx-mt-6 hx-mb-6">
+<div class="hx-mt-6 hx-mb-4">
 {{< hextra/hero-headline >}}
-  Self-hosted file storage&nbsp;&nbsp;
-  that stays out of your way
+  Trove
 {{< /hextra/hero-headline >}}
 </div>
 
-<div class="hx-mb-12">
+<div class="hx-mb-8">
 {{< hextra/hero-subtitle >}}
-  Your personal Google Drive alternative.&nbsp;&nbsp;
-  Single Docker container. ~18MB image.
+  Self-hosted file storage. Single Docker container, ~18MB image, no JavaScript framework.
 {{< /hextra/hero-subtitle >}}
 </div>
 
-<div class="hx-mb-6">
-{{< hextra/hero-button text="Get Started" link="docs/" >}}
-{{< hextra/hero-button text="View on GitHub" link="https://github.com/agjmills/trove" style="secondary" >}}
+```bash
+docker run -d -p 8080:8080 -v ./data:/app/data -v /tmp \
+  -e SESSION_SECRET="$(openssl rand -base64 32)" \
+  -e DB_TYPE=sqlite \
+  ghcr.io/agjmills/trove:latest
+```
+
+<div class="hx-mt-6 hx-mb-10">
+{{< hextra/hero-button text="Documentation" link="docs/" >}}
+{{< hextra/hero-button text="GitHub" link="https://github.com/agjmills/trove" style="secondary" >}}
 </div>
 
-<div class="hx-mt-6"></div>
+---
+
+<div style="margin: 2rem 0">
+
+Trove is a file storage server written in Go. Upload, organise, and share files from a single binary. It uses local disk or S3-compatible storage, and PostgreSQL or SQLite.
+
+It doesn't have a mobile app, a cloud sync daemon, or a premium tier.
+
+</div>
 
 {{< hextra/feature-grid >}}
   {{< hextra/feature-card
-    title="Simple deployment"
-    subtitle="Single Docker container, ~18MB image. Up in under a minute with docker compose."
-    icon="cube"
+    title="File management"
+    subtitle="Upload, rename, move, trash, and restore files. Folder hierarchy. Natural sort order."
   >}}
   {{< hextra/feature-card
-    title="Pluggable storage"
-    subtitle="Store files on local disk, AWS S3, Cloudflare R2, MinIO, or Backblaze B2."
-    icon="server"
+    title="Storage backends"
+    subtitle="Local disk, AWS S3, Cloudflare R2, MinIO, Backblaze B2, or rustfs."
   >}}
   {{< hextra/feature-card
     title="Multi-user"
-    subtitle="Per-user storage quotas, admin panel, OIDC/SSO support for Authentik, Authelia, Keycloak."
-    icon="user-group"
+    subtitle="Per-user quotas. Admin panel for user management. OIDC/SSO via Authentik, Authelia, or Keycloak."
   >}}
   {{< hextra/feature-card
     title="Resumable uploads"
-    subtitle="Chunked uploads with pause, resume, and cancel. SHA-256 integrity verification."
-    icon="arrow-up"
+    subtitle="Chunked upload with pause and resume. SHA-256 integrity check. No client-side JS framework."
   >}}
   {{< hextra/feature-card
     title="Sharing"
-    subtitle="Share files and folders with optional password protection, expiry, and download limits."
-    icon="share"
+    subtitle="Share files or folders via link. Optional password, expiry date, and download limit."
   >}}
   {{< hextra/feature-card
     title="Search"
-    subtitle="Full-text search across filenames, folders, and tags. Tag files at upload time."
-    icon="beaker"
+    subtitle="Search by filename, folder path, and tags. Tags can be set at upload time."
   >}}
 {{< /hextra/feature-grid >}}

@@ -28,3 +28,18 @@ theme = "hextra"
 
 [markup.highlight]
   noClasses = false
+
+[[menu.main]]
+  name = "Docs"
+  url = "/trove/docs/"
+  weight = 1
+
+[[menu.main]]
+  name = "Releases"
+  url = "https://github.com/agjmills/trove/releases"
+  weight = 2
+
+[[menu.main]]
+  name = "GitHub"
+  url = "https://github.com/agjmills/trove"
+  weight = 3
