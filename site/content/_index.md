@@ -29,9 +29,13 @@ docker run -d -p 8080:8080 -v ./data:/app/data -v /tmp \
 
 ---
 
+<div style="margin: 2rem 0">
+
 Trove is a file storage server written in Go. Upload, organise, and share files from a single binary. It uses local disk or S3-compatible storage, and PostgreSQL or SQLite.
 
 It doesn't have a mobile app, a cloud sync daemon, or a premium tier.
+
+</div>
 
 {{< hextra/feature-grid >}}
   {{< hextra/feature-card
