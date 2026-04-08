@@ -31,7 +31,7 @@ theme = "hextra"
 
 [[menu.main]]
   name = "Docs"
-  url = "/trove/docs/"
+  url = "/docs/"
   weight = 1
 
 [[menu.main]]
