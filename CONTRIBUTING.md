@@ -10,10 +10,6 @@ Thank you for your interest in contributing to Trove! We welcome contributions f
    git clone https://github.com/YOUR-USERNAME/trove.git
    cd trove
    ```
-3. **Create a branch** for your changes:
-   ```bash
-   git checkout -b feature/my-new-feature
-   ```
 
 ## Development Setup
 
@@ -121,12 +117,7 @@ make build-css
    git commit -m "Add feature: description of changes"
    ```
 
-2. **Push to your fork**:
-   ```bash
-   git push origin feature/my-new-feature
-   ```
-
-3. **Open a Pull Request** on GitHub with:
+2. **Open a Pull Request** on GitHub with:
    - Clear description of changes
    - Any related issue numbers
    - Screenshots for UI changes
