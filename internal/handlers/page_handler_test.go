@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	csrf "filippo.io/csrf/gorilla"
 	"github.com/maruel/natural"
@@ -234,5 +235,131 @@ func TestFilesOnlyPagination(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func parseTime(s string) time.Time {
+	t, _ := time.Parse("2006-01-02", s)
+	return t
+}
+
+func TestFileSorting(t *testing.T) {
+	tests := []struct {
+		name      string
+		files     []models.File
+		sortField string
+		sortOrder string
+		expected  []string
+	}{
+		{
+			name: "natural sort by name ASC",
+			files: []models.File{
+				{OriginalFilename: "file10.txt"},
+				{OriginalFilename: "file2.txt"},
+				{OriginalFilename: "File20.txt"},
+				{OriginalFilename: "file1.txt"},
+				{OriginalFilename: "file3.txt"},
+				{OriginalFilename: "image2.png"},
+				{OriginalFilename: "image10.png"},
+			},
+			sortField: "original_filename",
+			sortOrder: "ASC",
+			expected:  []string{"file1.txt", "file2.txt", "file3.txt", "file10.txt", "File20.txt", "image2.png", "image10.png"},
+		},
+		{
+			name: "natural sort by name DESC",
+			files: []models.File{
+				{OriginalFilename: "file10.txt"},
+				{OriginalFilename: "file2.txt"},
+				{OriginalFilename: "File20.txt"},
+				{OriginalFilename: "file1.txt"},
+				{OriginalFilename: "file3.txt"},
+			},
+			sortField: "original_filename",
+			sortOrder: "DESC",
+			expected:  []string{"File20.txt", "file10.txt", "file3.txt", "file2.txt", "file1.txt"},
+		},
+		{
+			name: "sort by size ASC",
+			files: []models.File{
+				{OriginalFilename: "small.txt", FileSize: 100},
+				{OriginalFilename: "large.txt", FileSize: 5000},
+				{OriginalFilename: "medium.txt", FileSize: 500},
+			},
+			sortField: "file_size",
+			sortOrder: "ASC",
+			expected:  []string{"small.txt", "medium.txt", "large.txt"},
+		},
+		{
+			name: "sort by size DESC",
+			files: []models.File{
+				{OriginalFilename: "small.txt", FileSize: 100},
+				{OriginalFilename: "large.txt", FileSize: 5000},
+				{OriginalFilename: "medium.txt", FileSize: 500},
+			},
+			sortField: "file_size",
+			sortOrder: "DESC",
+			expected:  []string{"large.txt", "medium.txt", "small.txt"},
+		},
+		{
+			name: "sort by date ASC",
+			files: []models.File{
+				{OriginalFilename: "newest.txt", CreatedAt: parseTime("2026-04-08")},
+				{OriginalFilename: "oldest.txt", CreatedAt: parseTime("2025-01-01")},
+				{OriginalFilename: "middle.txt", CreatedAt: parseTime("2025-12-01")},
+			},
+			sortField: "created_at",
+			sortOrder: "ASC",
+			expected:  []string{"oldest.txt", "middle.txt", "newest.txt"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			files := make([]models.File, len(tt.files))
+			copy(files, tt.files)
+
+			if tt.sortField == "original_filename" {
+				sort.Slice(files, func(i, j int) bool {
+					nameI := strings.ToLower(files[i].OriginalFilename)
+					nameJ := strings.ToLower(files[j].OriginalFilename)
+
+					if tt.sortOrder == "DESC" {
+						return natural.Less(nameJ, nameI)
+					}
+					return natural.Less(nameI, nameJ)
+				})
+			} else {
+				sort.Slice(files, func(i, j int) bool {
+					var less bool
+					switch tt.sortField {
+					case "file_size":
+						less = files[i].FileSize < files[j].FileSize
+					case "created_at":
+						less = files[i].CreatedAt.Before(files[j].CreatedAt)
+					}
+
+					if tt.sortOrder == "DESC" {
+						return !less
+					}
+					return less
+				})
+			}
+
+			got := make([]string, len(files))
+			for i, f := range files {
+				got[i] = f.OriginalFilename
+			}
+
+			if len(got) != len(tt.expected) {
+				t.Fatalf("length mismatch: got %d, want %d", len(got), len(tt.expected))
+			}
+
+			for i := range got {
+				if got[i] != tt.expected[i] {
+					t.Errorf("position %d: got %s, want %s", i, got[i], tt.expected[i])
+				}
+			}
+		})
 	}
 }
