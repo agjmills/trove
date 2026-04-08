@@ -87,7 +87,12 @@ When deleting files, the physical file is only removed when all references are d
 ### Code Style
 
 - Follow Go conventions (run `make fmt` before committing)
-- Write clear commit messages
+- Write commit messages following [Conventional Commits](https://www.conventionalcommits.org/):
+  - `feat: add search pagination`
+  - `fix: correct natural sort order for renamed files`
+  - `docs: update configuration reference`
+  - `refactor: extract sort helpers into shared file`
+  - `test: add integration tests for folder sharing`
 - Add tests for new functionality
 - Update documentation as needed
 
@@ -114,7 +119,7 @@ make build-css
 1. **Commit your changes**:
    ```bash
    git add .
-   git commit -m "Add feature: description of changes"
+   git commit -m "feat: description of changes"
    ```
 
 2. **Open a Pull Request** on GitHub with:
