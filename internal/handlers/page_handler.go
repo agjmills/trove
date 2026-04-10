@@ -29,16 +29,10 @@ func naturalLessInsensitive(a, b string) bool {
 	aLower := strings.ToLower(a)
 	bLower := strings.ToLower(b)
 
-	switch {
-	case aLower == bLower:
+	if aLower == bLower {
 		return a < b
-	case natural.Less(aLower, bLower):
-		return true
-	case natural.Less(bLower, aLower):
-		return false
-	default:
-		return aLower < bLower
 	}
+	return natural.Less(aLower, bLower)
 }
 
 func sortStringsNaturally(values []string) {
