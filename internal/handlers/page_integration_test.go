@@ -41,9 +41,10 @@ func init() {
 
 // pageTestApp encapsulates all dependencies for page handler integration tests
 type pageTestApp struct {
-	db          *gorm.DB
-	cfg         *config.Config
-	pageHandler *PageHandler
+	db            *gorm.DB
+	cfg           *config.Config
+	pageHandler   *PageHandler
+	searchHandler *SearchHandler
 }
 
 // newPageTestApp creates a new test application for page handler tests
@@ -67,11 +68,13 @@ func newPageTestApp(t *testing.T) *pageTestApp {
 	}
 
 	pageHandler := NewPageHandler(db, cfg)
+	searchHandler := NewSearchHandler(db, cfg)
 
 	return &pageTestApp{
-		db:          db,
-		cfg:         cfg,
-		pageHandler: pageHandler,
+		db:            db,
+		cfg:           cfg,
+		pageHandler:   pageHandler,
+		searchHandler: searchHandler,
 	}
 }
 
@@ -275,6 +278,71 @@ func TestShowFilesFiltering(t *testing.T) {
 		// We can't easily verify the order in the HTML, but we verify
 		// the handler doesn't error
 	})
+
+	t.Run("renamed files are repositioned by current filename", func(t *testing.T) {
+		renamed := app.createTestFile(t, user, "cat.txt", "/")
+		if err := app.db.Model(renamed).Update("filename", "ant.txt").Error; err != nil {
+			t.Fatalf("Failed to rename file in test setup: %v", err)
+		}
+		app.createTestFile(t, user, "bear.txt", "/")
+
+		req := app.authenticatedRequest(t, http.MethodGet, "/files", user)
+		w := httptest.NewRecorder()
+		app.pageHandler.ShowFiles(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d", w.Code)
+		}
+
+		body := w.Body.String()
+		antIndex := strings.Index(body, "ant.txt")
+		bearIndex := strings.Index(body, "bear.txt")
+		if antIndex == -1 || bearIndex == -1 {
+			t.Fatalf("Expected renamed and comparison files in response")
+		}
+		if antIndex >= bearIndex {
+			t.Fatalf("Expected ant.txt to appear before bear.txt after rename")
+		}
+	})
+}
+
+func TestSearchResultsNaturalSort(t *testing.T) {
+	app := newPageTestApp(t)
+	user := app.createTestUser(t, "searchuser")
+
+	app.createTestFile(t, user, "photo_10.jpg", "/season10")
+	app.createTestFile(t, user, "photo_2.jpg", "/season2")
+	app.createTestFile(t, user, "photo_11.jpg", "/season2")
+	app.createTestFile(t, user, "photo_1.jpg", "/season2")
+
+	req := app.authenticatedRequest(t, http.MethodGet, "/search?q=photo", user)
+	w := httptest.NewRecorder()
+
+	app.searchHandler.Search(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	order := []string{
+		"photo_1.jpg",
+		"photo_2.jpg",
+		"photo_11.jpg",
+		"photo_10.jpg",
+	}
+
+	lastIndex := -1
+	for _, name := range order {
+		index := strings.Index(body, name)
+		if index == -1 {
+			t.Fatalf("Expected %s in search results", name)
+		}
+		if index <= lastIndex {
+			t.Fatalf("Expected %s to appear after previous result", name)
+		}
+		lastIndex = index
+	}
 }
 
 // TestShowFilesFolderStructure tests folder hierarchy display

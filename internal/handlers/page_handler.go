@@ -25,6 +25,52 @@ func NewPageHandler(db *gorm.DB, cfg *config.Config) *PageHandler {
 	return &PageHandler{db: db, cfg: cfg}
 }
 
+func naturalLessInsensitive(a, b string) bool {
+	aLower := strings.ToLower(a)
+	bLower := strings.ToLower(b)
+
+	if aLower == bLower {
+		return a < b
+	}
+	return natural.Less(aLower, bLower)
+}
+
+func sortStringsNaturally(values []string) {
+	sort.SliceStable(values, func(i, j int) bool {
+		return naturalLessInsensitive(values[i], values[j])
+	})
+}
+
+func sortFilesByFilenameNaturally(files []models.File) {
+	sort.SliceStable(files, func(i, j int) bool {
+		if files[i].Filename == files[j].Filename {
+			return files[i].ID < files[j].ID
+		}
+		return naturalLessInsensitive(files[i].Filename, files[j].Filename)
+	})
+}
+
+func sortFilesByPathAndFilenameNaturally(files []models.File) {
+	sort.SliceStable(files, func(i, j int) bool {
+		if files[i].LogicalPath != files[j].LogicalPath {
+			return naturalLessInsensitive(files[i].LogicalPath, files[j].LogicalPath)
+		}
+		if files[i].Filename != files[j].Filename {
+			return naturalLessInsensitive(files[i].Filename, files[j].Filename)
+		}
+		return files[i].ID < files[j].ID
+	})
+}
+
+func sortFoldersByPathNaturally(folders []models.Folder) {
+	sort.SliceStable(folders, func(i, j int) bool {
+		if folders[i].FolderPath == folders[j].FolderPath {
+			return folders[i].ID < folders[j].ID
+		}
+		return naturalLessInsensitive(folders[i].FolderPath, folders[j].FolderPath)
+	})
+}
+
 func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 
@@ -163,9 +209,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	for name := range folderMap {
 		folderNames = append(folderNames, name)
 	}
-	sort.Slice(folderNames, func(i, j int) bool {
-		return natural.Less(strings.ToLower(folderNames[i]), strings.ToLower(folderNames[j]))
-	})
+	sortStringsNaturally(folderNames)
 
 	// Build folder info with sanitized IDs
 	folderInfos := make([]FolderInfo, 0, len(folderNames))
@@ -185,24 +229,20 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	query := h.db.Where("user_id = ? AND logical_path = ? AND upload_status != ? AND trashed_at IS NULL",
 		user.ID, currentFolder, "failed")
 
-	query = query.Order(orderExpression)
-
-	if dbOrderColumn == "original_filename" {
-		query = query.Order("created_at ASC") // or "id ASC" for stability
+	if dbOrderColumn != "original_filename" {
+		query = query.Order(orderExpression)
 	}
 
 	query.Find(&allFiles)
 
 	if dbOrderColumn == "original_filename" {
-		sort.Slice(allFiles, func(i, j int) bool {
-			nameI := strings.ToLower(allFiles[i].Filename)
-			nameJ := strings.ToLower(allFiles[j].Filename)
-
-			if sortOrder == "desc" {
-				return natural.Less(nameJ, nameI)
-			}
-			return natural.Less(nameI, nameJ)
-		})
+		if sortOrder == "desc" {
+			sort.SliceStable(allFiles, func(i, j int) bool {
+				return naturalLessInsensitive(allFiles[j].Filename, allFiles[i].Filename)
+			})
+		} else {
+			sortFilesByFilenameNaturally(allFiles)
+		}
 	}
 
 	// Pagination applies only to files (folders are always shown)
