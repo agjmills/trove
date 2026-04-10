@@ -5,12 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
 	csrf "filippo.io/csrf/gorilla"
-	"github.com/maruel/natural"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
@@ -357,30 +355,28 @@ func TestFileSorting(t *testing.T) {
 			files := make([]models.File, len(tt.files))
 			copy(files, tt.files)
 
-			if tt.sortField == "filename" {
-				sort.Slice(files, func(i, j int) bool {
-					nameI := strings.ToLower(files[i].Filename)
-					nameJ := strings.ToLower(files[j].Filename)
-
+			switch tt.sortField {
+			case "filename":
+				if tt.sortOrder == "desc" {
+					sort.SliceStable(files, func(i, j int) bool {
+						return naturalLessInsensitive(files[j].Filename, files[i].Filename)
+					})
+				} else {
+					sortFilesByFilenameNaturally(files)
+				}
+			case "file_size":
+				sort.SliceStable(files, func(i, j int) bool {
 					if tt.sortOrder == "desc" {
-						return natural.Less(nameJ, nameI)
+						return files[i].FileSize > files[j].FileSize
 					}
-					return natural.Less(nameI, nameJ)
+					return files[i].FileSize < files[j].FileSize
 				})
-			} else {
-				sort.Slice(files, func(i, j int) bool {
-					var less bool
-					switch tt.sortField {
-					case "file_size":
-						less = files[i].FileSize < files[j].FileSize
-					case "created_at":
-						less = files[i].CreatedAt.Before(files[j].CreatedAt)
-					}
-
+			case "created_at":
+				sort.SliceStable(files, func(i, j int) bool {
 					if tt.sortOrder == "desc" {
-						return !less
+						return files[i].CreatedAt.After(files[j].CreatedAt)
 					}
-					return less
+					return files[i].CreatedAt.Before(files[j].CreatedAt)
 				})
 			}
 
