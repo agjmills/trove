@@ -60,13 +60,34 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := (page - 1) * pageSize
 
+	sortField := r.URL.Query().Get("sort")
+	sortOrder := strings.ToLower(r.URL.Query().Get("order"))
+
+	if sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "asc"
+	}
+
+	allowedSorts := map[string]string{
+		"filename":   "original_filename",
+		"file_size":  "file_size",
+		"created_at": "created_at",
+	}
+
+	dbOrderColumn, ok := allowedSorts[sortField]
+	if !ok {
+		dbOrderColumn = "original_filename"
+		sortField = "filename"
+	}
+
+	orderExpression := dbOrderColumn + " " + strings.ToUpper(sortOrder)
+
 	// Get direct subfolders from Folders table (exclude deleted)
 	var folders []models.Folder
 	if currentFolder == "/" {
 		// Root level: get folders that don't contain additional slashes after the first one
 		h.db.Raw(`
-			SELECT * FROM folders 
-			WHERE user_id = ? 
+			SELECT * FROM folders
+			WHERE user_id = ?
 			AND folder_path LIKE '/%'
 			AND folder_path NOT LIKE '%/%/%'
 			AND LENGTH(folder_path) - LENGTH(REPLACE(folder_path, '/', '')) = 1
@@ -77,8 +98,8 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Subdirectory: get direct children only
 		h.db.Raw(`
-			SELECT * FROM folders 
-			WHERE user_id = ? 
+			SELECT * FROM folders
+			WHERE user_id = ?
 			AND folder_path LIKE ?
 			AND folder_path NOT LIKE ?
 			AND deleted_at IS NULL
@@ -160,21 +181,35 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	// Exclude failed uploads - they are shown as toast notifications instead
 	// Exclude deleted files
 	var allFiles []models.File
-	h.db.Where("user_id = ? AND logical_path = ? AND upload_status != ? AND trashed_at IS NULL", user.ID, currentFolder, "failed").Find(&allFiles)
 
-	// Sort files naturally (handles "file2" before "file10" correctly)
-	sort.Slice(allFiles, func(i, j int) bool {
-		return natural.Less(strings.ToLower(allFiles[i].OriginalFilename), strings.ToLower(allFiles[j].OriginalFilename))
-	})
+	query := h.db.Where("user_id = ? AND logical_path = ? AND upload_status != ? AND trashed_at IS NULL",
+		user.ID, currentFolder, "failed")
+
+	query = query.Order(orderExpression)
+
+	if dbOrderColumn == "original_filename" {
+		query = query.Order("created_at ASC") // or "id ASC" for stability
+	}
+
+	query.Find(&allFiles)
+
+	if dbOrderColumn == "original_filename" {
+		sort.Slice(allFiles, func(i, j int) bool {
+			nameI := strings.ToLower(allFiles[i].Filename)
+			nameJ := strings.ToLower(allFiles[j].Filename)
+
+			if sortOrder == "desc" {
+				return natural.Less(nameJ, nameI)
+			}
+			return natural.Less(nameI, nameJ)
+		})
+	}
 
 	// Pagination applies only to files (folders are always shown)
 	totalFiles := len(allFiles)
 	var files []models.File
 	if offset < totalFiles {
-		end := offset + pageSize
-		if end > totalFiles {
-			end = totalFiles
-		}
+		end := min(offset+pageSize, totalFiles)
 		files = allFiles[offset:end]
 	}
 
@@ -225,7 +260,7 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 	// Count deleted items for nav badge (single query for both files and folders)
 	var deletedCount int64
 	h.db.Raw(`
-		SELECT 
+		SELECT
 			(SELECT COUNT(*) FROM files WHERE user_id = ? AND trashed_at IS NOT NULL AND deleted_at IS NULL) +
 			(SELECT COUNT(*) FROM folders WHERE user_id = ? AND trashed_at IS NOT NULL AND deleted_at IS NULL) AS total
 	`, user.ID, user.ID).Scan(&deletedCount)
@@ -246,6 +281,8 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 		"MaxUploadSize": h.cfg.MaxUploadSize,
 		"FailedUploads": failedUploads,
 		"DeletedCount":  deletedCount,
+		"SortField":     sortField,
+		"SortOrder":     sortOrder,
 	}); err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
