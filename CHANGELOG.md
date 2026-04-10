@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.0](https://github.com/agjmills/trove/compare/v0.9.0...v0.10.0) (2026-04-10)
+
+
+### Features
+
+* add file sorting by filename, size, created_at with URL persist… ([#112](https://github.com/agjmills/trove/issues/112)) ([9d86764](https://github.com/agjmills/trove/commit/9d867648a37762c2381c6e157db8d0dacf1e351b))
+* **site:** scaffold Hugo/Hextra GitHub Pages site ([#106](https://github.com/agjmills/trove/issues/106)) ([5861755](https://github.com/agjmills/trove/commit/5861755ae9863db76c501d7a9cd17aff33ab7ff3))
+
+
+### Bug Fixes
+
+* natural sort order and renamed file repositioning ([#108](https://github.com/agjmills/trove/issues/108)) ([b9b3403](https://github.com/agjmills/trove/commit/b9b3403f1915f069ab5f4de8e06b7a88fa793e96))
+* correct docs nav link URL ([8b52ba3](https://github.com/agjmills/trove/commit/8b52ba384a9d9e73de3522ed8169de0dd9a2b88b))
+
 ## [0.9.0](https://github.com/agjmills/trove/compare/v0.8.1...v0.9.0) (2026-04-07)
 
 
