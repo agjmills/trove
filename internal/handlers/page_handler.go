@@ -195,8 +195,8 @@ func (h *PageHandler) ShowFiles(w http.ResponseWriter, r *http.Request) {
 
 	if dbOrderColumn == "original_filename" {
 		sort.Slice(allFiles, func(i, j int) bool {
-			nameI := strings.ToLower(allFiles[i].OriginalFilename)
-			nameJ := strings.ToLower(allFiles[j].OriginalFilename)
+			nameI := strings.ToLower(allFiles[i].Filename)
+			nameJ := strings.ToLower(allFiles[j].Filename)
 
 			if sortOrder == "desc" {
 				return natural.Less(nameJ, nameI)
