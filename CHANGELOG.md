@@ -11,7 +11,7 @@
 
 ### Bug Fixes
 
-* 102 ([#108](https://github.com/agjmills/trove/issues/108)) ([b9b3403](https://github.com/agjmills/trove/commit/b9b3403f1915f069ab5f4de8e06b7a88fa793e96))
+* natural sort order and renamed file repositioning ([#108](https://github.com/agjmills/trove/issues/108)) ([b9b3403](https://github.com/agjmills/trove/commit/b9b3403f1915f069ab5f4de8e06b7a88fa793e96))
 * correct docs nav link URL ([8b52ba3](https://github.com/agjmills/trove/commit/8b52ba384a9d9e73de3522ed8169de0dd9a2b88b))
 
 ## [0.9.0](https://github.com/agjmills/trove/compare/v0.8.1...v0.9.0) (2026-04-07)
