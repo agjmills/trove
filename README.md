@@ -34,7 +34,6 @@
 - 📂 Folder sharing links with the same controls
 - 🔍 Full-text file search with tag support
 - 🔑 OIDC/SSO support (Authentik, Authelia, Keycloak, etc.)
-- 🖧 WebDAV endpoint — mount as a network drive in Finder, Explorer, Nautilus, rclone
 - 🐳 Easy Docker deployment with multi-arch support
 - 🗄️ PostgreSQL or SQLite database options
 - 📊 Health checks and Prometheus metrics
@@ -49,6 +48,10 @@ Trove is for people who want straightforward self-hosted file storage without th
 | **Image size** | ~18 MB | ~1 GB+ | ~200 MB |
 | **Storage backends** | Disk, S3/R2/B2, MinIO | Disk, S3 (plugin) | Disk, S3 |
 | **Tech stack** | Go + SQLite/Postgres | PHP + MySQL | Python + MySQL |
+| **OIDC/SSO** | ✅ | ✅ (app) | ✅ (Pro) |
+| **File & folder sharing** | ✅ expiry, limits, password | ✅ | ✅ |
+| **Full-text search** | ✅ with tags | ✅ (plugin) | ✅ |
+| **WebDAV** | Planned | ✅ | ✅ |
 | **Focus** | File storage only | Full office suite | File sync + sharing |
 
 If you just want to store, organize, and share files — without a calendar, contacts app, or office suite — Trove is for you.
@@ -310,13 +313,41 @@ Development uses human-readable text format.
 | `POST` | `/folder/create` | Create folder |
 | `POST` | `/folder/delete/{name}` | Delete empty folder |
 
-### Sharing
+### Search
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/search` | Search files by name, content, or tag |
+
+### File Sharing
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/files/{id}/share` | Create a share link |
 | `POST` | `/share/{token}/revoke` | Revoke a share link |
-| `GET` | `/s/{token}` | Download via share link (public) |
+| `GET` | `/s/{token}` | Browse/download via share link (public) |
+| `POST` | `/s/{token}` | Submit password for a protected share link |
+
+### Folder Sharing
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/folders/share` | Create a folder share link |
+| `POST` | `/f/{token}/revoke` | Revoke a folder share link |
+| `GET` | `/f/{token}` | Browse shared folder (public) |
+| `POST` | `/f/{token}` | Submit password for a protected folder link |
+| `GET` | `/f/{token}/files/{id}` | Download a file from a shared folder |
+
+### Chunked Upload API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/uploads/init` | Initialise a chunked upload |
+| `POST` | `/api/uploads/{id}/chunk` | Upload a chunk |
+| `POST` | `/api/uploads/{id}/complete` | Finalise upload |
+| `DELETE` | `/api/uploads/{id}` | Cancel upload |
+| `GET` | `/api/uploads/{id}/status` | Poll upload status |
+| `GET` | `/api/files/status` | SSE stream for upload progress |
 
 ### System
 
@@ -333,6 +364,7 @@ Open any file's detail page and expand **Create share link**. You can optionally
 
 - **Expiry date** — the link stops working after the end of that day (UTC)
 - **Max uses** — the link stops working after N downloads
+- **Password** — recipients must enter the correct password before downloading
 
 The share URL looks like `https://your-trove/s/<token>`. Copy it from the Sharing section with one click.
 
@@ -343,31 +375,21 @@ To revoke a link before it expires or runs out of uses, hit **Revoke** next to i
 - Expired, exhausted, and revoked links all return 404 — no information leakage
 - Only the file owner can create or revoke share links for their files
 - Use count is incremented atomically — concurrent requests cannot bypass a max-uses limit
+- Passwords are bcrypt-hashed — the plaintext is never stored
 
-## WebDAV
+## Folder Sharing
 
-Trove exposes a WebDAV endpoint at `/dav/` when enabled, allowing any WebDAV-compatible client to mount your files as a network drive — no browser required.
+You can share an entire folder as a browseable link — recipients can navigate the folder tree and download individual files without an account.
 
-Enable it with:
-```bash
-WEBDAV_ENABLED=true
-```
+Go to **Files**, open the folder menu, and choose **Share folder**. The same optional controls apply:
 
-Then connect from any client using your Trove username and password:
+- **Expiry date** — the link stops working after the end of that day (UTC)
+- **Max uses** — the link stops working after N visits to the folder root
+- **Password** — recipients must enter the correct password before browsing
 
-| Client | URL |
-|--------|-----|
-| macOS Finder (`⌘K`) | `http://your-trove/dav/` |
-| Windows Explorer | `\\your-trove\dav\` |
-| Linux / davfs2 | `http://your-trove/dav/` |
-| rclone | `type = webdav`, `url = http://your-trove/dav/` |
-| Cyberduck / Mountain Duck | WebDAV (HTTP) → path `/dav/` |
+The share URL looks like `https://your-trove/f/<token>`.
 
-> **Security note:** Basic Auth over plain HTTP sends credentials in the clear. Always put Trove behind HTTPS in production.
-
-> **OIDC users:** WebDAV requires a local password. OIDC-only accounts cannot use WebDAV in the current release.
-
-For full client setup instructions see [docs/webdav.md](docs/webdav.md).
+To manage or revoke folder share links, go to **Folders → Manage shares**. Revoking is instant and permanent.
 
 ## Security
 
@@ -392,7 +414,9 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 - ✅ Production-ready Docker images (~18MB)
 - ✅ Deleted items with configurable retention
 - ✅ OIDC/SSO authentication
-- ✅ File sharing links
+- ✅ File sharing links (expiry, use limits, password protection)
+- ✅ Folder sharing links (expiry, use limits, password protection)
+- ✅ Full-text search with tag support
 
 **Planned:**
 - WebDAV endpoint (`/dav/`) — mount as a network drive
