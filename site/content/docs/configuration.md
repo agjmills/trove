@@ -69,8 +69,3 @@ Sizes support human-readable units: `B`, `K`/`KB`, `M`/`MB`, `G`/`GB`, `T`/`TB`.
 | `OIDC_ADMIN_CLAIM` | | Claim that controls admin status |
 | `OIDC_ADMIN_VALUE` | | Value that grants admin |
 
-## WebDAV
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WEBDAV_ENABLED` | `false` | Enable WebDAV endpoint at `/dav/` |
