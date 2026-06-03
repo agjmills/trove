@@ -24,7 +24,7 @@ jobs:
         id: release
         with:
           release-type: go
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           # release-please parses conventional commits and bumps semver:
           #   feat: → minor bump
           #   fix: → patch bump
