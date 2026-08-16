@@ -25,7 +25,9 @@ func Connect(cfg *config.Config) (*gorm.DB, error) {
 		)
 		dialector = postgres.Open(dsn)
 	case "sqlite":
-		dialector = sqlite.Open(cfg.DBPath)
+		// Use the modernc pure-Go driver explicitly so sqlite works in
+		// CGO_ENABLED=0 builds (e.g. the scratch-based Docker images).
+		dialector = &sqlite.Dialector{DSN: cfg.DBPath, DriverName: "sqlite"}
 	default:
 		return nil, fmt.Errorf("unsupported database type: %s", cfg.DBType)
 	}
