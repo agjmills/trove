@@ -59,6 +59,7 @@ func Migrate(db *gorm.DB) error {
 		&models.Folder{},
 		&models.File{},
 		&models.UploadSession{},
+		&models.TranscodeJob{},
 		&models.ShareLink{},
 		&models.FolderShareLink{},
 	)

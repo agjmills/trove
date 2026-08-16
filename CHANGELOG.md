@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Features
+
+* **video:** background transcoding to web-optimized H.264/AAC MP4 (max 720p, faststart) via a DB-backed job queue and separate ffmpeg worker container, with in-browser streaming and original download retention
+
 ## [0.10.0](https://github.com/agjmills/trove/compare/v0.9.0...v0.10.0) (2026-04-10)
 
 

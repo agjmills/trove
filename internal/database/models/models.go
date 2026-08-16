@@ -54,6 +54,11 @@ type File struct {
 	TempPath            string                                `gorm:"size:1024" json:"-"`                                       // Temporary local path (used during async upload, not shown to user)
 	Metadata            datatypes.JSONType[map[string]string] `json:"metadata"`                                                 // Arbitrary key-value metadata
 	Tags                datatypes.JSONType[[]string]          `json:"tags"`                                                     // Simple string tags for filtering
+	VideoVariantPath    string                                `gorm:"size:1024;index" json:"video_variant_path,omitempty"`      // Storage path of the web-optimized MP4 variant (empty = none)
+	VideoVariantSize    int64                                 `gorm:"default:0" json:"video_variant_size,omitempty"`            // Size of the transcoded variant in bytes
+	VideoVariantMime    string                                `gorm:"size:100" json:"video_variant_mime,omitempty"`             // MIME type of the transcoded variant (e.g. video/mp4)
+	TranscodeStatus     string                                `gorm:"size:20;default:'none';index" json:"transcode_status"`     // Transcode status: none, pending, processing, completed, failed
+	TranscodeError      string                                `gorm:"size:500" json:"transcode_error,omitempty"`                // Error message for failed transcodes
 	SoftDeletedAt       *time.Time                            `gorm:"column:trashed_at;index" json:"soft_deleted_at,omitempty"` // When file was soft-deleted (nil = not deleted)
 	OriginalLogicalPath string                                `gorm:"size:1024" json:"original_logical_path,omitempty"`         // Original path before deletion (for restore)
 	CreatedAt           time.Time                             `json:"created_at"`
@@ -118,4 +123,21 @@ type UploadSession struct {
 	DeletedAt      gorm.DeletedAt               `gorm:"index" json:"-"`
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
+}
+
+// TranscodeJob represents a queued video transcoding job.
+// Jobs are claimed by the transcoder worker (one at a time) and removed once
+// the transcoded variant has been stored and the file record updated.
+type TranscodeJob struct {
+	ID            uint       `gorm:"primaryKey" json:"id"`
+	FileID        uint       `gorm:"not null;uniqueIndex" json:"file_id"` // One job per file
+	UserID        uint       `gorm:"not null;index" json:"user_id"`
+	Status        string     `gorm:"size:20;not null;default:'pending';index" json:"status"` // pending, processing, failed
+	Error         string     `gorm:"size:500" json:"error,omitempty"`
+	Attempts      int        `gorm:"not null;default:0" json:"attempts"`
+	NextAttemptAt *time.Time `json:"next_attempt_at,omitempty"` // Backoff deadline before the next retry (nil = claim immediately)
+	StartedAt     *time.Time `json:"started_at,omitempty"`
+	FinishedAt    *time.Time `json:"finished_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }

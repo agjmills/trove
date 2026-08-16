@@ -47,6 +47,10 @@ func (m *mockAdminStorage) Open(ctx context.Context, path string) (io.ReadCloser
 	return nil, storage.ErrNotFound
 }
 
+func (m *mockAdminStorage) OpenRange(ctx context.Context, path string, offset, length int64) (io.ReadCloser, error) {
+	return nil, storage.ErrNotFound
+}
+
 func (m *mockAdminStorage) Delete(ctx context.Context, path string) error {
 	m.deletedPaths = append(m.deletedPaths, path)
 	return nil

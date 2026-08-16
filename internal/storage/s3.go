@@ -151,6 +151,27 @@ func (s *S3Backend) Open(ctx context.Context, path string) (io.ReadCloser, error
 	return output.Body, nil
 }
 
+// OpenRange returns a reader for a byte range of the object at the given key.
+func (s *S3Backend) OpenRange(ctx context.Context, path string, offset, length int64) (io.ReadCloser, error) {
+	if length <= 0 {
+		return nil, fmt.Errorf("length must be > 0")
+	}
+	rng := fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
+	output, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(path),
+		Range:  aws.String(rng),
+	})
+	if err != nil {
+		if isS3NotFoundError(err) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to get object range from S3: %w", err)
+	}
+
+	return output.Body, nil
+}
+
 // Delete removes an object from S3. Returns nil if object doesn't exist (idempotent).
 func (s *S3Backend) Delete(ctx context.Context, path string) error {
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{

@@ -34,6 +34,7 @@
 - 📂 Folder sharing links with the same controls
 - 🔍 Full-text file search with tag support
 - 🔑 OIDC/SSO support (Authentik, Authelia, Keycloak, etc.)
+- 🎬 Automatic video transcoding (H.264/AAC MP4, max 720p) with in-browser streaming
 - 🐳 Easy Docker deployment with multi-arch support
 - 🗄️ PostgreSQL or SQLite database options
 - 📊 Health checks and Prometheus metrics
@@ -44,7 +45,7 @@ Trove is for people who want straightforward self-hosted file storage without th
 
 | | Trove | Nextcloud | Seafile |
 |---|---|---|---|
-| **Setup complexity** | Single Docker container | Multi-container, heavy config | Moderate |
+| **Setup complexity** | Single container (+ optional transcoder) | Multi-container, heavy config | Moderate |
 | **Image size** | ~18 MB | ~1 GB+ | ~200 MB |
 | **Storage backends** | Disk, S3/R2/B2, MinIO | Disk, S3 (plugin) | Disk, S3 |
 | **Tech stack** | Go + SQLite/Postgres | PHP + MySQL | Python + MySQL |
@@ -130,8 +131,51 @@ If you're using OIDC only with `ENABLE_REGISTRATION=false`, the first OIDC login
 
 > The admin panel prevents you from switching your *own* account to OIDC while logged in, to stop you accidentally locking yourself out. Another admin can do it, or you can set the `identity_provider` column directly in the database.
 
-## Storage Backends
+## Video Transcoding
 
+Video uploads are automatically converted in the background into phone-friendly,
+web-optimized MP4 files (H.264 + AAC, max 1280x720, `+faststart`) so they can be
+streamed in the browser's HTML5 player. The original file is always kept for
+downloads and share links, and the MP4 variant counts toward the user's storage
+quota.
+
+Transcoding runs in a separate `transcoder` container (bundled with ffmpeg) that
+polls the `transcode_jobs` database table and processes one job at a time:
+
+- Already-compatible MP4s are streamed as-is (no re-encoding).
+- Compatible streams in other containers (e.g. H.264/AAC MKVs) are remuxed
+  without re-encoding.
+- Everything else is re-encoded with libx264/AAC.
+
+```yaml
+# docker-compose.yml — add the transcoder service alongside the app
+transcoder:
+  image: ghcr.io/agjmills/trove-transcoder:latest
+  volumes:
+    - ./data:/app/data
+    - trove-files:/app/data/files
+  env_file: .env
+  environment:
+    - ENV=production
+    - DB_HOST=postgres
+  depends_on:
+    postgres:
+      condition: service_healthy
+  restart: unless-stopped
+```
+
+To convert videos that were uploaded before transcoding was enabled, run the
+backfill once:
+
+```bash
+docker compose run --rm transcoder trove-transcoder -backfill
+```
+
+Settings are configurable via environment variables (`TRANSCODE_*`, see
+[Configuration](#configuration)); the web server just enqueues jobs, so
+transcoding can be disabled there without affecting the worker.
+
+## Storage Backends
 Trove supports multiple storage backends, configured via the `STORAGE_BACKEND` environment variable.
 
 ### Local Disk (Default)
@@ -238,6 +282,15 @@ S3_USE_PATH_STYLE=false                # true for MinIO/rustfs
 # Limits
 DEFAULT_USER_QUOTA=10G
 MAX_UPLOAD_SIZE=500M
+
+# Video transcoding
+TRANSCODE_ENABLED=true                  # enqueue transcode jobs on upload
+# TRANSCODE_MAX_HEIGHT=720              # output height cap
+# TRANSCODE_PRESET=medium               # libx264 preset
+# TRANSCODE_CRF=23                      # quality value (lower = better)
+# TRANSCODE_WORKERS=1                   # concurrent jobs in the worker
+# TRANSCODE_TIMEOUT=2h                  # per-job timeout
+# TRANSCODE_MAX_ATTEMPTS=3              # retries before failing a job
 
 # Security
 SESSION_SECRET=change-in-production    # openssl rand -base64 32

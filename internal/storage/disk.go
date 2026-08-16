@@ -85,6 +85,28 @@ func (d *DiskBackend) Open(ctx context.Context, path string) (io.ReadCloser, err
 	return file, nil
 }
 
+// OpenRange returns a reader for a byte range of the file at the given path.
+func (d *DiskBackend) OpenRange(ctx context.Context, path string, offset, length int64) (io.ReadCloser, error) {
+	if length <= 0 {
+		return nil, fmt.Errorf("length must be > 0")
+	}
+	file, err := d.root.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	if _, err := file.Seek(offset, io.SeekStart); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("failed to seek to offset %d: %w", offset, err)
+	}
+	return &limitedReadCloser{
+		Reader: io.LimitReader(file, length),
+		Closer: file,
+	}, nil
+}
+
 // Delete removes a file. Returns nil if file doesn't exist (idempotent).
 func (d *DiskBackend) Delete(ctx context.Context, path string) error {
 	if err := d.root.Remove(path); err != nil && !os.IsNotExist(err) {

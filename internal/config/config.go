@@ -51,6 +51,19 @@ type Config struct {
 	UploadSessionTimeout       time.Duration // How long upload sessions remain active
 	UploadSessionRetentionDays int           // Days to retain completed/canceled/expired upload sessions before cleanup
 
+	// Video transcoding configuration
+	TranscodeEnabled      bool          // Enqueue transcode jobs when video files are uploaded
+	TranscodePollInterval time.Duration // How often the transcoder worker polls for pending jobs
+	TranscodeWorkers      int           // Number of concurrent transcoding workers
+	TranscodeMaxAttempts  int           // Max attempts per job before marking it failed
+	TranscodeTimeout      time.Duration // Per-job timeout (kills runaway ffmpeg processes)
+	TranscodePreset       string        // libx264 preset (e.g. "medium", "fast")
+	TranscodeCRF          int           // libx264 CRF quality value (lower = better quality)
+	TranscodeMaxHeight    int           // Maximum output height in pixels (e.g. 720)
+	FFmpegPath            string        // Path to the ffmpeg binary
+	FFprobePath           string        // Path to the ffprobe binary
+	TranscodeStaleJobAge  time.Duration // Age after which "processing" jobs are considered stale and re-queued
+
 	// TrustedProxyCIDRs is a list of CIDR ranges (e.g., "127.0.0.1/32", "10.0.0.0/8")
 	// from which X-Forwarded-Proto headers will be trusted for CSRF origin validation.
 	// If empty, X-Forwarded-Proto is never trusted and r.TLS is used to detect HTTPS.
@@ -108,6 +121,17 @@ func Load() (*Config, error) {
 		UploadChunkSize:            getEnvSize("UPLOAD_CHUNK_SIZE", "5M"),
 		UploadSessionTimeout:       getEnvDuration("UPLOAD_SESSION_TIMEOUT", "24h"),
 		UploadSessionRetentionDays: getEnvInt("UPLOAD_SESSION_RETENTION_DAYS", 7),
+		TranscodeEnabled:           getEnvBool("TRANSCODE_ENABLED", true),
+		TranscodePollInterval:      getEnvDuration("TRANSCODE_POLL_INTERVAL", "5s"),
+		TranscodeWorkers:           getEnvInt("TRANSCODE_WORKERS", 1),
+		TranscodeMaxAttempts:       getEnvInt("TRANSCODE_MAX_ATTEMPTS", 3),
+		TranscodeTimeout:           getEnvDuration("TRANSCODE_TIMEOUT", "2h"),
+		TranscodePreset:            getEnv("TRANSCODE_PRESET", "medium"),
+		TranscodeCRF:               getEnvInt("TRANSCODE_CRF", 23),
+		TranscodeMaxHeight:         getEnvInt("TRANSCODE_MAX_HEIGHT", 720),
+		FFmpegPath:                 getEnv("FFMPEG_PATH", "ffmpeg"),
+		FFprobePath:                getEnv("FFPROBE_PATH", "ffprobe"),
+		TranscodeStaleJobAge:       getEnvDuration("TRANSCODE_STALE_JOB_AGE", "30m"),
 		TrustedProxyCIDRs:          getEnvStringSlice("TRUSTED_PROXY_CIDRS", nil),
 		CORSAllowedOrigins:         getEnvStringSlice("CORS_ALLOWED_ORIGINS", nil),
 		OIDCEnabled:                getEnvBool("OIDC_ENABLED", false),
@@ -146,6 +170,26 @@ func Load() (*Config, error) {
 	}
 	if cfg.UploadSessionRetentionDays < 0 {
 		cfg.UploadSessionRetentionDays = 0
+	}
+
+	// Validate transcoding configuration
+	if cfg.TranscodePollInterval < time.Second {
+		cfg.TranscodePollInterval = 5 * time.Second
+	}
+	if cfg.TranscodeWorkers < 1 {
+		cfg.TranscodeWorkers = 1
+	}
+	if cfg.TranscodeMaxAttempts < 1 {
+		cfg.TranscodeMaxAttempts = 3
+	}
+	if cfg.TranscodeTimeout < time.Minute {
+		cfg.TranscodeTimeout = 2 * time.Hour
+	}
+	if cfg.TranscodeMaxHeight < 1 {
+		cfg.TranscodeMaxHeight = 720
+	}
+	if cfg.TranscodeStaleJobAge < time.Minute {
+		cfg.TranscodeStaleJobAge = 30 * time.Minute
 	}
 
 	log.Printf("Config loaded: MaxUploadSize=%d bytes (%.2f MB), DefaultUserQuota=%d bytes (%.2f GB)",

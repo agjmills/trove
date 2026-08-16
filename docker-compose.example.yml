@@ -20,6 +20,25 @@ services:
     networks:
       - trove-network
 
+  transcoder:
+    image: ghcr.io/agjmills/trove-transcoder:latest
+    container_name: trove-transcoder
+    volumes:
+      - ./data:/app/data
+      - trove-files:/app/data/files
+      - /tmp
+    env_file:
+      - .env
+    environment:
+      - ENV=production
+      - DB_HOST=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - trove-network
+
   postgres:
     image: postgres:15-alpine
     container_name: trove-postgres
