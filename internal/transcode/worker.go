@@ -42,6 +42,11 @@ func NewWorker(db *gorm.DB, cfg *config.Config, storage storage.StorageBackend) 
 // jobs until the context is cancelled. With once=true it stops as soon as the
 // queue is empty (useful for one-shot runs and tests).
 func (w *Worker) Run(ctx context.Context, once bool) error {
+	// Remove workspace directories left behind by a hard kill mid-transcode.
+	if err := cleanupStaleTempDirs(w.cfg.TempDir, w.cfg.TranscodeStaleJobAge); err != nil {
+		logger.Warn("failed to clean stale transcode temp dirs", "error", err)
+	}
+
 	if err := RecoverStaleJobs(w.db, w.cfg.TranscodeStaleJobAge); err != nil {
 		logger.Error("failed to recover stale transcode jobs", "error", err)
 	}
@@ -78,6 +83,44 @@ func (w *Worker) sleep(ctx context.Context, d time.Duration) bool {
 	case <-time.After(d):
 		return true
 	}
+}
+
+// cleanupStaleTempDirs removes transcode workspace directories left behind by
+// previous runs (e.g. the host was powered off mid-transcode and SIGKILL
+// prevented the normal cleanup).
+func cleanupStaleTempDirs(tempRoot string, olderThan time.Duration) error {
+	if tempRoot == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(tempRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read temp root: %w", err)
+	}
+
+	cutoff := time.Now().Add(-olderThan)
+	removed := 0
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "trove-transcode-") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || !info.ModTime().Before(cutoff) {
+			continue
+		}
+		dir := filepath.Join(tempRoot, entry.Name())
+		if err := os.RemoveAll(dir); err != nil {
+			logger.Warn("failed to remove stale transcode temp dir", "dir", dir, "error", err)
+		} else {
+			removed++
+		}
+	}
+	if removed > 0 {
+		logger.Info("removed stale transcode temp dirs", "count", removed)
+	}
+	return nil
 }
 
 // process handles a single claimed job. It never panics out of the loop.
