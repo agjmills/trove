@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -27,6 +28,12 @@ import (
 //	trove-transcoder            # run the worker (one job at a time)
 //	trove-transcoder -backfill  # enqueue jobs for existing videos, then exit
 //	trove-transcoder -once      # process the queue until empty, then exit
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	backfill := flag.Bool("backfill", false, "enqueue transcode jobs for all existing videos, then exit")
 	once := flag.Bool("once", false, "process the queue until empty, then exit")
@@ -83,6 +90,7 @@ func main() {
 	worker := transcode.NewWorker(db, cfg, storageService)
 
 	logger.Info("transcoder worker starting",
+		"version", fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
 		"workers", cfg.TranscodeWorkers,
 		"poll_interval", cfg.TranscodePollInterval,
 		"max_height", cfg.TranscodeMaxHeight,

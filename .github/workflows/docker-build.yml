@@ -48,3 +48,24 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Extract transcoder metadata
+        id: transcoder-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/agjmills/trove-transcoder
+          tags: |
+            type=ref,event=branch
+            type=sha
+
+      - name: Build and push transcoder
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.transcoder
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.transcoder-meta.outputs.tags }}
+          labels: ${{ steps.transcoder-meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
