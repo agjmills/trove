@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.11.0](https://github.com/agjmills/trove/compare/v0.10.0...v0.11.0) (2026-08-16)
+
+
+### Features
+
+* show video conversion status in file list and file view ([145e4a0](https://github.com/agjmills/trove/commit/145e4a06cfc2d105de1bedf090ced482d22143a2))
+* video transcoding with background ffmpeg worker and streaming ([d8e1179](https://github.com/agjmills/trove/commit/d8e1179951904756649692a330c8be61a581d3e1))
+
+
+### Bug Fixes
+
+* use GITHUB_TOKEN for release-please ([f145b81](https://github.com/agjmills/trove/commit/f145b8123f7ff739d4e0ec935e74e90a3952e223))
+* use modernc pure-Go sqlite driver for CGO-free builds ([9f107b1](https://github.com/agjmills/trove/commit/9f107b12460a22201cc214aaa43f6bfd07572a34))
+* use PAT for release-please PR creation ([f391721](https://github.com/agjmills/trove/commit/f391721235059a4982e32d56c15445cf3fec4b2c))
+
 ## [Unreleased]
 
 ### Features
