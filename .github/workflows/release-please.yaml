@@ -24,7 +24,9 @@ jobs:
         id: release
         with:
           release-type: go
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # A PAT is required to create the release PR: GITHUB_TOKEN is not
+          # permitted to create pull requests in this repository.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           # release-please parses conventional commits and bumps semver:
           #   feat: → minor bump
           #   fix: → patch bump
