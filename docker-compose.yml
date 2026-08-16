@@ -27,6 +27,30 @@ services:
     networks:
       - trove-network
 
+  # Video transcoding worker: polls transcode_jobs, runs ffmpeg one job at a time.
+  # Requires the same storage volume and DB access as the app service.
+  transcoder:
+    build:
+      context: .
+      dockerfile: Dockerfile.transcoder
+    container_name: trove-transcoder-dev
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=postgres
+      - ENV=development
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - trove-network
+    restart: unless-stopped
+
   postgres:
     image: postgres:15-alpine
     container_name: trove-postgres-dev

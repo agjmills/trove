@@ -171,11 +171,15 @@ func (h *DeletedHandler) permanentlyDeleteFile(ctx context.Context, file *models
 	storagePath := file.StoragePath
 	fileSize := file.FileSize
 	userID := file.UserID
+	variantPath := file.VideoVariantPath
+	variantSize := file.VideoVariantSize
 
 	// Delete from database first
 	if err := h.db.Unscoped().Delete(file).Error; err != nil {
 		return fmt.Errorf("failed to delete file record: %w", err)
 	}
+
+	quotaDelta := int64(0)
 
 	// Check if any other File records reference this physical file (deduplication check)
 	var refCount int64
@@ -186,10 +190,26 @@ func (h *DeletedHandler) permanentlyDeleteFile(ctx context.Context, file *models
 		if err := h.storage.Delete(ctx, storagePath); err != nil {
 			logger.Warn("Failed to delete file from storage", "path", storagePath, "error", err)
 		}
+		quotaDelta += fileSize
+	}
 
+	// Delete the video variant (if any) once no other records reference it.
+	// Skip when the variant shares the original's storage path (counted above).
+	if variantPath != "" && variantPath != storagePath {
+		var variantRefs int64
+		h.db.Model(&models.File{}).Where("video_variant_path = ?", variantPath).Count(&variantRefs)
+		if variantRefs == 0 {
+			if err := h.storage.Delete(ctx, variantPath); err != nil {
+				logger.Warn("Failed to delete video variant from storage", "path", variantPath, "error", err)
+			}
+			quotaDelta += variantSize
+		}
+	}
+
+	if quotaDelta > 0 {
 		// Update user storage quota
 		if err := h.db.Model(&models.User{}).Where("id = ?", userID).
-			UpdateColumn("storage_used", gorm.Expr("CASE WHEN storage_used >= ? THEN storage_used - ? ELSE 0 END", fileSize, fileSize)).Error; err != nil {
+			UpdateColumn("storage_used", gorm.Expr("CASE WHEN storage_used >= ? THEN storage_used - ? ELSE 0 END", quotaDelta, quotaDelta)).Error; err != nil {
 			logger.Warn("Failed to update user storage", "user_id", userID, "error", err)
 		}
 	}

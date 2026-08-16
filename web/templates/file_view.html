@@ -22,6 +22,47 @@
 						<img src="/preview/{{.File.ID}}" alt="{{.File.Filename}}" class="max-w-full max-h-[600px] object-contain rounded">
 					{{else if .IsPDF}}
 						<iframe src="/preview/{{.File.ID}}" class="w-full h-[600px] rounded border-0"></iframe>
+					{{else if .IsVideo}}
+						{{if .VideoReady}}
+							<video controls preload="metadata" class="w-full max-h-[600px] rounded bg-black">
+								<source src="/stream/{{.File.ID}}" type="{{if .File.VideoVariantMime}}{{.File.VideoVariantMime}}{{else}}video/mp4{{end}}">
+								Your browser does not support the video tag.
+							</video>
+						{{else}}
+							<div class="text-center space-y-3 py-12" id="transcode-status">
+								<svg class="animate-spin mx-auto text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+								</svg>
+								<div class="text-gray-600 dark:text-gray-400">
+									{{if eq .TranscodeState "failed"}}
+										<p class="font-medium text-red-600 dark:text-red-400">Video conversion failed</p>
+										<p class="text-sm mt-1">The original file is still available via the download button.</p>
+									{{else}}
+										<p class="font-medium">Processing video for streaming…</p>
+										<p class="text-sm mt-1">The original file is available via the download button.</p>
+									{{end}}
+								</div>
+							</div>
+							{{if ne .TranscodeState "failed"}}
+							<script>
+								(function() {
+									const fileId = {{.File.ID}};
+									const es = new EventSource('/api/files/status', { withCredentials: true });
+									es.addEventListener('status', function(e) {
+										const data = JSON.parse(e.data);
+										if (data.id === fileId && data.transcode_status === 'completed') {
+											es.close();
+											window.location.reload();
+										}
+										if (data.id === fileId && data.transcode_status === 'failed') {
+											es.close();
+											window.location.reload();
+										}
+									});
+								})();
+							</script>
+							{{end}}
+						{{end}}
 					{{else if .IsAudio}}
 						<audio controls class="w-full max-w-2xl">
 							<source src="/preview/{{.File.ID}}" type="{{.File.MimeType}}">
@@ -127,6 +168,12 @@
 							<dt class="text-gray-600 dark:text-gray-400 font-medium">Type</dt>
 							<dd class="text-gray-900 dark:text-gray-100 mt-1 break-all">{{.File.MimeType}}</dd>
 						</div>
+						{{if .VideoReady}}
+						<div>
+							<dt class="text-gray-600 dark:text-gray-400 font-medium">Streaming version</dt>
+							<dd class="text-gray-900 dark:text-gray-100 mt-1">H.264 MP4 · {{formatBytes .File.VideoVariantSize}}</dd>
+						</div>
+						{{end}}
 						<div>
 							<dt class="text-gray-600 dark:text-gray-400 font-medium">Uploaded</dt>
 							<dd class="text-gray-900 dark:text-gray-100 mt-1">{{.File.CreatedAt.Format "Jan 2, 2006 at 3:04 PM"}}</dd>

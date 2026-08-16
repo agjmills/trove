@@ -15,6 +15,14 @@ var (
 // copyBufferSize is the buffer size used for file copies (8MB aligns with S3 multipart upload parts).
 const copyBufferSize = 8 * 1024 * 1024
 
+// limitedReadCloser pairs an io.Reader with a separate io.Closer so callers can
+// limit how many bytes are read without losing the ability to close the
+// underlying resource.
+type limitedReadCloser struct {
+	io.Reader
+	io.Closer
+}
+
 // StorageBackend defines the contract for file storage operations.
 // All implementations must be safe for concurrent use.
 // All paths are relative to the backend's configured root/prefix.
@@ -31,6 +39,13 @@ type StorageBackend interface {
 	// Caller must call Close() on the returned reader.
 	// Returns ErrNotFound if the path does not exist.
 	Open(ctx context.Context, path string) (io.ReadCloser, error)
+
+	// OpenRange returns a reader for a byte range of the file at the given path.
+	// offset is the starting byte offset and length is the number of bytes to read (must be > 0).
+	// Used to serve HTTP Range requests for video streaming.
+	// Caller must call Close() on the returned reader.
+	// Returns ErrNotFound if the path does not exist.
+	OpenRange(ctx context.Context, path string, offset, length int64) (io.ReadCloser, error)
 
 	// Delete removes a file. Returns nil if file doesn't exist (idempotent).
 	Delete(ctx context.Context, path string) error

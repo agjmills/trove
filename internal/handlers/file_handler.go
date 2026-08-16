@@ -31,6 +31,7 @@ import (
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/flash"
 	"github.com/agjmills/trove/internal/storage"
+	"github.com/agjmills/trove/internal/transcode"
 )
 
 type uploadJob struct {
@@ -549,6 +550,26 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Handle video transcoding for the new record:
+	//  - Duplicates reuse any variant the existing file already has.
+	//  - Otherwise enqueue a transcode job for the background worker.
+	if isDuplicate && existingFile.VideoVariantPath != "" && existingFile.TranscodeStatus == transcode.StatusCompleted {
+		if err := h.db.Model(&fileRecord).Updates(map[string]interface{}{
+			"video_variant_path": existingFile.VideoVariantPath,
+			"video_variant_size": existingFile.VideoVariantSize,
+			"video_variant_mime": existingFile.VideoVariantMime,
+			"transcode_status":   existingFile.TranscodeStatus,
+		}).Error; err != nil {
+			log.Printf("Warning: failed to copy video variant from deduplicated file: %v", err)
+		}
+	} else if h.cfg.TranscodeEnabled && transcode.IsVideoFile(mimeType, originalFilename) {
+		if err := transcode.Enqueue(h.db, fileRecord.ID, user.ID); err != nil {
+			log.Printf("Warning: failed to enqueue transcode job for file %d: %v", fileRecord.ID, err)
+		} else {
+			log.Printf("Upload: queued transcode job for file %d", fileRecord.ID)
+		}
+	}
+
 	// Update user storage quota (always count it immediately)
 	if err := h.db.Model(&models.User{}).Where("id = ?", user.ID).
 		UpdateColumn("storage_used", gorm.Expr("storage_used + ?", actualSize)).Error; err != nil {
@@ -852,6 +873,7 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 	isPDF := false
 	isAudio := false
 	isText := false
+	isVideo := transcode.IsVideoFile(file.MimeType, file.Filename)
 
 	mimeType := strings.ToLower(file.MimeType)
 	filename := strings.ToLower(file.Filename)
@@ -863,6 +885,8 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 	} else if mimeType == "application/pdf" {
 		canPreview = true
 		isPDF = true
+	} else if isVideo {
+		canPreview = true
 	} else if strings.HasPrefix(mimeType, "audio/") {
 		canPreview = true
 		isAudio = true
@@ -882,17 +906,20 @@ func (h *FileHandler) ViewFile(w http.ResponseWriter, r *http.Request) {
 
 	// Render template
 	data := map[string]interface{}{
-		"Title":      file.Filename,
-		"User":       user,
-		"File":       file,
-		"AllFolders": uniqueFolders,
-		"CanPreview": canPreview,
-		"IsImage":    isImage,
-		"IsPDF":      isPDF,
-		"IsAudio":    isAudio,
-		"IsText":     isText,
-		"FullWidth":  true,
-		"ShareLinks": shareLinks,
+		"Title":          file.Filename,
+		"User":           user,
+		"File":           file,
+		"AllFolders":     uniqueFolders,
+		"CanPreview":     canPreview,
+		"IsImage":        isImage,
+		"IsPDF":          isPDF,
+		"IsAudio":        isAudio,
+		"IsText":         isText,
+		"IsVideo":        isVideo,
+		"VideoReady":     isVideo && file.TranscodeStatus == transcode.StatusCompleted && file.VideoVariantPath != "",
+		"TranscodeState": file.TranscodeStatus,
+		"FullWidth":      true,
+		"ShareLinks":     shareLinks,
 	}
 
 	if err := render(w, "file_view.html", data); err != nil {
@@ -1059,10 +1086,11 @@ func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 
 // FileStatusEvent represents a file status update for SSE
 type FileStatusEvent struct {
-	ID           uint   `json:"id"`
-	UploadStatus string `json:"upload_status"`
-	ErrorMessage string `json:"error_message,omitempty"`
-	Filename     string `json:"filename"`
+	ID              uint   `json:"id"`
+	UploadStatus    string `json:"upload_status"`
+	TranscodeStatus string `json:"transcode_status"`
+	ErrorMessage    string `json:"error_message,omitempty"`
+	Filename        string `json:"filename"`
 }
 
 // StatusStream provides Server-Sent Events for file upload status updates.
@@ -1128,17 +1156,21 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-ticker.C:
 			// Query for files that are not completed (pending, uploading, failed)
+			// or whose video transcoding is still in progress.
 			var files []models.File
-			if err := h.db.Where("user_id = ? AND upload_status IN (?)", user.ID, []string{"pending", "uploading", "failed"}).
+			if err := h.db.Where("user_id = ? AND (upload_status IN ? OR transcode_status IN ?)",
+				user.ID, []string{"pending", "uploading", "failed"}, []string{"pending", "processing", "failed"}).
 				Find(&files).Error; err != nil {
 				log.Printf("SSE: failed to query files: %v", err)
 				continue
 			}
 
-			// Also check for recently completed files (completed in last 5 seconds)
+			// Also check for recently completed files (completed in last 5 seconds),
+			// including recently completed transcodes.
 			var recentlyCompleted []models.File
 			fiveSecondsAgo := time.Now().Add(-5 * time.Second)
-			if err := h.db.Where("user_id = ? AND upload_status = ? AND updated_at > ?", user.ID, "completed", fiveSecondsAgo).
+			if err := h.db.Where("user_id = ? AND (upload_status = ? OR transcode_status = ?) AND updated_at > ?",
+				user.ID, "completed", "completed", fiveSecondsAgo).
 				Find(&recentlyCompleted).Error; err != nil {
 				log.Printf("SSE: failed to query recently completed files: %v", err)
 			}
@@ -1147,11 +1179,14 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 			// Build current state and detect changes
 			currentState := make(map[uint]string)
 			hasChanges := false
+			stateKey := func(f models.File) string {
+				return f.UploadStatus + "|" + f.TranscodeStatus
+			}
 			for _, file := range files {
-				currentState[file.ID] = file.UploadStatus
+				currentState[file.ID] = stateKey(file)
 
 				// Check if state changed or is new
-				if oldStatus, exists := lastState[file.ID]; !exists || oldStatus != file.UploadStatus {
+				if oldStatus, exists := lastState[file.ID]; !exists || oldStatus != stateKey(file) {
 					hasChanges = true
 					// For failed uploads, sanitize error messages to avoid exposing
 					// internal details (e.g., S3 connection errors) to the user.
@@ -1178,10 +1213,11 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 					event := FileStatusEvent{
-						ID:           file.ID,
-						UploadStatus: file.UploadStatus,
-						ErrorMessage: errorMsg,
-						Filename:     file.OriginalFilename,
+						ID:              file.ID,
+						UploadStatus:    file.UploadStatus,
+						TranscodeStatus: file.TranscodeStatus,
+						ErrorMessage:    errorMsg,
+						Filename:        file.OriginalFilename,
 					}
 
 					data, err := json.Marshal(event)
@@ -1198,27 +1234,25 @@ func (h *FileHandler) StatusStream(w http.ResponseWriter, r *http.Request) {
 			// Check for files that were previously tracked but are no longer in our query results.
 			// This happens when a file transitions to "completed" after the 5-second window.
 			// We need to fetch these files individually to send the completion event.
-			for id, oldStatus := range lastState {
+			for id, oldState := range lastState {
 				if _, exists := currentState[id]; !exists {
-					// File was previously tracked but not in current results
-					// Check if it completed (not deleted)
-					if oldStatus == "pending" || oldStatus == "uploading" {
+					// File was previously tracked but not in current results.
+					// Check if it finished uploading or transcoding (not deleted).
+					if !strings.HasPrefix(oldState, "completed|") {
 						var file models.File
 						if err := h.db.Where("id = ? AND user_id = ?", id, user.ID).First(&file).Error; err == nil {
 							// File exists, send its current status
-							if file.UploadStatus == "completed" {
-								hasChanges = true
-								event := FileStatusEvent{
-									ID:           file.ID,
-									UploadStatus: file.UploadStatus,
-									ErrorMessage: "",
-									Filename:     file.OriginalFilename,
-								}
-								data, err := json.Marshal(event)
-								if err == nil {
-									_, _ = fmt.Fprintf(w, "event: status\ndata: %s\n\n", data)
-									flusher.Flush()
-								}
+							event := FileStatusEvent{
+								ID:              file.ID,
+								UploadStatus:    file.UploadStatus,
+								TranscodeStatus: file.TranscodeStatus,
+								ErrorMessage:    "",
+								Filename:        file.OriginalFilename,
+							}
+							data, err := json.Marshal(event)
+							if err == nil {
+								_, _ = fmt.Fprintf(w, "event: status\ndata: %s\n\n", data)
+								flusher.Flush()
 							}
 						}
 					}
