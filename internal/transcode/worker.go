@@ -121,7 +121,13 @@ func (w *Worker) processJob(ctx context.Context, job *models.TranscodeJob) error
 	jobCtx, cancel := context.WithTimeout(ctx, w.cfg.TranscodeTimeout)
 	defer cancel()
 
-	// Work in a fresh temp directory.
+	// Work in a fresh temp directory (create the configured temp root first
+	// in case it does not exist yet, e.g. on fresh deployments).
+	if w.cfg.TempDir != "" {
+		if err := os.MkdirAll(w.cfg.TempDir, 0700); err != nil {
+			return fmt.Errorf("failed to create temp root: %w", err)
+		}
+	}
 	tempDir, err := os.MkdirTemp(w.cfg.TempDir, "trove-transcode-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
