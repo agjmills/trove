@@ -24,6 +24,8 @@ jobs:
         id: release
         with:
           release-type: go
+          # GITHUB_TOKEN can create tags/releases (contents: write) but cannot
+          # open pull requests; the release PR itself is created separately.
           token: ${{ secrets.GITHUB_TOKEN }}
           # release-please parses conventional commits and bumps semver:
           #   feat: → minor bump

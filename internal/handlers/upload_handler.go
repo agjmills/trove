@@ -27,6 +27,7 @@ import (
 	"github.com/agjmills/trove/internal/database/models"
 	"github.com/agjmills/trove/internal/logger"
 	"github.com/agjmills/trove/internal/storage"
+	"github.com/agjmills/trove/internal/transcode"
 )
 
 type UploadHandler struct {
@@ -544,6 +545,15 @@ func (h *UploadHandler) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 		}()
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
+	}
+
+	// Enqueue a transcode job for videos so they can be streamed in the browser.
+	if h.cfg.TranscodeEnabled && transcode.IsVideoFile(file.MimeType, file.Filename) {
+		if err := transcode.Enqueue(h.db, file.ID, userID); err != nil {
+			logger.Error("failed to enqueue transcode job", "error", err, "file_id", file.ID)
+		} else {
+			logger.Info("queued transcode job for uploaded video", "file_id", file.ID, "filename", file.Filename)
+		}
 	}
 
 	// Mark session as completed

@@ -69,3 +69,27 @@ jobs:
             VERSION=${{ github.ref_name }}
             COMMIT=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
+
+      - name: Extract transcoder Docker metadata
+        id: transcoder-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/agjmills/trove-transcoder
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+
+      - name: Build and push transcoder Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.transcoder
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.transcoder-meta.outputs.tags }}
+          labels: ${{ steps.transcoder-meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}

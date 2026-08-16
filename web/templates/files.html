@@ -335,7 +335,7 @@
             </thead>
             <tbody id="files-table-body">
                 {{range .Files}}
-                <tr data-file-id="{{.ID}}" data-upload-status="{{.UploadStatus}}"
+                <tr data-file-id="{{.ID}}" data-upload-status="{{.UploadStatus}}" data-transcode-status="{{.TranscodeStatus}}"
                     class="file-row hover:bg-gray-50 dark:hover:bg-gray-700/50
                            {{if eq .UploadStatus "completed"}}cursor-pointer{{end}}
                            {{if ne .UploadStatus "completed"}}bg-yellow-50 dark:bg-yellow-900/10{{end}}"
@@ -364,6 +364,11 @@
                                 {{end}}
                             </span>
                             <span class="truncate" title="{{.Filename}}">{{.Filename}}</span>
+                            {{if or (eq .TranscodeStatus "pending") (eq .TranscodeStatus "processing")}}
+                            <span class="transcode-badge flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">Converting…</span>
+                            {{else if eq .TranscodeStatus "failed"}}
+                            <span class="transcode-badge flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">Conversion failed</span>
+                            {{end}}
                         </div>
                     </td>
                     <td class="p-3 border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 max-sm:hidden">{{formatBytes .FileSize}}</td>
@@ -593,12 +598,15 @@
 		}
 
 		const currentStatus = row.dataset.uploadStatus;
-		if (currentStatus === data.upload_status) {
+		const currentTranscode = row.dataset.transcodeStatus || '';
+		const newTranscode = data.transcode_status || '';
+		if (currentStatus === data.upload_status && currentTranscode === newTranscode) {
 			return; // No change
 		}
 
-		// Update the row's data attribute
+		// Update the row's data attributes
 		row.dataset.uploadStatus = data.upload_status;
+		row.dataset.transcodeStatus = newTranscode;
 
 		// Update row styling
 		row.classList.remove('bg-yellow-50', 'dark:bg-yellow-900/10');
@@ -623,6 +631,45 @@
 				</svg>
 			`;
 			statusLabel.innerHTML = '<span class="text-blue-600 dark:text-blue-400 text-xs font-medium flex-shrink-0">Processing...</span>';
+		}
+
+		// Update the transcoding badge on completed rows
+		if (data.upload_status === 'completed') {
+			const purpleBadge = 'transcode-badge flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300';
+			const redBadge = 'transcode-badge flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+			const existingBadge = row.querySelector('.transcode-badge');
+			const filenameSpan = row.querySelector('td .truncate');
+
+			if (newTranscode === 'pending' || newTranscode === 'processing') {
+				let badge = existingBadge;
+				if (!badge && filenameSpan) {
+					badge = document.createElement('span');
+					filenameSpan.after(badge);
+				}
+				if (badge) {
+					badge.className = purpleBadge;
+					badge.textContent = 'Converting…';
+				}
+			} else if (newTranscode === 'failed') {
+				let badge = existingBadge;
+				if (!badge && filenameSpan) {
+					badge = document.createElement('span');
+					filenameSpan.after(badge);
+				}
+				if (badge) {
+					badge.className = redBadge;
+					badge.textContent = 'Conversion failed';
+				}
+			} else {
+				if (existingBadge) {
+					existingBadge.remove();
+				}
+				// Variant just became available: refresh to enable playback.
+				if ((currentTranscode === 'pending' || currentTranscode === 'processing') && !isUploading) {
+					window.location.reload();
+					return;
+				}
+			}
 		}
 
 		// Close SSE if no more pending files
@@ -752,7 +799,7 @@
 	}
 
 	function checkSSENeeded() {
-		const pendingFiles = document.querySelectorAll('[data-upload-status="pending"], [data-upload-status="uploading"]');
+		const pendingFiles = document.querySelectorAll('[data-upload-status="pending"], [data-upload-status="uploading"], [data-transcode-status="pending"], [data-transcode-status="processing"]');
 		if (pendingFiles.length === 0 && !isUploading && eventSource) {
 			eventSource.close();
 			eventSource = null;
@@ -1534,7 +1581,7 @@
 	(function() {
 		let hasPendingFiles = false;
 		{{range .Files}}
-		{{if or (eq .UploadStatus "pending") (eq .UploadStatus "uploading")}}
+		{{if or (eq .UploadStatus "pending") (eq .UploadStatus "uploading") (eq .TranscodeStatus "pending") (eq .TranscodeStatus "processing")}}
 		hasPendingFiles = true;
 		{{end}}
 		{{end}}

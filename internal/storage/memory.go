@@ -81,6 +81,33 @@ func (m *MemoryBackend) Open(ctx context.Context, path string) (io.ReadCloser, e
 	return io.NopCloser(bytes.NewReader(content)), nil
 }
 
+// OpenRange returns a reader for a byte range of the file at the given path.
+func (m *MemoryBackend) OpenRange(ctx context.Context, path string, offset, length int64) (io.ReadCloser, error) {
+	if length <= 0 {
+		return nil, fmt.Errorf("length must be > 0")
+	}
+	m.mu.RLock()
+	content, err := m.fs.ReadFile(path)
+	m.mu.RUnlock()
+	if err != nil {
+		if isNotExist(err) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > int64(len(content)) {
+		offset = int64(len(content))
+	}
+	end := offset + length
+	if end > int64(len(content)) {
+		end = int64(len(content))
+	}
+	return io.NopCloser(bytes.NewReader(content[offset:end])), nil
+}
+
 // Delete removes a file. Returns nil if file doesn't exist (idempotent).
 func (m *MemoryBackend) Delete(ctx context.Context, path string) error {
 	m.mu.Lock()

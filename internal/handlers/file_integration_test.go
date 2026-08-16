@@ -44,7 +44,7 @@ func newFileTestApp(t *testing.T) *fileTestApp {
 		t.Fatalf("Failed to open test database: %v", err)
 	}
 
-	err = db.AutoMigrate(&models.User{}, &models.File{}, &models.Folder{})
+	err = db.AutoMigrate(&models.User{}, &models.File{}, &models.Folder{}, &models.TranscodeJob{})
 	if err != nil {
 		t.Fatalf("Failed to migrate database: %v", err)
 	}
