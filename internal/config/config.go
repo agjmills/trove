@@ -60,6 +60,7 @@ type Config struct {
 	TranscodePreset       string        // libx264 preset (e.g. "medium", "fast")
 	TranscodeCRF          int           // libx264 CRF quality value (lower = better quality)
 	TranscodeMaxHeight    int           // Maximum output height in pixels (e.g. 720)
+	TranscodeThreads      int           // ffmpeg -threads value (0 = auto, let ffmpeg decide)
 	FFmpegPath            string        // Path to the ffmpeg binary
 	FFprobePath           string        // Path to the ffprobe binary
 	TranscodeStaleJobAge  time.Duration // Age after which "processing" jobs are considered stale and re-queued
@@ -129,6 +130,7 @@ func Load() (*Config, error) {
 		TranscodePreset:            getEnv("TRANSCODE_PRESET", "medium"),
 		TranscodeCRF:               getEnvInt("TRANSCODE_CRF", 23),
 		TranscodeMaxHeight:         getEnvInt("TRANSCODE_MAX_HEIGHT", 720),
+		TranscodeThreads:           getEnvInt("TRANSCODE_THREADS", 0),
 		FFmpegPath:                 getEnv("FFMPEG_PATH", "ffmpeg"),
 		FFprobePath:                getEnv("FFPROBE_PATH", "ffprobe"),
 		TranscodeStaleJobAge:       getEnvDuration("TRANSCODE_STALE_JOB_AGE", "30m"),
@@ -187,6 +189,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.TranscodeMaxHeight < 1 {
 		cfg.TranscodeMaxHeight = 720
+	}
+	if cfg.TranscodeThreads < 0 {
+		cfg.TranscodeThreads = 0 // 0 = auto
 	}
 	if cfg.TranscodeStaleJobAge < time.Minute {
 		cfg.TranscodeStaleJobAge = 30 * time.Minute

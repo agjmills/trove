@@ -36,6 +36,45 @@ All configuration is via environment variables, typically in a `.env` file.
 
 Sizes support human-readable units: `B`, `K`/`KB`, `M`/`MB`, `G`/`GB`, `T`/`TB`.
 
+## Video Transcoding
+
+Video uploads are converted in the background by the **transcoder worker**
+(separate container/binary with ffmpeg) into H.264/AAC MP4, max 1280x720,
+`+faststart`, so they can stream in the browser. The original file is always
+kept for downloads and the MP4 variant counts toward the user's storage quota.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TRANSCODE_ENABLED` | `true` | Enqueue transcode jobs on video upload (web server) |
+| `TRANSCODE_POLL_INTERVAL` | `5s` | How often the worker polls for new jobs |
+| `TRANSCODE_WORKERS` | `1` | Concurrent jobs (ffmpeg is CPU-heavy) |
+| `TRANSCODE_MAX_ATTEMPTS` | `3` | Retries before a job is marked failed |
+| `TRANSCODE_TIMEOUT` | `2h` | Per-job timeout |
+| `TRANSCODE_PRESET` | `medium` | libx264 preset (`ultrafast`..`veryslow`) |
+| `TRANSCODE_CRF` | `23` | Quality value (lower = better, larger files) |
+| `TRANSCODE_MAX_HEIGHT` | `720` | Maximum output height in pixels |
+| `TRANSCODE_THREADS` | `0` | Cap ffmpeg thread count (`0` = auto; e.g. `4` to limit CPU) |
+| `TRANSCODE_STALE_JOB_AGE` | `30m` | Re-queue jobs stuck in `processing` after this long |
+| `FFMPEG_PATH` | `ffmpeg` | ffmpeg binary location (worker only) |
+| `FFPROBE_PATH` | `ffprobe` | ffprobe binary location (worker only) |
+
+To convert videos uploaded before the transcoder was added, run the backfill
+once:
+
+```bash
+docker compose run --rm transcoder -backfill
+```
+
+**Tips:**
+
+- Set `TRANSCODE_THREADS` to limit CPU on shared hosts (a single job can
+  otherwise saturate all cores).
+- Use `TRANSCODE_PRESET=veryfast` for weaker hardware; `slow` for smaller
+  files at the cost of much longer encodes.
+- The worker must share the same `STORAGE_*` configuration and storage volume
+  as the web server, and its `TEMP_DIR` needs room for roughly twice the size
+  of the largest video being converted.
+
 ## S3 / S3-Compatible
 
 | Variable | Description |

@@ -191,6 +191,7 @@ func (w *Worker) transcodeAndStore(ctx context.Context, job *models.TranscodeJob
 		Preset:    w.cfg.TranscodePreset,
 		CRF:       w.cfg.TranscodeCRF,
 		MaxHeight: w.cfg.TranscodeMaxHeight,
+		Threads:   w.cfg.TranscodeThreads,
 	}); err != nil {
 		return err
 	}

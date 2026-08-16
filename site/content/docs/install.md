@@ -45,6 +45,17 @@ services:
       postgres:
         condition: service_healthy
 
+  transcoder:
+    image: ghcr.io/agjmills/trove-transcoder:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - /tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -63,6 +74,15 @@ services:
 volumes:
   postgres-data:
 ```
+
+> The `transcoder` service is optional: it converts video uploads into
+> streamable H.264/AAC MP4s in the background. Without it, files still upload
+> and download fine — only in-browser video streaming is unavailable. It must
+> share the same storage volume and database as the `app` service.
+
+**Note for S3 storage:** the transcoder uses the same `STORAGE_BACKEND`/AWS
+environment as the app; it downloads from and uploads to S3 through the
+standard AWS SDK credential chain.
 
 **.env**
 
@@ -92,14 +112,16 @@ cd trove
 # Build Tailwind CSS
 ./build-tailwind.sh
 
-# Build binary
+# Build binaries
 go build -o trove ./cmd/server
+go build -o trove-transcoder ./cmd/transcoder
 
 # Configure
 cp .env.example .env
 # Edit .env
 
-./trove
+./trove            # web server
+./trove-transcoder # video transcoding worker (requires ffmpeg + ffprobe in PATH)
 ```
 
 PostgreSQL setup:

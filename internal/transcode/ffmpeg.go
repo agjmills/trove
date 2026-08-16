@@ -12,6 +12,7 @@ type TranscodeOptions struct {
 	Preset    string // libx264 preset, e.g. "medium"
 	CRF       int    // quality value, lower is better (18-28 typical)
 	MaxHeight int    // output height cap, e.g. 720
+	Threads   int    // -threads value (0 = let ffmpeg decide)
 }
 
 // Transcode re-encodes the input into a phone-friendly, web-optimized MP4:
@@ -38,8 +39,13 @@ func Transcode(ctx context.Context, ffmpegPath, inputPath, outputPath string, op
 		"-ac", "2",
 		"-movflags", "+faststart",
 		"-f", "mp4",
-		outputPath,
 	}
+
+	// Cap ffmpeg's thread count to limit CPU usage on shared hosts.
+	if opts.Threads > 0 {
+		args = append(args, "-threads", strconv.Itoa(opts.Threads))
+	}
+	args = append(args, outputPath)
 
 	return runFFmpeg(ctx, ffmpegPath, args)
 }

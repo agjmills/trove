@@ -168,7 +168,7 @@ To convert videos that were uploaded before transcoding was enabled, run the
 backfill once:
 
 ```bash
-docker compose run --rm transcoder trove-transcoder -backfill
+docker compose run --rm transcoder -backfill
 ```
 
 Settings are configurable via environment variables (`TRANSCODE_*`, see
@@ -289,6 +289,7 @@ TRANSCODE_ENABLED=true                  # enqueue transcode jobs on upload
 # TRANSCODE_PRESET=medium               # libx264 preset
 # TRANSCODE_CRF=23                      # quality value (lower = better)
 # TRANSCODE_WORKERS=1                   # concurrent jobs in the worker
+# TRANSCODE_THREADS=0                   # cap ffmpeg threads (0 = auto)
 # TRANSCODE_TIMEOUT=2h                  # per-job timeout
 # TRANSCODE_MAX_ATTEMPTS=3              # retries before failing a job
 
