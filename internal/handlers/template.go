@@ -10,6 +10,18 @@ import (
 
 var templates *template.Template
 
+// instanceName is the display name shown in the navigation bar and the browser
+// tab title. Set once at startup from config; rendered on every page.
+var instanceName = "Trove"
+
+// SetInstanceName configures the display name used in the navigation bar and
+// page titles. Call once during startup, before serving requests.
+func SetInstanceName(name string) {
+	if name != "" {
+		instanceName = name
+	}
+}
+
 // LoadTemplates parses HTML templates from the web/templates directory and registers
 // helper functions for use by those templates.
 //
@@ -40,6 +52,12 @@ func render(w http.ResponseWriter, page string, data map[string]any) error {
 	tmpl, err := templates.Clone()
 	if err != nil {
 		return err
+	}
+	if data == nil {
+		data = map[string]any{}
+	}
+	if _, ok := data["InstanceName"]; !ok {
+		data["InstanceName"] = instanceName
 	}
 
 	_, err = tmpl.ParseFiles(filepath.Join("web", "templates", page))

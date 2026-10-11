@@ -12,6 +12,10 @@ import (
 )
 
 type Config struct {
+	// InstanceName is the display name shown in the navigation bar and the
+	// browser tab title. Configured with INSTANCE_NAME.
+	InstanceName string
+
 	Port string
 	Host string
 	Env  string
@@ -94,6 +98,7 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
+		InstanceName:               getEnv("INSTANCE_NAME", "Trove"),
 		Port:                       getEnv("PORT", "8080"),
 		Host:                       getEnv("HOST", "0.0.0.0"),
 		Env:                        getEnv("ENV", "development"),
