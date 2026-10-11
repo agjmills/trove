@@ -39,6 +39,9 @@ func main() {
 	// Initialize structured logger
 	logger.Init(cfg.Env)
 
+	// Display name for the nav bar and page titles (INSTANCE_NAME).
+	handlers.SetInstanceName(cfg.InstanceName)
+
 	logger.Info("configuration loaded",
 		"max_upload_mb", float64(cfg.MaxUploadSize)/(1024*1024),
 		"default_quota_gb", float64(cfg.DefaultUserQuota)/(1024*1024*1024),

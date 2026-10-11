@@ -270,3 +270,17 @@ func TestParseSizeEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEnvInstanceNameDefault(t *testing.T) {
+	t.Setenv("INSTANCE_NAME", "")
+	if got := getEnv("INSTANCE_NAME", "Trove"); got != "Trove" {
+		t.Errorf("getEnv = %q, want Trove default", got)
+	}
+}
+
+func TestGetEnvInstanceNameOverride(t *testing.T) {
+	t.Setenv("INSTANCE_NAME", "Alex's Files")
+	if got := getEnv("INSTANCE_NAME", "Trove"); got != "Alex's Files" {
+		t.Errorf("getEnv = %q, want the override", got)
+	}
+}
